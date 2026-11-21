@@ -107,4 +107,35 @@ class ProtectionEvaluatorTest {
         )
         assertEquals(ProtectionLevel.DEGRADED, result.level)
     }
+
+    @Test
+    fun `degraded when the monitoring service is not running`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 1,
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = false,
+            managedEnforced = false,
+            emergencyActive = false,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertTrue(result.issues.any { it.contains("service") })
+    }
+
+    @Test
+    fun `managed mode with unsuspended apps is degraded, not protected`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 3,
+            usageAccess = false,
+            overlayAccess = false,
+            serviceRunning = false,
+            managedEnforced = true,
+            emergencyActive = false,
+            managedUnsuspendedCount = 1,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertTrue(result.issues.any { it.contains("not suspended") })
+    }
 }

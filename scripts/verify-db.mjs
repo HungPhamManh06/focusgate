@@ -705,6 +705,58 @@ await asUser(USER_A, async () => {
   );
 });
 
+// Multi-device scenario: a second active device for USER_A shares the same
+// grant balance, cannot claim a second grant, and cannot replay device A's key.
+let deviceA_mobile;
+await asUser(USER_A, async () => {
+  const dev = await db.query(
+    `insert into public.devices (user_id, name, platform)
+     values ($1, 'Alice Android', 'android') returning id`,
+    [USER_A],
+  );
+  deviceA_mobile = dev.rows[0].id;
+
+  const secondGrantAttempt = await db.query(
+    "select public.rpc_evaluate_unlock($1, $2, 'eval-key-dev2-0001') as res",
+    [planId, deviceA_mobile],
+  );
+  checkReplay(
+    "second device cannot claim a duplicate grant for the same plan",
+    secondGrantAttempt.rows[0].res,
+    grantId,
+  );
+});
+
+await expectError(
+  "second device cannot replay first device's consume idempotency key",
+  () => asUser(USER_A, () => db.query(
+    "select public.rpc_consume_unlock_minutes($1, $2, 10, 'consume-key-0001')",
+    [grantId, deviceA_mobile],
+  )),
+  "idempotency_conflict",
+);
+
+await asUser(USER_A, async () => {
+  const dev2Spend = await db.query(
+    "select public.rpc_consume_unlock_minutes($1, $2, 5, 'consume-key-dev2-0001') as res",
+    [grantId, deviceA_mobile],
+  );
+  check(
+    "second device consumes 5 minutes from shared grant (25 -> 20)",
+    dev2Spend.rows[0].res.remainingMinutes === 20 && dev2Spend.rows[0].res.idempotent === false,
+    JSON.stringify(dev2Spend.rows[0].res),
+  );
+});
+
+await expectError(
+  "first device cannot overspend after second device consumed 5 minutes",
+  () => asUser(USER_A, () => db.query(
+    "select public.rpc_consume_unlock_minutes($1, $2, 21, 'consume-key-dev1-over')",
+    [grantId, deviceA],
+  )),
+  "exhausted",
+);
+
 await asUser(USER_B, async () => {
   const grants = await db.query("select count(*)::int as n from public.unlock_grants");
   const ledger = await db.query("select count(*)::int as n from public.reward_ledger");

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import com.focusgate.app.policy.PolicyEvaluator
+import com.focusgate.app.util.SystemPackages
 
 data class InstalledApp(
     val packageName: String,
@@ -27,6 +28,7 @@ fun loadLauncherApps(context: Context): List<InstalledApp> {
         packageManager.queryIntentActivities(intent, 0)
     }
 
+    val deviceEssential = SystemPackages.deviceEssential(context)
     return resolved
         .mapNotNull { it.activityInfo?.applicationInfo }
         .distinctBy { it.packageName }
@@ -37,7 +39,7 @@ fun loadLauncherApps(context: Context): List<InstalledApp> {
                 label = runCatching {
                     packageManager.getApplicationLabel(info).toString()
                 }.getOrDefault(info.packageName),
-                essential = PolicyEvaluator.isEssential(info.packageName),
+                essential = PolicyEvaluator.isEssential(info.packageName, deviceEssential),
             )
         }
         .filterNot { it.essential }

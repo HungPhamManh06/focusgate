@@ -57,6 +57,7 @@ import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.PermissionChecks
 import com.focusgate.app.util.ProtectionWatchdog
+import com.focusgate.app.util.SystemPackages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -92,6 +93,8 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         mutableStateOf(AgentPreferences.isManagedEnforcementEnabled(context))
     }
     var deviceOwner by remember { mutableStateOf(managedController.isDeviceOwner()) }
+    var suspendedPackages by remember { mutableStateOf(managedController.suspendedPackages()) }
+    val deviceEssential = remember { SystemPackages.deviceEssential(context) }
     var serviceRunning by remember { mutableStateOf(AppUsageMonitorService.isRunning) }
     var emergencyRemaining by remember { mutableLongStateOf(EmergencyAccess.remainingMillis(context)) }
 
@@ -106,6 +109,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         monitorEnabled = AgentPreferences.isMonitorEnabled(context)
         managedEnabled = AgentPreferences.isManagedEnforcementEnabled(context)
         deviceOwner = managedController.isDeviceOwner()
+        suspendedPackages = managedController.suspendedPackages()
         serviceRunning = AppUsageMonitorService.isRunning
         emergencyRemaining = EmergencyAccess.remainingMillis(context)
     }
@@ -138,8 +142,15 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     }
 
     val managedActive = managedEnabled && deviceOwner
-    val effectiveBlocked = PolicyEvaluator.effectiveBlocked(blocked, exempt, context.packageName)
+    val effectiveBlocked =
+        PolicyEvaluator.effectiveBlocked(blocked, exempt, context.packageName, deviceEssential)
     val emergencyActive = emergencyRemaining > 0L
+    // Compare against the saved policy only; unsaved edits are not yet applied.
+    val managedUnsuspended = if (managedActive && !dirty) {
+        effectiveBlocked.count { it !in suspendedPackages }
+    } else {
+        0
+    }
     val protection = ProtectionEvaluator.evaluate(
         monitorEnabled = monitorEnabled,
         restrictedAppCount = effectiveBlocked.size,
@@ -148,6 +159,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         serviceRunning = serviceRunning,
         managedEnforced = managedActive && !emergencyActive,
         emergencyActive = emergencyActive,
+        managedUnsuspendedCount = managedUnsuspended,
     )
 
     fun labelFor(packageName: String): String =
@@ -173,6 +185,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                 val result = withContext(Dispatchers.IO) {
                     managedController.applyBlockedPackages(blocked, exempt)
                 }
+                suspendedPackages = managedController.suspendedPackages()
                 result.message
             } else {
                 "Policy saved. The monitor reads it immediately."
@@ -182,7 +195,14 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     fun applyManagedPolicy() {
         val result = managedController.applyBlockedPackages(blocked, exempt)
+        suspendedPackages = managedController.suspendedPackages()
         banner = result.message
+    }
+
+    fun clearManagedSuspensions(): String {
+        val result = managedController.clearSuspensions()
+        suspendedPackages = managedController.suspendedPackages()
+        return result.message
     }
 
     fun setMonitoring(enabled: Boolean) {
@@ -191,7 +211,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
             monitorEnabled = false
             context.stopService(Intent(context, AppUsageMonitorService::class.java))
             ProtectionWatchdog.cancel(context)
-            if (managedActive) managedController.clearSuspensions()
+            if (managedActive) clearManagedSuspensions()
             banner = "Protection is off. Selected apps are not being restricted."
             return
         }
@@ -235,8 +255,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
             ProtectionWatchdog.cancel(context)
             applyManagedPolicy()
         } else {
-            val result = managedController.clearSuspensions()
-            banner = result.message
+            banner = clearManagedSuspensions()
             if (monitorEnabled && usageGranted && overlayGranted) {
                 ProtectionWatchdog.schedule(context)
                 runCatching {
@@ -251,7 +270,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     fun startEmergency() {
         EmergencyAccess.start(context, EmergencyAccess.DEFAULT_MINUTES)
-        if (managedActive) managedController.clearSuspensions()
+        if (managedActive) clearManagedSuspensions()
         emergencyRemaining = EmergencyAccess.remainingMillis(context)
         banner = "Emergency access is active. Restrictions resume automatically."
     }

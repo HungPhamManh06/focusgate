@@ -6,39 +6,42 @@ FocusGate is a task manager with a gate: you commit to the day's Must Do tasks,
 do verified focus work, and only then earn time in the entertainment apps you
 chose to restrict.
 
-> **Status: backend and web dashboard implemented and verified locally.**
+> **Status: Phase 0 stabilized and verified locally (Milestone 1).**
 > The database, RLS, plan lifecycle, server-owned focus sessions and reward
-> engine are implemented across three migrations and 70 automated checks. The
-> Next.js dashboard runs against the same PostgreSQL schema via PGlite. The
-> Windows agent PoC runs; the Android PoC source is written but **not compiled**
-> (no Android SDK on this machine). No hosted Supabase or Vercel deployment has
-> been performed in this environment.
+> engine are implemented across three migrations and 74 automated checks on
+> PGlite PostgreSQL. The Next.js dashboard runs locally against the same schema
+> via PGlite (`LOCAL_USER_ID` is local development only, not production auth).
+> The Windows agent PoC builds and passes `--selftest`; the Android module
+> (`personal` and `managed` flavors) compiles and passes 22/22 unit tests per
+> flavor. Physical-device testing (Redmi Note 13 / Android 15) and hosted
+> Supabase/Vercel deployment have **not** been performed yet.
 
 ## What exists
 
 | Component | Status | Evidence |
 |---|---|---|
-| Windows agent PoC (.NET 10) | Working | build 0 warnings; probe 6 pass / 0 fail / 2 skip; live monitor persisted a row |
-| Database schema + RLS + RPCs | Working | 3 migrations; 70/70 automated checks on PGlite PostgreSQL |
-| Web dashboard (Next.js) | Working locally | 6 screens; typecheck + production build pass; PGlite backend |
-| Android PoC (Kotlin/Compose) | Source only | not built: no Android SDK / JDK 27 unsupported by AGP |
-| Hosted Supabase / Vercel | Not deployed | needs a Supabase project and access token |
+| Windows agent PoC (.NET 10) | Working (PoC) | `dotnet build` 0 warnings / 0 errors; `--selftest` 5 pass / 0 fail / 3 skip (headless) |
+| Database schema + RLS + RPCs | Working locally | 3 migrations; 74/74 automated checks on PGlite PostgreSQL (incl. multi-device) |
+| Web dashboard (Next.js) | Working locally | 6 screens (HTTP 200); `typecheck` + `next build` pass; local PGlite backend |
+| Android module (Kotlin/Compose) | Compiled & unit-tested | `personalDebug` & `managedDebug` APKs built; 22/22 unit tests per flavor; emulator-tested (API 36), **physical device untested** |
+| Hosted Supabase / Vercel | Not deployed | needs a Supabase project, real Auth and credentials |
 
 ## Repository
 
 ```
 apps/
   windows-agent/   C# PoC: foreground hook, policy engine, overlay, SQLite
-  android/         Kotlin/Compose PoC: usage stats, accessibility block screen, Room
-  web/             Next.js dashboard (local PGlite backend)
+  android/         Kotlin/Compose module: Usage Access + overlay (personal), Device Owner (managed), Room
+  web/             Next.js dashboard (local PGlite backend, dev-only auth)
 packages/
-  shared-contracts/  TypeScript domain types shared with the future web app
+  shared-contracts/  TypeScript domain types shared with the web app
 supabase/
   migrations/      schema, RLS, plan lifecycle, focus and reward engine
   seed.sql         development users/tasks/plan/device policy
 scripts/
-  verify-db.mjs    runs migrations + 70 RLS/reward/focus assertions without Docker
-docs/              PRD, architecture, database, API, platform analyses, roadmap, Phase 0 report
+  verify-db.mjs    runs 3 migrations + 74 RLS/reward/focus/multi-device assertions without Docker
+  verify-local-seed.mjs  verifies the web app's local PGlite seed workspace
+docs/              PRD, architecture, database, API, platform analyses, roadmap, audit & test reports
 ```
 
 ## Quick start
@@ -46,8 +49,8 @@ docs/              PRD, architecture, database, API, platform analyses, roadmap,
 ### Repository checks
 
 ```bash
-npm install
-npm run db:verify          # real PostgreSQL semantics via PGlite; 70 assertions
+npm ci
+npm run db:verify          # real PostgreSQL semantics via PGlite; 74 assertions
 npm run typecheck          # strict TypeScript for all workspaces
 npm run build -w @focusgate/web
 ```
@@ -84,8 +87,21 @@ Local events are stored in `apps/windows-agent/agent-poc-data/`.
 
 ### Android
 
-Requires Android Studio with JDK 17–21 and SDK 35. Open `apps/android` and follow
-`apps/android/README.md`. It has **not** been compiled in this environment.
+Requires **JDK 17** (AGP 8.13.2 / Gradle 8.13 are incompatible with JDK 27),
+**Android SDK Platform 36**, and **Build Tools 36.0.0**. Two flavors exist:
+
+- `personal` (`com.focusgate.app`): Usage Access + `TYPE_APPLICATION_OVERLAY` (no AccessibilityService).
+- `managed` (`com.focusgate.app.managed`): Device Owner `setPackagesSuspended`.
+
+```bash
+cd apps/android
+./gradlew :app:assemblePersonalDebug :app:assembleManagedDebug \
+  :app:testPersonalDebugUnitTest :app:testManagedDebugUnitTest
+```
+
+See [apps/android/README.md](apps/android/README.md) and
+[docs/ANDROID_LOCK.md](docs/ANDROID_LOCK.md) for emulator and physical-device
+testing notes.
 
 ### Database (real Supabase)
 
@@ -127,6 +143,8 @@ in the repository.
 - [Windows app lock](docs/WINDOWS_LOCK.md)
 - [Roadmap](docs/DEVELOPMENT_ROADMAP.md)
 - [Phase 0 validation report](docs/PHASE0_VALIDATION.md)
+- [Milestone 1 initial audit](docs/MILESTONE1_INITIAL_AUDIT.md)
+- [Milestone 1 test report](docs/MILESTONE1_TEST_REPORT.md)
 
 ## Honest limits
 
@@ -134,12 +152,17 @@ in the repository.
   revoke permissions, kill the agent or uninstall the app.
 - Windows cannot control elevated/protected apps without elevation or WDAC;
   the agent does not run elevated by default.
-- Android cannot enforce without Device Owner provisioning; `UsageStatsManager`
-  observes, Accessibility detects, neither is unbreakable.
+- Android Personal Strict Mode uses `UsageStatsManager` + `SYSTEM_ALERT_WINDOW`
+  overlay (no `AccessibilityService`), which is revocable friction. Real
+  platform enforcement requires Managed Device Mode (Device Owner provisioning
+  with `setPackagesSuspended`). Physical-device testing on Redmi Note 13 /
+  Android 15 is still pending.
 - No driver, root, exploit or hidden surveillance is used or planned.
+- Web Dashboard currently uses PGlite with a hardcoded `LOCAL_USER_ID` for
+  local development only; it is **not** production authentication.
 - Supabase hosted deployment was not performed: Docker/WSL and Supabase project
-  credentials are unavailable here. The SQL was verified on PGlite (real
-  PostgreSQL), but `supabase db reset` against a real Supabase stack is still
+  credentials are unavailable here. The SQL was verified on PGlite (74
+  assertions), but `supabase db reset` against a real Supabase stack is still
   required before production.
 
 ## Security

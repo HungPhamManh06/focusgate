@@ -12,21 +12,26 @@ Delivered:
 
 - Windows PoC: foreground hook, UWP identity, process control, cross-process
   minimize, SQLite log, capability probe, live monitor.
-- Android PoC source: usage access, accessibility window detection, block
-  screen, Room policy, boot restore, permission UX.
-- Database: full migrations, RLS, reward RPCs, 34 automated checks.
+- Android module (`personal` & `managed` flavors): Usage Access + `TYPE_APPLICATION_OVERLAY`
+  block screen (no `AccessibilityService`), Device Owner `setPackagesSuspended`,
+  Room policy, boot restore, permission UX, 22 unit tests per flavor.
+- Database: 3 migrations, RLS, server-owned focus sessions, reward RPCs, 74
+  automated checks on PGlite.
+- Web dashboard (local dev): 6 screens running against PGlite (`LOCAL_USER_ID`,
+  dev-only auth).
 - Documents: PRD, architecture, database, API, platform lock analyses, this
-  roadmap, Phase 0 report.
+  roadmap, Phase 0 report, Milestone 1 audit and test report.
 
 Acceptance evidence:
 
 | Item | Result |
 |---|---|
 | .NET build | 0 warnings, 0 errors (warnings-as-errors) |
-| Windows capability probe | 6 passed, 0 failed, 2 skipped (UWP not foreground, not elevated) |
-| Windows live monitor | event captured and persisted, ~1 ms decision/apply |
-| Database verification | 34 passed, 0 failed |
-| Android build | **blocked**: no Android SDK and JDK 27 incompatible with AGP; not claimed as passing |
+| Windows capability probe | 5 passed, 0 failed, 3 skipped (headless); 6 passed / 0 failed / 2 skipped (interactive) |
+| Windows live monitor | event captured and persisted in interactive session (~1 ms decision/apply) |
+| Database verification | 74 passed, 0 failed (PGlite, 3 migrations, incl. multi-device checks) |
+| Android build & unit tests | `personalDebug` & `managedDebug` built (JDK 17 + SDK 36); 22/22 unit tests per flavor; **physical device (Redmi Note 13 / Android 15) pending** |
+| Web dashboard | `typecheck` + `next build` pass; 6/6 routes HTTP 200 locally (PGlite) |
 | Hosted Supabase | not run: no project credentials |
 
 **Exit decision:** proceed with Windows Personal Strict Mode and the backend
@@ -126,9 +131,9 @@ place; privacy policy published; Play data-safety declaration matches reality.
 
 | Risk | Impact | Mitigation | Phase |
 |---|---|---|---|
-| Android OEM background restrictions | Monitoring silently stops | Foreground service + status + device matrix tests | 1/4 |
-| Play policy rejection for Accessibility | App cannot ship | Core-function disclosure, no content access, minimal config | 4/5 |
-| Background activity launch blocked | No block screen on some devices | Accessibility overlay fallback | 4 |
+| Android OEM background restrictions | Monitoring silently stops | Foreground service + status + physical-device matrix tests (incl. Xiaomi HyperOS) | 1/4 |
+| Play policy rejection for special access | App cannot ship | No AccessibilityService used; explicit Usage Access, Overlay & `specialUse` FGS declarations | 4/5 |
+| Overlay blocked or dismissed by OEM | Block screen does not appear | Detect failure, post notification, show Degraded status; Managed Mode uses `setPackagesSuspended` | 4 |
 | Windows user kills/elevates agent | Protection bypassed | Watchdog + honest UX; managed mode only for real enforcement | 4 |
 | Reward bugs | Trust damage | DB constraints + idempotency + concurrency tests | 3 |
 | Scope creep into "unblockable" promises | Legal/reputation | Explicit Personal vs Managed mode language everywhere | all |

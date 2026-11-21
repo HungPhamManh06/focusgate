@@ -4,6 +4,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import com.focusgate.app.policy.PolicyEvaluator
+import com.focusgate.app.util.SystemPackages
 
 /**
  * Device Owner enforcement for Managed Device Mode.
@@ -25,6 +26,10 @@ class ManagedDeviceController(context: Context) {
     fun isAdminActive(): Boolean =
         dpm?.isAdminActive(admin) == true
 
+    /** Packages FocusGate believes it has suspended (persisted after each apply). */
+    fun suspendedPackages(): Set<String> =
+        prefs().getStringSet(KEY_SUSPENDED, emptySet()).orEmpty().toSet()
+
     fun applyBlockedPackages(
         blockedPackages: Set<String>,
         exemptPackages: Set<String>,
@@ -42,6 +47,7 @@ class ManagedDeviceController(context: Context) {
             blockedPackages = blockedPackages,
             exemptPackages = exemptPackages,
             ownPackage = appContext.packageName,
+            deviceEssential = SystemPackages.deviceEssential(appContext),
         )
         val currentlySuspended = prefs().getStringSet(KEY_SUSPENDED, emptySet()).orEmpty()
         val toUnsuspend = currentlySuspended - target
@@ -110,7 +116,7 @@ class ManagedDeviceController(context: Context) {
             ManagedApplyResult(
                 applied = failures.isEmpty(),
                 suspendedPackages = remaining.size,
-                failures = failures,
+                failures = failures.toList(),
                 message = if (failures.isEmpty()) {
                     "All managed suspensions removed."
                 } else {

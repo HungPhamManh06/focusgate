@@ -140,7 +140,14 @@ public static class SelfTest
     {
         try
         {
-            var app = WindowInspector.Describe(NativeMethods.GetForegroundWindow());
+            var hwnd = NativeMethods.GetForegroundWindow();
+            if (hwnd == IntPtr.Zero)
+            {
+                return new CheckResult("UWP identity (AUMID)", Status.Skip,
+                    "No foreground window (locked or non-interactive session).");
+            }
+
+            var app = WindowInspector.Describe(hwnd);
             if (app is null)
             {
                 return new CheckResult("UWP identity (AUMID)", Status.Fail,

@@ -33,6 +33,7 @@ object ProtectionEvaluator {
         serviceRunning: Boolean,
         managedEnforced: Boolean,
         emergencyActive: Boolean,
+        managedUnsuspendedCount: Int = 0,
     ): ProtectionSnapshot {
         if (!monitorEnabled || restrictedAppCount == 0) {
             return ProtectionSnapshot(
@@ -56,6 +57,16 @@ object ProtectionEvaluator {
         }
 
         if (managedEnforced) {
+            // Device Owner mode is only "Protected" when every restricted app
+            // is actually suspended; a partial apply must not look complete.
+            if (managedUnsuspendedCount > 0) {
+                return ProtectionSnapshot(
+                    level = ProtectionLevel.DEGRADED,
+                    issues = listOf("$managedUnsuspendedCount restricted app(s) are not suspended"),
+                    personalModeReady = false,
+                    managedModeReady = false,
+                )
+            }
             return ProtectionSnapshot(
                 level = ProtectionLevel.PROTECTED,
                 issues = emptyList(),

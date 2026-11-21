@@ -21,6 +21,7 @@ import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.NotificationIds
 import com.focusgate.app.util.Notifications
 import com.focusgate.app.util.PermissionChecks
+import com.focusgate.app.util.SystemPackages
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,10 +61,24 @@ class AppUsageMonitorService : Service() {
     private var wasUsable = true
     private var started = false
 
+    @Volatile
+    private var deviceEssential: Set<String> = emptySet()
+    private var deviceEssentialRefreshedAt = 0L
+
+    // After "Back home"/"Open FocusGate" the next foreground event may arrive
+    // a moment later than the next poll. Suppress the overlay for that package
+    // briefly so it does not flash over the launcher; the window is bounded so
+    // a missing event can never leave a restricted app usable.
+    @Volatile
+    private var suppressedPackage: String? = null
+    @Volatile
+    private var suppressedUntil = 0L
+
     override fun onCreate() {
         super.onCreate()
         overlayController = BlockOverlayController(this)
         isRunning = true
+        deviceEssential = SystemPackages.deviceEssential(this)
         lastUsageGranted = PermissionChecks.hasUsageAccess(this)
         lastOverlayGranted = PermissionChecks.hasOverlayAccess(this)
 
@@ -196,12 +211,14 @@ class AppUsageMonitorService : Service() {
             return
         }
 
+        refreshDeviceEssential(now)
         val isBlocked = PolicyEvaluator.isBlocked(
             packageName = current,
             blockedPackages = blockedPackages,
             exemptPackages = exemptPackages,
             emergencyActive = emergencyActive,
             ownPackage = packageName,
+            deviceEssential = deviceEssential,
         )
 
         if (!isBlocked) {
@@ -210,8 +227,15 @@ class AppUsageMonitorService : Service() {
             return
         }
 
+        if (current == suppressedPackage && now < suppressedUntil) return
         if (lastShownBlockFor == current && isOverlayVisible) return
         showBlockScreen(current)
+    }
+
+    private fun refreshDeviceEssential(now: Long) {
+        if (now - deviceEssentialRefreshedAt < ESSENTIAL_REFRESH_MS && deviceEssentialRefreshedAt != 0L) return
+        deviceEssentialRefreshedAt = now
+        deviceEssential = SystemPackages.deviceEssential(this)
     }
 
     private fun reportPermissionTransitions(usageGranted: Boolean, overlayGranted: Boolean) {
@@ -255,6 +279,7 @@ class AppUsageMonitorService : Service() {
         closeOpenEvent(timestamp)
         foregroundPackage = packageName
         lastShownBlockFor = null
+        if (packageName != suppressedPackage) suppressedPackage = null
 
         if (packageName == this.packageName) return
 
@@ -264,6 +289,7 @@ class AppUsageMonitorService : Service() {
             exemptPackages = exemptPackages,
             emergencyActive = EmergencyAccess.isActive(this),
             ownPackage = this.packageName,
+            deviceEssential = deviceEssential,
         )
         openUsageEventId = FocusGateDatabase.get(this).usageEventDao().insert(
             UsageEvent(packageName = packageName, startedAt = timestamp, blocked = blocked),
@@ -314,7 +340,13 @@ class AppUsageMonitorService : Service() {
         isOverlayVisible = false
     }
 
+    private fun suppressBriefly() {
+        suppressedPackage = foregroundPackage
+        suppressedUntil = System.currentTimeMillis() + SUPPRESS_AFTER_EXIT_MS
+    }
+
     private fun goHome() {
+        suppressBriefly()
         hideOverlayNow()
         lastShownBlockFor = null
         val intent = Intent(Intent.ACTION_MAIN)
@@ -324,6 +356,7 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun openFocusGate() {
+        suppressBriefly()
         hideOverlayNow()
         lastShownBlockFor = null
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -360,6 +393,8 @@ class AppUsageMonitorService : Service() {
         private const val POLL_INTERVAL_MS = 1_000L
         private const val INITIAL_LOOKBACK_MS = 10_000L
         private const val FAILURE_NOTIFY_INTERVAL_MS = 30_000L
+        private const val ESSENTIAL_REFRESH_MS = 60_000L
+        private const val SUPPRESS_AFTER_EXIT_MS = 2_000L
 
         @Volatile
         var isRunning: Boolean = false

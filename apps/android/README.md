@@ -1,62 +1,97 @@
-# FocusGate Android – Phase 0 PoC
+# FocusGate Android
 
-A minimal, honest proof of concept for the two Android mechanisms FocusGate
-needs: **usage monitoring** and **a block screen**. It is not the production
-app (no auth, no sync, no reward wallet yet).
+Kotlin/Jetpack Compose app-lock module. Two deployment flavours share the same
+policy UI:
 
-## What it does
+- **personal** (`com.focusgate.app`): Usage Access + a full-screen overlay.
+- **managed** (`com.focusgate.app.managed`): Device Owner
+  `setPackagesSuspended` for real platform enforcement on provisioned devices.
 
-1. Lists launchable apps (`<queries>` visibility only — no `QUERY_ALL_PACKAGES`).
-2. Saves a user-selected block list in Room.
-3. Runs a foreground service that polls `UsageStatsManager` every 5 s and stores
-   aggregated foreground time locally.
-4. Runs an `AccessibilityService` that observes **only**
-   `TYPE_WINDOW_STATE_CHANGED` package names (`canRetrieveWindowContent="false"`).
-5. Shows a full-screen block screen when a selected app becomes active.
-6. Restarts monitoring after boot and warns when accessibility was revoked.
+There is **no AccessibilityService**. Google Play limits the Accessibility API
+to accessibility purposes, so FocusGate uses Usage Access to observe the
+foreground app and a user-granted `TYPE_APPLICATION_OVERLAY` to present the
+block screen. No `QUERY_ALL_PACKAGES`, no root, no exploit.
 
-## Build
+## Requirements
 
-Requirements:
+- JDK 17 (AGP 8.13 / Gradle 8.13 are not compatible with JDK 27).
+- Android SDK Platform 36 and Build Tools 36.
+- `local.properties` with `sdk.dir` (git-ignored) or `ANDROID_HOME`.
 
-- Android Studio (Ladybug or newer) with JDK 17–21. The Gradle/AGP versions in
-  this project are **not** compatible with JDK 27, which is what is installed on
-  the machine where this PoC was authored.
-- Android SDK Platform 35 and Build Tools 35.
+## Build and test
 
 ```bash
 cd apps/android
-# Open in Android Studio, or with a configured ANDROID_HOME:
-./gradlew :app:assembleDebug
+./gradlew :app:assemblePersonalDebug :app:assembleManagedDebug \
+  :app:testPersonalDebugUnitTest :app:testManagedDebugUnitTest
+./gradlew :app:connectedPersonalDebugAndroidTest   # device/emulator required
 ```
 
-> On the development machine used for Phase 0 there was **no Android SDK**, so
-> this module has not been compiled here. That is a reported limitation, not a
-> claim of success. The Windows PoC and the database were executed and verified.
+APKs:
 
-## Manual test script
+- `app/build/outputs/apk/personal/debug/app-personal-debug.apk`
+- `app/build/outputs/apk/managed/debug/app-managed-debug.apk`
 
-1. Install the debug APK.
-2. Grant **Usage access** (Settings → Special app access → Usage access).
-3. Enable **FocusGate app blocking** in Accessibility settings.
-4. Start monitoring in the app, select one entertainment app, save.
-5. Open the blocked app → the FocusGate block screen must appear within ~1 s.
-6. Force-stop the entertainment app → it must remain blocked next launch.
-7. Disable accessibility → the app must show "Not granted" and the notification
-   must warn that protection is off.
-8. Reboot → monitoring resumes and the block screen still applies.
-9. Revoke usage access → monitoring must show inactive; it must not pretend to
-   protect the device.
+The Android 16 (API 36) emulator run is documented in
+[`../../docs/ANDROID_LOCK.md`](../../docs/ANDROID_LOCK.md): build, 17/17 unit
+tests per flavour, onboarding, block overlay, emergency access, permission
+revocation, reboot restore, Device Owner suspension and managed reboot restore.
 
-## Known platform limits
+## Personal Strict Mode
 
-- UsageStatsManager observes, it does not enforce. Enforcement here is the
-  accessibility-window trigger plus an activity launch.
-- Android 10+ restricts background activity launches. On vendor builds that
-  refuse the launch, switch the presentation to an accessibility overlay
-  (`TYPE_ACCESSIBILITY_OVERLAY`) or a full-screen notification. See
+1. Onboarding explains local usage monitoring and collects explicit consent.
+2. The user grants **Usage Access** (foreground detection) and **Display over
+   other apps** (block screen). Notifications are optional.
+3. The user selects restricted apps and optionally exempt apps, then saves the
+   policy and enables monitoring.
+4. `AppUsageMonitorService` polls `UsageStatsManager.queryEvents` every second
+   and adds a full-screen Compose overlay when a restricted package comes to the
+   foreground.
+5. Status is always derived from real state: `Protected`, `Degraded` (a required
+   permission or the service is missing) or `Off`.
+
+### Manual check
+
+```bash
+adb install -r app/build/outputs/apk/personal/debug/app-personal-debug.apk
+adb shell appops set com.focusgate.app GET_USAGE_STATS allow
+adb shell appops set com.focusgate.app SYSTEM_ALERT_WINDOW allow
+adb shell pm grant com.focusgate.app android.permission.POST_NOTIFICATIONS
+```
+
+Then complete onboarding, restrict an app and open it. The overlay must appear
+within about a second. Revoking Usage Access must hide the overlay, post a
+"Protection lost" notification and change the status to `Degraded`.
+
+## Managed Device mode
+
+Only provision a device you control (typically factory-reset, no accounts):
+
+```bash
+adb install -r app/build/outputs/apk/managed/debug/app-managed-debug.apk
+adb shell dpm set-device-owner \
+  com.focusgate.app.managed/com.focusgate.app.admin.FocusGateDeviceAdminReceiver
+```
+
+Open the managed app, complete setup, select apps, and enable
+**Apply Device Owner policy**. Android then refuses to launch the selected
+packages and shows its own "Blocked by work policy" dialog. Emergency access
+clears suspensions for 10 minutes; expiry or reboot re-applies them.
+
+## Device test notes
+
+- `TYPE_APPLICATION_OVERLAY` requires the user-granted overlay app-op.
+- A reboot during emergency ends the pause by design (boot count check).
+- The overlay is not touch-focusable; the home/recents keys still leave the
+  blocked app, which is intended.
+- Google Play: declare the `specialUse` foreground-service type and justify
+  Usage Access/overlay in the listing. See the policy section in
   `docs/ANDROID_LOCK.md`.
-- Accessibility can be revoked by the user; this is by design in Personal Strict
-  Mode. Managed Device Mode requires Device Owner provisioning.
-- Battery optimisation on some OEM builds may stop the foreground service. The
-  ongoing notification and the in-app status make that visible.
+
+## Known limits
+
+FocusGate is a friction layer, not an uninstall-proof lock. The user can revoke
+permissions, force-stop the app, use safe mode or a custom ROM. OEM
+autostart/battery settings can stop the service; the status screen must show
+that rather than claim protection. Physical-device testing is still required
+before release.

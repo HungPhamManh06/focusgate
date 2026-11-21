@@ -68,17 +68,30 @@ given explicitly.
 
 ## 3. Measured results (this machine)
 
+### 3.1 Maturity stage
+
+- **Current stage: Windows PoC (`FocusGate.Agent.Poc`)** — CLI/WinForms
+  capability probe and short-lived foreground monitor.
+- **Not yet a Windows Agent Prototype or Production app:** missing system tray
+  UX, autostart/watchdog scheduled task, DPAPI token storage, device
+  registration, backend policy sync, and signed MSIX/installer.
+
+### 3.2 Probe & enforcement checks
+
 | Check | Result | Evidence |
 |---|---|---|
-| Foreground window resolved | PASS | `Freebuff (pid 16368)`, title read |
+| `dotnet build` | PASS | 0 warnings, 0 errors (`TreatWarningsAsErrors=true`, `Nullable=enable`) |
+| Foreground window resolved | PASS (interactive) / SKIP (headless) | `Freebuff (pid 16368)` in interactive session; `Skip` when no foreground window |
 | Foreground event hook | PASS | `SetWinEventHook` installed in a message pump |
-| Process enumeration | PASS | 6 interactive processes in **18 ms** |
+| Process enumeration | PASS | 6 interactive processes in **18 ms** (interactive); 0 in non-interactive session |
 | Window enforcement | PASS | `ShowWindow(SW_MINIMIZE)` on a separate PoC process: accepted + iconified |
 | Process control rights | PASS | `PROCESS_TERMINATE` and thread suspend handles opened on a same-user child |
-| SQLite local log | PASS | schema created, row written/read |
-| UWP AUMID | SKIP | foreground app was not a Store app at probe time |
+| SQLite local log | PASS | schema created, row written/read; unwritable DB path fails gracefully (exit 2) |
+| Missing policy file | PASS | exits cleanly with code 2 and actionable message |
+| UWP AUMID | SKIP | foreground app was not a Store app / no foreground window at probe time |
 | Elevation | SKIP | not elevated (expected; documented) |
-| Live monitor (8 s) | PASS | 1 observation, 1 row stored, decision+apply **1.04 ms** |
+| Live monitor (interactive, 8 s) | PASS | 1 observation, 1 row stored, decision+apply **1.04 ms** |
+| Live monitor (`log`/`minimize`/`overlay`/`terminate`) in headless shell | PARTIAL | CLI exits 0 without errors, but `GetForegroundWindow()` is null in non-interactive sessions; interactive desktop verification of `overlay` and `terminate` against `--window-probe` is still required |
 
 The probe was **not** run elevated. Consequently, the report does not claim
 control over elevated or protected apps.

@@ -10,12 +10,21 @@ package com.focusgate.app.policy
 object PolicyEvaluator {
 
     private val ESSENTIAL_PACKAGES = setOf(
+        // Telephony, contacts and messaging (AOSP, Google, Xiaomi, Samsung).
         "com.android.dialer",
+        "com.google.android.dialer",
+        "com.samsung.android.dialer",
         "com.android.incallui",
         "com.android.server.telecom",
+        "com.android.phone",
+        "com.android.contacts",
+        "com.google.android.contacts",
+        "com.samsung.android.app.contacts",
         "com.android.mms",
         "com.android.messaging",
         "com.google.android.apps.messaging",
+        "com.samsung.android.messaging",
+        // System UI, settings, permissions, installation.
         "com.android.settings",
         "com.android.systemui",
         "com.android.permissioncontroller",
@@ -24,10 +33,19 @@ object PolicyEvaluator {
         "com.google.android.packageinstaller",
         "com.android.vending",
         "com.google.android.gms",
+        "com.miui.securitycenter",
+        "com.miui.home",
+        "com.mi.android.globallauncher",
+        "com.google.android.apps.nexuslauncher",
+        "com.sec.android.app.launcher",
+        // Camera, maps and emergency/safety.
         "com.android.camera",
         "com.android.camera2",
         "com.google.android.apps.maps",
         "com.android.emergency",
+        "com.google.android.apps.safetyhub",
+        "com.android.cellbroadcastreceiver",
+        "com.google.android.cellbroadcastreceiver",
     )
 
     private val ESSENTIAL_PREFIXES = listOf(
@@ -38,6 +56,7 @@ object PolicyEvaluator {
         "com.android.permissioncontroller",
         "com.google.android.permissioncontroller",
         "com.android.systemui",
+        "com.android.emergency",
     )
 
     private val SOCIAL_HINTS = listOf(
@@ -47,8 +66,14 @@ object PolicyEvaluator {
     private val VIDEO_HINTS = listOf("youtube", "netflix", "twitch", "prime", "disney", "hulu", "spotify")
     private val GAME_HINTS = listOf("game", "supercell", "king", "roblox", "minecraft", "pubg", "riot")
 
-    fun isEssential(packageName: String): Boolean =
+    /**
+     * [deviceEssential] holds packages resolved at runtime on the device: the
+     * default launcher, dialer and SMS app (see `SystemPackages`). They differ
+     * per OEM, so a static list alone is not enough.
+     */
+    fun isEssential(packageName: String, deviceEssential: Set<String> = emptySet()): Boolean =
         packageName in ESSENTIAL_PACKAGES ||
+            packageName in deviceEssential ||
             ESSENTIAL_PREFIXES.any { prefix ->
                 packageName == prefix || packageName.startsWith("$prefix.")
             }
@@ -63,20 +88,22 @@ object PolicyEvaluator {
         exemptPackages: Set<String> = emptySet(),
         emergencyActive: Boolean = false,
         ownPackage: String? = null,
+        deviceEssential: Set<String> = emptySet(),
     ): Boolean {
         if (emergencyActive) return false
         if (ownPackage != null && packageName == ownPackage) return false
         return packageName in blockedPackages &&
             packageName !in exemptPackages &&
-            !isEssential(packageName)
+            !isEssential(packageName, deviceEssential)
     }
 
     fun effectiveBlocked(
         blockedPackages: Set<String>,
         exemptPackages: Set<String>,
         ownPackage: String? = null,
+        deviceEssential: Set<String> = emptySet(),
     ): Set<String> = blockedPackages
-        .filterNot { it in exemptPackages || isEssential(it) || it == ownPackage }
+        .filterNot { it in exemptPackages || isEssential(it, deviceEssential) || it == ownPackage }
         .toSet()
 
     /** Best-effort category used for reporting; users can override it later. */

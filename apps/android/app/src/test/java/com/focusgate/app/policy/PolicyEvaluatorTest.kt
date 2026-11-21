@@ -68,4 +68,48 @@ class PolicyEvaluatorTest {
         assertFalse(youtube in effective)
         assertFalse("com.android.settings" in effective)
     }
+
+    @Test
+    fun `OEM dialer, contacts and security apps are essential`() {
+        listOf(
+            "com.google.android.dialer",
+            "com.google.android.contacts",
+            "com.android.phone",
+            "com.miui.securitycenter",
+            "com.miui.home",
+            "com.samsung.android.dialer",
+            "com.google.android.apps.safetyhub",
+        ).forEach { pkg ->
+            assertTrue("$pkg should be essential", PolicyEvaluator.isEssential(pkg))
+            assertFalse("$pkg must never be blocked", PolicyEvaluator.isBlocked(pkg, setOf(pkg)))
+        }
+    }
+
+    @Test
+    fun `device default launcher, dialer and SMS app are never blocked`() {
+        val oemDialer = "com.example.oem.dialer"
+        val oemLauncher = "com.example.oem.launcher"
+        val deviceEssential = setOf(oemDialer, oemLauncher)
+
+        assertFalse(
+            PolicyEvaluator.isBlocked(
+                packageName = oemDialer,
+                blockedPackages = setOf(oemDialer, facebook),
+                deviceEssential = deviceEssential,
+            ),
+        )
+        val effective = PolicyEvaluator.effectiveBlocked(
+            blockedPackages = setOf(oemDialer, oemLauncher, facebook),
+            exemptPackages = emptySet(),
+            deviceEssential = deviceEssential,
+        )
+        assertTrue(effective == setOf(facebook))
+    }
+
+    @Test
+    fun `ordinary entertainment apps are not treated as essential`() {
+        listOf(facebook, youtube, "com.zhiliaoapp.musically", "com.instagram.android").forEach {
+            assertFalse("$it should not be essential", PolicyEvaluator.isEssential(it))
+        }
+    }
 }

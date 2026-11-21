@@ -1,25 +1,27 @@
 # Phase 0 – Technical Validation Report
 
-Date: 2026-11-21 · Status: **complete, conditional go**
+Date: 2026-11-21 (updated 2026-11-22 in Milestone 1) · Status: **complete, conditional go**
 
 Scope: verify what Android, Windows and PostgreSQL actually allow before building
 the product. Nothing in this report is inferred from documentation alone where a
-local measurement was possible.
+local measurement was possible. For the full Milestone 1 verification log see
+`docs/MILESTONE1_TEST_REPORT.md`.
 
 ## 1. Environment
 
 | Item | Value |
 |---|---|
-| Workspace | `C:\Users\hungv\Downloads\focusgate` (started empty except `.freebuff`) |
+| Workspace | `C:\Users\hungv\Downloads\focusgate` |
 | OS | Windows 11, build 10.0.26300 |
 | .NET SDK | 10.0.400 |
 | Node / npm | 24.17.0 / 12.0.1 |
-| Java | 27.0.1 (outside the Android Gradle Plugin support matrix) |
-| Android SDK | **not installed** (`ANDROID_HOME` empty, no SDK directory) |
-| Docker | CLI 29.5.3 present, **daemon not running**; Postgres container could not be used |
+| Java (local toolchain) | JDK 17 under `.android-tools/jdk17` (system JDK 27 is outside AGP 8.13 support matrix) |
+| Android SDK (local toolchain) | `.android-tools/sdk` (Platforms 35 & 36, Build Tools 35.0.0 & 36.0.0, `platform-tools`, `emulator`) |
+| Physical Android device | **None attached via ADB** (Redmi Note 13 / Android 15 testing pending) |
+| Docker | CLI present, **daemon not running**; Postgres container could not be used |
 | PostgreSQL client | not installed |
 | Supabase CLI / hosted project | not available in this environment |
-| Git | repository initialized during Phase 0 |
+| Git | `main` tracking `origin/main` |
 
 Because Docker and Supabase were unavailable, the migrations were executed
 against **PGlite 0.5.17** (PostgreSQL compiled to WASM), which preserves real
@@ -93,38 +95,46 @@ switching was injected.
 
 ### 3.1 What was delivered
 
-A complete PoC module under `apps/android`:
+A compiled and unit-tested module under `apps/android` with two product flavors:
 
-- Kotlin 2.0, Jetpack Compose, Material 3, Room, foreground service,
-  UsageStatsManager polling, AccessibilityService with
-  `canRetrieveWindowContent=false`, block screen, boot restore, permission UX,
-  launcher-only package visibility (no `QUERY_ALL_PACKAGES`).
+- **Personal flavor (`com.focusgate.app`):** Kotlin 2.0.21, Jetpack Compose,
+  Material 3, Room, `specialUse` foreground service (`AppUsageMonitorService`),
+  `UsageStatsManager.queryEvents` polling (1 s), `TYPE_APPLICATION_OVERLAY`
+  full-screen Compose block overlay (`BlockOverlayController`), dynamic
+  default-app essential protection (`SystemPackages`), bounded `EmergencyAccess`,
+  `BootReceiver`, `ProtectionWatchdog`, and launcher-only package visibility
+  (no `QUERY_ALL_PACKAGES`). **No `AccessibilityService` is used.**
+- **Managed flavor (`com.focusgate.app.managed`):** Device Owner
+  `DevicePolicyManager.setPackagesSuspended` (`ManagedDeviceController`) and
+  optional `setLockTaskPackages` allowlist for provisioned devices.
 
-### 3.2 What could not be verified
+### 3.2 What was verified vs. not verified
 
-**The Android module was not compiled or run.** The machine has no Android SDK,
-and the installed JDK 27 is not supported by AGP 8.7/Gradle. Installing a
-multi-gigabyte SDK plus a compatible JDK was outside the safe, reversible scope
-of this turn. Therefore:
+- **Verified (automated + API 36 emulator):**
+  - `assemblePersonalDebug` and `assembleManagedDebug` build cleanly with JDK 17
+    + Android SDK 36 / Build Tools 36.0.0.
+  - `testPersonalDebugUnitTest`: **22/22 passed** (`PolicyEvaluatorTest` 10,
+    `ProtectionEvaluatorTest` 9, `EmergencyAccessTest` 3).
+  - `testManagedDebugUnitTest`: **22/22 passed**.
+  - API 36 emulator walkthrough documented in `docs/ANDROID_LOCK.md`.
+- **Not verified:**
+  - **Physical device testing** (target: Redmi Note 13 / Android 15 HyperOS) has
+    not been run because no phone was connected via ADB.
+  - OEM autostart/battery killers, background FGS start from `BOOT_COMPLETED` on
+    HyperOS, release signing, and Play Console review are unverified.
 
-- No APK exists.
-- No device test results exist.
-- No claim is made that the block screen appears on any device.
-- The accessibility background-activity-launch behaviour is **unverified**.
-
-### 3.3 Platform findings (documented, not device-verified)
+### 3.3 Platform findings
 
 1. `UsageStatsManager` only observes; it cannot block. It requires a special
    access permission the user can revoke.
-2. `AccessibilityService` can detect window changes but Android 10+ restricts
-   background activity launches; an overlay (`TYPE_ACCESSIBILITY_OVERLAY`) is the
-   likely fallback on strict OEM builds.
-3. Google Play requires Accessibility use to be core functionality, disclosed,
-   and minimal; `canRetrieveWindowContent=false` is mandatory for this design.
-4. Real enforcement on Android requires Device Owner / DPC provisioning
+2. `SYSTEM_ALERT_WINDOW` (`TYPE_APPLICATION_OVERLAY`) avoids background activity
+   launch restrictions and Google Play's AccessibilityService restriction, but
+   remains user-revocable friction.
+3. Real enforcement on Android requires Device Owner / DPC provisioning
    (`setPackagesSuspended`), i.e. Managed Device Mode — not a personal-phone
    trick.
-5. OEM battery managers are the main reliability risk for the foreground service.
+4. OEM battery managers (especially Xiaomi HyperOS/MIUI) are the main
+   reliability risk for the foreground service.
 
 ## 4. Database and backend rules
 
@@ -132,31 +142,30 @@ of this turn. Therefore:
 
 - `supabase/migrations/20260101000001_init.sql`
 - `supabase/migrations/20260101000002_plan_and_reward.sql`
-- `scripts/verify-db.mjs` (harness, two users, 34 assertions)
+- `supabase/migrations/20260101000003_backend_hardening.sql`
+- `scripts/verify-db.mjs` (harness, two users + multiple devices, **74 assertions**)
 
-### 4.2 Result: 34 passed, 0 failed
+### 4.2 Result: 74 passed, 0 failed
 
 Verified behaviours:
 
 | Area | Evidence |
 |---|---|
-| Migrations | Both files applied without error |
-| Auth trigger | Two profiles + default settings created |
-| RLS isolation | User B sees 0 of user A's tasks, rewards |
+| Migrations | All 3 migration files applied without error |
+| Auth trigger & profile validation | Display name truncation/fallback, unknown timezone rejected, blank name rejected |
+| RLS isolation | User B sees 0 of user A's tasks, focus sessions, grants, ledger |
 | RLS writes | User B cannot update user A's task |
-| Plan lifecycle | Draft → confirmed → active via RPCs; direct status update refused |
+| Plan lifecycle | Draft → confirmed → active → completed via RPCs; direct status update refused |
 | Committed Must Do | Cannot be deleted by the client; downgrade requires a reason |
-| Task completion | Rejected with `0 of 25 required focus minutes` |
-| Focus validity | Client-supplied `is_valid` ignored; server computed `true` |
-| Grant math | 30 base + 5 bonus = 35 minutes |
-| Grant idempotency | Same key and different key both return the original grant |
-| Client forgery | Direct insert into `unlock_grants`: permission denied |
-| Consumption | 10 of 35 → 25 left; replay does not double-spend |
-| Overspend | 30 requested with 25 left → `grant_exhausted` |
-| Wallet | 35 earned / 10 consumed / 25 remaining |
-| Cross-user RPC | User B cannot evaluate or consume user A's plan/grant |
+| Task completion | Rejected with `0 of 25 required focus minutes`; succeeds once valid focus exists |
+| Focus sessions | Server-owned RPCs; single open session unique index; direct insert/update revoked; server clock elapsed calculation |
+| Grant math & idempotency | 30 base + 5 bonus = 35 minutes; same/different key returns original grant; key reuse across plans rejected |
+| Client forgery | Direct insert into `unlock_grants` / `user_settings` update: permission denied |
+| Consumption & multi-device | 10 of 35 → 25 left; replay idempotent; second device cannot claim duplicate grant or replay first device's key; second device spends 5 → 20 left; overspend rejected (`grant_exhausted`) |
+| Device revocation | Revoking a device cancels open sessions and blocks subsequent session start / spending |
+| Cross-tenant storage constraints | Composite `(id, user_id)` FKs and usage event grant ownership trigger reject cross-user references |
 | Expiry | Expired grant cannot be spent |
-| RLS coverage | 38 policies; every public table has RLS enabled |
+| RLS coverage | 33 policies; every public table has RLS enabled |
 
 ### 4.3 Not verified
 
@@ -173,7 +182,7 @@ Verified behaviours:
 | Platform | Bypass | Status |
 |---|---|---|
 | Windows | Kill agent, rename exe, elevated app, browser tab, second user, safe mode | Documented in `docs/WINDOWS_LOCK.md`; no mitigation claimed beyond watchdog/status |
-| Android | Revoke accessibility/usage access, force-stop, OEM battery kill, safe mode, split screen, browser tabs, second profile, root | Documented in `docs/ANDROID_LOCK.md`; permission-loss UX implemented in source |
+| Android | Revoke usage/overlay access, force-stop, OEM battery kill, safe mode, split screen, browser tabs, second profile, root | Documented in `docs/ANDROID_LOCK.md`; permission-loss UX implemented and unit-tested; physical device pending |
 | Backend | Client forging rewards | Blocked at privilege + trigger + RPC validation; tested |
 | Backend | Double spend across devices | Row lock + idempotency; tested sequentially, not under true parallel load |
 
@@ -205,9 +214,10 @@ Verified behaviours:
 
 ```bash
 # Repository checks
-npm install
-npm run db:verify                    # 34 assertions
-npm run shared:typecheck             # strict TypeScript
+npm ci
+npm run db:verify                    # 74 assertions
+npm run typecheck                    # strict TypeScript
+npm run build -w @focusgate/web
 
 # Windows agent
 cd apps/windows-agent
@@ -215,9 +225,10 @@ dotnet build src/FocusGate.Agent.Poc/FocusGate.Agent.Poc.csproj
 dotnet run --project src/FocusGate.Agent.Poc -- --selftest
 dotnet run --project src/FocusGate.Agent.Poc -- --monitor --seconds 20 --enforce log
 
-# Android (requires Android Studio / SDK 35 / JDK 17-21)
-# open apps/android in Android Studio, then run the manual test script in
-# apps/android/README.md
+# Android (requires JDK 17 + Android SDK 36 / Build Tools 36.0.0)
+cd apps/android
+./gradlew :app:assemblePersonalDebug :app:assembleManagedDebug \
+  :app:testPersonalDebugUnitTest :app:testManagedDebugUnitTest
 ```
 
 ## 9. Go / no-go

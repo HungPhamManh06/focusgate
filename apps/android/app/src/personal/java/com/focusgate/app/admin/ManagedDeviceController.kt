@@ -8,6 +8,8 @@ class ManagedDeviceController(@Suppress("UNUSED_PARAMETER") context: Context) {
 
     fun isAdminActive(): Boolean = false
 
+    fun suspendedPackages(): Set<String> = emptySet()
+
     fun applyBlockedPackages(
         blockedPackages: Set<String>,
         exemptPackages: Set<String>,

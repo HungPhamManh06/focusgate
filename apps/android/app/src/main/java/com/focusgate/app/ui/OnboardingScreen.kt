@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -45,6 +46,7 @@ import com.focusgate.app.util.PermissionChecks
 
 private const val STEP_COUNT = 4
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingScreen(onFinished: () -> Unit) {
     val context = LocalContext.current
@@ -222,6 +224,7 @@ private fun IntroStep(
 
 @Composable
 private fun UsageStep(granted: Boolean) {
+    val context = LocalContext.current
     Text(
         "1. Allow Usage Access",
         style = MaterialTheme.typography.headlineSmall,
@@ -237,7 +240,7 @@ private fun UsageStep(granted: Boolean) {
         title = "Usage Access",
         granted = granted,
         actionLabel = "Open Usage Access settings",
-        onAction = { PermissionChecks.openUsageAccessSettings(LocalContext.current) },
+        onAction = { PermissionChecks.openUsageAccessSettings(context) },
     )
     if (!granted) {
         Text(
@@ -250,6 +253,7 @@ private fun UsageStep(granted: Boolean) {
 
 @Composable
 private fun OverlayStep(granted: Boolean) {
+    val context = LocalContext.current
     Text(
         "2. Allow display over other apps",
         style = MaterialTheme.typography.headlineSmall,
@@ -265,7 +269,7 @@ private fun OverlayStep(granted: Boolean) {
         title = "Display over other apps",
         granted = granted,
         actionLabel = "Open overlay settings",
-        onAction = { PermissionChecks.openOverlaySettings(LocalContext.current) },
+        onAction = { PermissionChecks.openOverlaySettings(context) },
     )
     if (!granted) {
         Text(
