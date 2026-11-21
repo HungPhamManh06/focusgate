@@ -3,16 +3,31 @@ package com.focusgate.app
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.os.Build
+import com.focusgate.app.admin.AndroidPolicyCoordinatorStore
+import com.focusgate.app.admin.PolicyOperationCoordinator
 import com.focusgate.app.util.NotificationIds
 import com.focusgate.app.util.ProtectionWatchdog
 
 class FocusGateApp : Application() {
 
+    val policyCoordinator: PolicyOperationCoordinator by lazy {
+        PolicyOperationCoordinator(AndroidPolicyCoordinatorStore(this))
+    }
+
     override fun onCreate() {
         super.onCreate()
         createChannels()
         ProtectionWatchdog.schedule(this)
+    }
+
+    companion object {
+        fun coordinator(context: Context): PolicyOperationCoordinator {
+            val app = context.applicationContext as? FocusGateApp
+            return app?.policyCoordinator
+                ?: PolicyOperationCoordinator(AndroidPolicyCoordinatorStore(context.applicationContext))
+        }
     }
 
     private fun createChannels() {

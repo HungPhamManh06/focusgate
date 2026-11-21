@@ -10,7 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
-import com.focusgate.app.admin.ManagedDeviceController
+import com.focusgate.app.FocusGateApp
 import com.focusgate.app.data.BlockedApp
 import com.focusgate.app.data.FocusGateDatabase
 import com.focusgate.app.data.UsageEvent
@@ -376,15 +376,12 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun startEmergencyFromOverlay() {
-        EmergencyAccess.start(this, EmergencyAccess.DEFAULT_MINUTES)
-
-        if (AgentPreferences.isManagedEnforcementEnabled(this)) {
-            val controller = ManagedDeviceController(this)
-            if (controller.isDeviceOwner()) controller.clearSuspensions()
-        }
-
         hideOverlayNow()
         lastShownBlockFor = null
+        scope.launch {
+            FocusGateApp.coordinator(this@AppUsageMonitorService)
+                .startEmergency(EmergencyAccess.DEFAULT_MINUTES)
+        }
         Notifications.updateMonitorNotification(this, true, true, true)
     }
 

@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,9 +47,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.focusgate.app.BuildConfig
+import com.focusgate.app.FocusGateApp
 import com.focusgate.app.admin.ManagedDeviceController
 import com.focusgate.app.admin.ManagedPolicyAudit
-import com.focusgate.app.data.BlockedApp
+import com.focusgate.app.admin.PolicyOperationOutcome
 import com.focusgate.app.data.FocusGateDatabase
 import com.focusgate.app.policy.PolicyEvaluator
 import com.focusgate.app.policy.ProtectionEvaluator
@@ -76,6 +78,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val database = remember { FocusGateDatabase.get(context) }
     val managedController = remember { ManagedDeviceController(context) }
+    val coordinator = remember { FocusGateApp.coordinator(context) }
 
     var apps by remember { mutableStateOf<List<InstalledApp>>(emptyList()) }
     var ruleLabels by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -113,20 +116,50 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     var banner by remember { mutableStateOf<String?>(null) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
+    var activeOperations by remember { mutableIntStateOf(0) }
+    var operationSequence by remember { mutableIntStateOf(0) }
+    val isOperationInProgress = activeOperations > 0
 
-    fun refreshManagedAudit(
-        blockedSet: Set<String> = savedBlocked,
-        exemptSet: Set<String> = savedExempt,
-        isManagedOn: Boolean = managedEnabled,
+    fun applyOutcome(outcome: PolicyOperationOutcome, seq: Int? = null) {
+        val state = outcome.state
+        val hadUnsaved = pendingBlocked != savedBlocked || pendingExempt != savedExempt
+        savedBlocked = state.savedBlocked
+        savedExempt = state.savedExempt
+        if (!hadUnsaved && outcome.savedSuccessfully) {
+            pendingBlocked = state.savedBlocked
+            pendingExempt = state.savedExempt
+        }
+        monitorEnabled = state.monitorEnabled
+        managedEnabled = state.managedEnabled
+        deviceOwner = state.deviceOwner
+        managedAudit = outcome.audit
+        deviceEssential = state.deviceEssential
+        serviceRunning = AppUsageMonitorService.isRunning
+        monitorAppliedBlocked = AppUsageMonitorService.appliedBlockedPackages
+        monitorAppliedExempt = AppUsageMonitorService.appliedExemptPackages
+        emergencyRemaining = EmergencyAccess.remainingMillis(context)
+        if (seq == null || seq == operationSequence) {
+            outcome.bannerMessage?.let { banner = it }
+        }
+    }
+
+    fun runPolicyOperation(
+        clearPendingIfSaved: Boolean = false,
+        block: suspend () -> PolicyOperationOutcome,
     ) {
-        managedAudit = if (BuildConfig.MANAGED_MODE) {
-            if (isManagedOn) {
-                managedController.auditPolicy(blockedSet, exemptSet)
-            } else {
-                managedController.auditPolicy(emptySet(), emptySet())
+        val seq = ++operationSequence
+        activeOperations++
+        scope.launch {
+            try {
+                val outcome = withContext(Dispatchers.IO) { block() }
+                if (clearPendingIfSaved && outcome.savedSuccessfully) {
+                    pendingBlocked = outcome.state.savedBlocked
+                    pendingExempt = outcome.state.savedExempt
+                }
+                applyOutcome(outcome, seq)
+            } finally {
+                activeOperations = (activeOperations - 1).coerceAtLeast(0)
             }
-        } else {
-            ManagedPolicyAudit(deviceOwnerValid = false)
         }
     }
 
@@ -134,21 +167,14 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         usageGranted = PermissionChecks.hasUsageAccess(context)
         overlayGranted = PermissionChecks.hasOverlayAccess(context)
         notificationsGranted = PermissionChecks.hasNotificationPermission(context)
-        monitorEnabled = AgentPreferences.isMonitorEnabled(context)
-        managedEnabled = AgentPreferences.isManagedEnforcementEnabled(context)
-        deviceOwner = managedController.isDeviceOwner()
-        refreshManagedAudit()
-        val updatedEssential = SystemPackages.deviceEssential(context)
-        if (updatedEssential != deviceEssential) {
-            deviceEssential = updatedEssential
-            scope.launch {
+        val prevEssential = deviceEssential
+        scope.launch {
+            val outcome = withContext(Dispatchers.IO) { coordinator.auditCurrentPolicy() }
+            applyOutcome(outcome)
+            if (outcome.state.deviceEssential != prevEssential) {
                 apps = withContext(Dispatchers.IO) { loadLauncherApps(context) }
             }
         }
-        serviceRunning = AppUsageMonitorService.isRunning
-        monitorAppliedBlocked = AppUsageMonitorService.appliedBlockedPackages
-        monitorAppliedExempt = AppUsageMonitorService.appliedExemptPackages
-        emergencyRemaining = EmergencyAccess.remainingMillis(context)
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -172,7 +198,6 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         pendingBlocked = loadedBlocked
         pendingExempt = loadedExempt
         refreshRuntime()
-        refreshManagedAudit(loadedBlocked, loadedExempt)
     }
 
     LaunchedEffect(Unit) {
@@ -239,134 +264,36 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         monitorPolicySynced = monitorPolicySynced,
     )
 
-    fun labelFor(packageName: String): String =
-        apps.firstOrNull { it.packageName == packageName }?.label
-            ?: ruleLabels[packageName]
-            ?: packageName
-
     fun savePolicy() {
         val nextBlocked = pendingBlocked
         val nextExempt = pendingExempt
-        val rows = (nextBlocked + nextExempt).map { packageName ->
-            BlockedApp(
-                packageName = packageName,
-                label = labelFor(packageName),
-                category = PolicyEvaluator.categoryFor(packageName, labelFor(packageName)),
-                enabled = true,
-                isExempt = packageName in nextExempt,
-            )
-        }
-        scope.launch {
-            val persisted = runCatching {
-                withContext(Dispatchers.IO) { database.blockedAppDao().replaceAll(rows) }
-            }
-            if (persisted.isFailure) {
-                banner = "Could not save policy. Active protection still uses the previous saved policy."
-                return@launch
-            }
-            savedBlocked = nextBlocked
-            savedExempt = nextExempt
-            ruleLabels = rows.associate { it.packageName to it.label }
-            banner = if (managedActive) {
-                val result = withContext(Dispatchers.IO) {
-                    managedController.applyBlockedPackages(savedBlocked, savedExempt)
-                }
-                refreshManagedAudit(savedBlocked, savedExempt)
-                result.message
-            } else {
-                refreshManagedAudit(savedBlocked, savedExempt)
-                "Policy saved. The monitor reads it immediately."
-            }
+        runPolicyOperation(clearPendingIfSaved = true) {
+            coordinator.savePolicy(nextBlocked, nextExempt)
         }
     }
 
     fun applyManagedPolicy() {
-        val result = managedController.applyBlockedPackages(savedBlocked, savedExempt)
-        refreshManagedAudit(savedBlocked, savedExempt)
-        banner = result.message
+        runPolicyOperation { coordinator.applyManagedPolicy() }
     }
 
-    fun clearManagedSuspensions(): String {
-        val result = managedController.clearSuspensions()
-        refreshManagedAudit(savedBlocked, savedExempt)
-        return result.message
+    fun clearManagedSuspensions() {
+        runPolicyOperation { coordinator.restoreSuspendedApps() }
     }
 
     fun setMonitoring(enabled: Boolean) {
-        if (!enabled) {
-            AgentPreferences.setMonitorEnabled(context, false)
-            monitorEnabled = false
-            context.stopService(Intent(context, AppUsageMonitorService::class.java))
-            ProtectionWatchdog.cancel(context)
-            if (managedActive) clearManagedSuspensions()
-            banner = "Protection is off. Selected apps are not being restricted."
-            return
-        }
-
-        if (!managedActive && (!usageGranted || !overlayGranted)) {
-            banner = "Grant Usage Access and Display over other apps before enabling protection."
-            return
-        }
-
-        AgentPreferences.setMonitorEnabled(context, true)
-        monitorEnabled = true
-
-        if (managedActive) {
-            context.stopService(Intent(context, AppUsageMonitorService::class.java))
-            ProtectionWatchdog.cancel(context)
-            applyManagedPolicy()
-        } else {
-            ProtectionWatchdog.schedule(context)
-            runCatching {
-                ContextCompat.startForegroundService(
-                    context,
-                    Intent(context, AppUsageMonitorService::class.java),
-                )
-            }.onFailure {
-                banner = "Android refused to start monitoring. Check permissions and try again."
-            }
-        }
+        runPolicyOperation { coordinator.setMonitoring(enabled) }
     }
 
     fun setManaged(enabled: Boolean) {
-        if (!deviceOwner) {
-            banner = "Device Owner provisioning is required for Managed Device mode."
-            return
-        }
-        AgentPreferences.setManagedEnforcementEnabled(context, enabled)
-        managedEnabled = enabled
-        if (enabled) {
-            AgentPreferences.setMonitorEnabled(context, true)
-            monitorEnabled = true
-            context.stopService(Intent(context, AppUsageMonitorService::class.java))
-            ProtectionWatchdog.cancel(context)
-            applyManagedPolicy()
-        } else {
-            banner = clearManagedSuspensions()
-            if (monitorEnabled && usageGranted && overlayGranted) {
-                ProtectionWatchdog.schedule(context)
-                runCatching {
-                    ContextCompat.startForegroundService(
-                        context,
-                        Intent(context, AppUsageMonitorService::class.java),
-                    )
-                }
-            }
-        }
+        runPolicyOperation { coordinator.setManagedMode(enabled) }
     }
 
     fun startEmergency() {
-        EmergencyAccess.start(context, EmergencyAccess.DEFAULT_MINUTES)
-        if (managedActive) clearManagedSuspensions()
-        emergencyRemaining = EmergencyAccess.remainingMillis(context)
-        banner = "Emergency access is active. Restrictions resume automatically."
+        runPolicyOperation { coordinator.startEmergency(EmergencyAccess.DEFAULT_MINUTES) }
     }
 
     fun endEmergency() {
-        EmergencyAccess.end(context)
-        if (managedActive) applyManagedPolicy()
-        emergencyRemaining = 0L
-        banner = "Emergency access ended."
+        runPolicyOperation { coordinator.endEmergency() }
     }
 
     if (showEmergencyDialog) {
@@ -496,18 +423,19 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 OutlinedButton(
                                     onClick = {
                                         if (protection.needsManagedRestore) {
-                                            banner = clearManagedSuspensions()
+                                            clearManagedSuspensions()
                                         } else {
                                             applyManagedPolicy()
                                         }
                                     },
+                                    enabled = !isOperationInProgress,
                                     modifier = Modifier.padding(top = 8.dp),
                                 ) {
                                     Text(
-                                        if (protection.needsManagedRestore) {
-                                            "Restore suspended apps"
-                                        } else {
-                                            "Re-apply policy"
+                                        when {
+                                            isOperationInProgress -> "Working..."
+                                            protection.needsManagedRestore -> "Restore suspended apps"
+                                            else -> "Re-apply policy"
                                         },
                                     )
                                 }
@@ -579,6 +507,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             Switch(
                                 checked = monitorEnabled,
                                 onCheckedChange = ::setMonitoring,
+                                enabled = !isOperationInProgress,
                             )
                         }
                     }
@@ -608,11 +537,13 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         if (emergencyActive) {
                             OutlinedButton(
                                 onClick = ::endEmergency,
+                                enabled = !isOperationInProgress,
                                 modifier = Modifier.padding(top = 8.dp),
                             ) { Text("End emergency access now") }
                         } else {
                             Button(
                                 onClick = { showEmergencyDialog = true },
+                                enabled = !isOperationInProgress,
                                 modifier = Modifier.padding(top = 8.dp),
                             ) { Text("Emergency access (10 min)") }
                         }
@@ -655,6 +586,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 Switch(
                                     checked = managedEnabled,
                                     onCheckedChange = ::setManaged,
+                                    enabled = !isOperationInProgress,
                                 )
                             }
                         }
@@ -720,8 +652,11 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 },
                                 modifier = Modifier.weight(1f),
                             )
-                            Button(onClick = ::savePolicy, enabled = hasUnsavedChanges) {
-                                Text("Save policy")
+                            Button(
+                                onClick = ::savePolicy,
+                                enabled = hasUnsavedChanges && !isOperationInProgress,
+                            ) {
+                                Text(if (isOperationInProgress) "Applying…" else "Save policy")
                             }
                         }
                     }

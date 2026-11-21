@@ -123,21 +123,22 @@ cd apps/android
   :app:testPersonalDebugUnitTest :app:testManagedDebugUnitTest
 ```
 
-Observed: `BUILD SUCCESSFUL`; **60/60 unit tests pass in each flavor** (120 total:
-`ManagedSuspensionReconcilerTest` 26, `PolicyEvaluatorTest` 13,
-`ProtectionEvaluatorTest` 18, `EmergencyAccessTest` 3), covering verified vs.
-`UNKNOWN` suspension state & recovery tracking, Managed-to-Personal transition
-guards, two-way policy audit (missing + extra suspended), final-OS-state
-`SecurityException` recovery, saved vs. pending policy status, Personal Mode
-monitor sync, OEM essential allowlist (Xiaomi/Samsung/Google dialers &
-launchers), dynamic default-app protection (`SystemPackages`), and invalid
-policy entries.
+Observed: `BUILD SUCCESSFUL`; **82/82 unit tests pass in each flavor** (164 total:
+`ManagedSuspensionReconcilerTest` 40, `PolicyOperationCoordinatorTest` 6,
+`PolicyEvaluatorTest` 13, `ProtectionEvaluatorTest` 20, `EmergencyAccessTest` 3),
+covering full post-operation OS verification across all involved packages,
+verified vs. `UNKNOWN` suspension state & recovery tracking, serialized policy
+transitions (`PolicyOperationCoordinator`), Managed-to-Personal transition guards,
+two-way policy audit (missing + extra suspended), final-OS-state `SecurityException`
+recovery, saved vs. pending policy status, Personal Mode monitor sync, OEM
+essential allowlist (Xiaomi/Samsung/Google dialers & launchers), dynamic
+default-app protection (`SystemPackages`), and invalid policy entries.
 `connectedPersonalDebugAndroidTest` ran 2/2 Compose onboarding tests on the
 emulator (`BUILD SUCCESSFUL`).
 
 > **Note:** Passing unit tests and builds does **not** verify real-device
 > enforcement. Physical-device testing on Redmi Note 13 (Android 15 / HyperOS)
-> has not been executed yet; see `docs/MILESTONE1_2_1_TEST_REPORT.md` and
+> has not been executed yet; see `docs/MILESTONE1_2_2_TEST_REPORT.md` and
 > `docs/MILESTONE1_TEST_REPORT.md` for the manual test checklist.
 
 Manual emulator checks performed with `adb`:

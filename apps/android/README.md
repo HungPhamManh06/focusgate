@@ -32,14 +32,15 @@ APKs:
 - `app/build/outputs/apk/personal/debug/app-personal-debug.apk`
 - `app/build/outputs/apk/managed/debug/app-managed-debug.apk`
 
-The Android 16 (API 36) emulator run and Milestone 1.2.1 unit test suite are
+The Android 16 (API 36) emulator run and Milestone 1.2.2 unit test suite are
 documented in [`../../docs/ANDROID_LOCK.md`](../../docs/ANDROID_LOCK.md) and
-[`../../docs/MILESTONE1_2_1_TEST_REPORT.md`](../../docs/MILESTONE1_2_1_TEST_REPORT.md):
-build, **60/60 unit tests per flavour** (`ManagedSuspensionReconcilerTest` 26,
-`PolicyEvaluatorTest` 13, `ProtectionEvaluatorTest` 18, `EmergencyAccessTest` 3),
-onboarding, block overlay, emergency access, permission revocation, reboot
-restore, Device Owner suspension and managed reboot restore. Physical-device
-testing (Redmi Note 13 / Android 15) has **not** been executed yet.
+[`../../docs/MILESTONE1_2_2_TEST_REPORT.md`](../../docs/MILESTONE1_2_2_TEST_REPORT.md):
+build, **82/82 unit tests per flavour** (`ManagedSuspensionReconcilerTest` 40,
+`PolicyOperationCoordinatorTest` 6, `PolicyEvaluatorTest` 13,
+`ProtectionEvaluatorTest` 20, `EmergencyAccessTest` 3), onboarding, block
+overlay, emergency access, permission revocation, reboot restore, Device Owner
+suspension, serialized policy transitions, and managed reboot restore.
+Physical-device testing (Redmi Note 13 / Android 15) has **not** been executed yet.
 
 ## Personal Strict Mode
 

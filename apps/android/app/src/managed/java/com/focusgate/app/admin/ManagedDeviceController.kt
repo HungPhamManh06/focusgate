@@ -97,6 +97,12 @@ class ManagedDeviceController(context: Context) {
         )
     }
 
+    fun auditRequiredPackages(requiredPackages: Set<String>): ManagedPolicyAudit =
+        ManagedSuspensionReconciler.auditPolicy(
+            requiredPackages = requiredPackages,
+            backend = backend,
+        )
+
     fun applyBlockedPackages(
         blockedPackages: Set<String>,
         exemptPackages: Set<String>,

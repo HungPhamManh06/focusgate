@@ -189,19 +189,21 @@ object ManagedSuspensionReconciler {
             }
         }
 
-        // Re-reconcile against actual OS state after operations (including after
-        // a partial SecurityException) so earlier successful steps are preserved
-        // and any failed/unverified packages (both unsuspend and suspend) remain
-        // tracked for recovery.
-        val candidateTracked = (before.trackedPackages - unsuspendedOk) +
-            suspendedOk +
+        // Re-reconcile ALL packages that were tracked, targeted, or touched by DPM
+        // (including packages DPM reported as unsuspendedOk or suspendedOk) so
+        // API lies or silent OS failures are always caught.
+        val involvedPackages = tracked +
+            before.trackedPackages +
+            target +
+            toUnsuspend +
+            toSuspend +
             failedToUnsuspend +
             failedToSuspend
         val ownerStillValid = backend.isDeviceOwner()
         val after = if (ownerStillValid) {
-            reconcile(candidateTracked, target, backend)
+            reconcile(involvedPackages, target, backend)
         } else {
-            val unverified = candidateTracked + target
+            val unverified = involvedPackages + target
             ManagedSuspensionSnapshot(
                 verifiedSuspended = emptySet(),
                 verifiedNotSuspended = emptySet(),
@@ -216,8 +218,9 @@ object ManagedSuspensionReconciler {
         val remainingExtra = after.verifiedSuspended - target
 
         // Final OS state after reconciliation is the primary source of truth.
-        // If an exception was thrown but OS state is verified exact match, do
-        // not contradict Protection Status; keep exceptionMessage for logging.
+        // `applied` is true ONLY when Device Owner is valid, all required
+        // packages are verified SUSPENDED, no extra packages remain suspended,
+        // and no involved package is UNKNOWN.
         val exactMatch = ownerStillValid &&
             remainingMissing.isEmpty() &&
             remainingExtra.isEmpty() &&
@@ -226,12 +229,14 @@ object ManagedSuspensionReconciler {
         val effectiveFailedToSuspend = if (exactMatch) {
             emptyList()
         } else {
-            (failedToSuspend.intersect(remainingMissing + after.unknownState)).toList().sorted()
+            (toSuspend.intersect(remainingMissing + after.unknownState) +
+                failedToSuspend.intersect(remainingMissing + after.unknownState)).distinct().sorted()
         }
         val effectiveFailedToUnsuspend = if (exactMatch) {
             emptyList()
         } else {
-            (failedToUnsuspend.intersect(remainingExtra + after.unknownState)).toList().sorted()
+            (toUnsuspend.intersect(remainingExtra + after.unknownState) +
+                failedToUnsuspend.intersect(remainingExtra + after.unknownState)).distinct().sorted()
         }
 
         val exceptionMsg = securityError?.let { it.message ?: "SecurityException" }
@@ -318,16 +323,18 @@ object ManagedSuspensionReconciler {
             failedToUnsuspend = toClear
         }
 
-        val candidateTracked = (toClear - unsuspendedOk) + failedToUnsuspend
+        // Re-reconcile ALL packages in toClear/tracked regardless of whether DPM
+        // reported success or failure, and only drop packages verified NOT_SUSPENDED.
+        val involvedPackages = tracked + toClear + failedToUnsuspend
         val ownerStillValid = backend.isDeviceOwner()
         val after = if (ownerStillValid) {
-            reconcile(candidateTracked, emptySet(), backend)
+            reconcile(involvedPackages, emptySet(), backend)
         } else {
             ManagedSuspensionSnapshot(
                 verifiedSuspended = emptySet(),
                 verifiedNotSuspended = emptySet(),
-                unknownState = candidateTracked,
-                trackedPackages = candidateTracked,
+                unknownState = involvedPackages,
+                trackedPackages = involvedPackages,
             )
         }
         backend.saveTrackedSuspended(after.trackedPackages)
@@ -335,12 +342,13 @@ object ManagedSuspensionReconciler {
         val unknownList = after.unknownState.toList().sorted()
         val cleared = ownerStillValid &&
             after.verifiedSuspended.isEmpty() &&
-            after.unknownState.isEmpty()
+            after.unknownState.isEmpty() &&
+            after.trackedPackages.isEmpty()
 
         val effectiveFailedToUnsuspend = if (cleared) {
             emptyList()
         } else {
-            (toClear.intersect(after.verifiedSuspended + after.unknownState)).toList().sorted()
+            (involvedPackages.intersect(after.verifiedSuspended + after.unknownState)).toList().sorted()
         }
 
         val exceptionMsg = securityError?.let { it.message ?: "SecurityException" }

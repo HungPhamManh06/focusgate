@@ -296,4 +296,56 @@ class ProtectionEvaluatorTest {
         assertEquals(1, result.managedUnknownCount)
         assertTrue(result.issues.any { it.contains("unverified") })
     }
+
+    @Test
+    fun `personal mode becomes ready only after lingering suspensions are verified cleared`() {
+        val degraded = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = true,
+            managedEnforced = false,
+            emergencyActive = false,
+            managedExtraSuspendedCount = 1,
+            managedUnknownCount = 0,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, degraded.level)
+        assertEquals(false, degraded.personalModeReady)
+
+        val cleared = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = true,
+            managedEnforced = false,
+            emergencyActive = false,
+            managedExtraSuspendedCount = 0,
+            managedUnknownCount = 0,
+        )
+        assertEquals(ProtectionLevel.PROTECTED, cleared.level)
+        assertTrue(cleared.personalModeReady)
+        assertEquals(false, cleared.needsManagedRestore)
+    }
+
+    @Test
+    fun `managed mode cannot be Protected when audit has any mismatch`() {
+        val missingAndExtra = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = false,
+            overlayAccess = false,
+            serviceRunning = false,
+            managedEnforced = true,
+            emergencyActive = false,
+            managedUnsuspendedCount = 1,
+            managedExtraSuspendedCount = 1,
+            managedUnknownCount = 0,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, missingAndExtra.level)
+        assertEquals(false, missingAndExtra.managedModeReady)
+        assertEquals(1, missingAndExtra.managedMissingCount)
+        assertEquals(1, missingAndExtra.managedExtraSuspendedCount)
+    }
 }

@@ -20,17 +20,25 @@ class ManagedSuspensionReconcilerTest {
         initialOsSuspended: Set<String> = initialTracked,
         var failSuspend: Set<String> = emptySet(),
         var failUnsuspend: Set<String> = emptySet(),
+        var ignoreOsSuspend: Set<String> = emptySet(),
+        var ignoreOsUnsuspend: Set<String> = emptySet(),
+        var forceOsSuspendEvenOnFail: Set<String> = emptySet(),
+        var forceOsUnsuspendEvenOnFail: Set<String> = emptySet(),
         var throwSecurityExceptionOnSuspend: Boolean = false,
         var throwSecurityExceptionOnUnsuspend: Boolean = false,
         var partialOsChangeBeforeSuspendException: Boolean = false,
         var partialOsChangeBeforeUnsuspendException: Boolean = false,
+        var markUnknownAfterSuspend: Set<String> = emptySet(),
+        var markUnknownAfterUnsuspend: Set<String> = emptySet(),
         var markUnknownAfterSuspendException: Boolean = false,
         var markUnknownAfterUnsuspendException: Boolean = false,
         var revokeDeviceOwnerOnOperation: Boolean = false,
+        var revokeDeviceOwnerAfterOperation: Boolean = false,
         var unknownStatePackages: MutableSet<String> = mutableSetOf(),
     ) : ManagedSuspensionBackend {
         var tracked: Set<String> = initialTracked.toSet()
         val osSuspended: MutableSet<String> = initialOsSuspended.toMutableSet()
+        val queriedPackages: MutableList<String> = mutableListOf()
 
         override fun isDeviceOwner(): Boolean = deviceOwner
         override fun loadTrackedSuspended(): Set<String> = tracked
@@ -45,7 +53,7 @@ class ManagedSuspensionReconcilerTest {
             }
             if (suspended && throwSecurityExceptionOnSuspend) {
                 if (partialOsChangeBeforeSuspendException) {
-                    osSuspended.addAll(packages - failSuspend)
+                    osSuspended.addAll(packages - failSuspend - ignoreOsSuspend)
                 }
                 if (markUnknownAfterSuspendException) {
                     unknownStatePackages.addAll(packages)
@@ -54,7 +62,7 @@ class ManagedSuspensionReconcilerTest {
             }
             if (!suspended && throwSecurityExceptionOnUnsuspend) {
                 if (partialOsChangeBeforeUnsuspendException) {
-                    osSuspended.removeAll(packages - failUnsuspend)
+                    osSuspended.removeAll(packages - failUnsuspend - ignoreOsUnsuspend)
                 }
                 if (markUnknownAfterUnsuspendException) {
                     unknownStatePackages.addAll(packages)
@@ -62,15 +70,28 @@ class ManagedSuspensionReconcilerTest {
                 throw SecurityException("Device policy rejected unsuspend")
             }
             val failing = if (suspended) packages.intersect(failSuspend) else packages.intersect(failUnsuspend)
-            val succeeded = packages - failing
-            if (suspended) osSuspended.addAll(succeeded) else osSuspended.removeAll(succeeded)
+            if (suspended) {
+                val toApply = (packages - failing - ignoreOsSuspend) + packages.intersect(forceOsSuspendEvenOnFail)
+                osSuspended.addAll(toApply)
+                unknownStatePackages.addAll(packages.intersect(markUnknownAfterSuspend))
+            } else {
+                val toApply = (packages - failing - ignoreOsUnsuspend) + packages.intersect(forceOsUnsuspendEvenOnFail)
+                osSuspended.removeAll(toApply)
+                unknownStatePackages.addAll(packages.intersect(markUnknownAfterUnsuspend))
+            }
+            if (revokeDeviceOwnerAfterOperation) {
+                deviceOwner = false
+            }
             return failing
         }
 
-        override fun querySuspensionState(packageName: String): PackageSuspensionState = when {
-            packageName in unknownStatePackages -> PackageSuspensionState.UNKNOWN
-            packageName in osSuspended -> PackageSuspensionState.SUSPENDED
-            else -> PackageSuspensionState.NOT_SUSPENDED
+        override fun querySuspensionState(packageName: String): PackageSuspensionState {
+            queriedPackages.add(packageName)
+            return when {
+                packageName in unknownStatePackages -> PackageSuspensionState.UNKNOWN
+                packageName in osSuspended -> PackageSuspensionState.SUSPENDED
+                else -> PackageSuspensionState.NOT_SUSPENDED
+            }
         }
     }
 
@@ -778,5 +799,278 @@ class ManagedSuspensionReconcilerTest {
         val status = evaluateAudit(audit, requiredCount = 1)
         assertEquals(ProtectionLevel.DEGRADED, status.level)
         assertEquals(1, status.managedUnknownCount)
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 1.2.2 Group A: Apply post-operation verification
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `M122-A1 - DPM unsuspend claims success but OS still SUSPENDED returns applied false and keeps tracked`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+            ignoreOsUnsuspend = setOf(youtube),
+        )
+        val result = ManagedSuspensionReconciler.applyBlockedPackages(
+            blockedPackages = emptySet(),
+            exemptPackages = emptySet(),
+            ownPackage = ownPkg,
+            deviceEssential = emptySet(),
+            backend = backend,
+        )
+        assertFalse(result.applied)
+        assertEquals(1, result.suspendedPackages)
+        assertEquals(listOf(youtube), result.failedToUnsuspend)
+        assertEquals(setOf(youtube), backend.tracked)
+        assertTrue(youtube in backend.osSuspended)
+
+        val audit = ManagedSuspensionReconciler.auditPolicy(emptySet(), backend)
+        assertEquals(setOf(youtube), audit.extraSuspended)
+        assertFalse(audit.isExactMatch)
+        assertEquals(ProtectionLevel.DEGRADED, evaluateAudit(audit, 0).level)
+    }
+
+    @Test
+    fun `M122-A2 - DPM unsuspend claims success but OS query returns UNKNOWN keeps tracked and applied false`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+            markUnknownAfterUnsuspend = setOf(youtube),
+        )
+        val result = ManagedSuspensionReconciler.applyBlockedPackages(
+            blockedPackages = emptySet(),
+            exemptPackages = emptySet(),
+            ownPackage = ownPkg,
+            deviceEssential = emptySet(),
+            backend = backend,
+        )
+        assertFalse(result.applied)
+        assertEquals(listOf(youtube), result.unknownPackages)
+        assertEquals(setOf(youtube), backend.tracked)
+
+        val audit = ManagedSuspensionReconciler.auditPolicy(emptySet(), backend)
+        assertEquals(setOf(youtube), audit.unknownPackages)
+        assertEquals(ProtectionLevel.DEGRADED, evaluateAudit(audit, 0).level)
+    }
+
+    @Test
+    fun `M122-A3 - DPM unsuspend succeeds and OS verified NOT_SUSPENDED removes from tracking`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+        )
+        val result = ManagedSuspensionReconciler.applyBlockedPackages(
+            blockedPackages = emptySet(),
+            exemptPackages = emptySet(),
+            ownPackage = ownPkg,
+            deviceEssential = emptySet(),
+            backend = backend,
+        )
+        assertTrue(result.applied)
+        assertEquals(0, result.suspendedPackages)
+        assertTrue(backend.tracked.isEmpty())
+        assertTrue(backend.osSuspended.isEmpty())
+        assertTrue(youtube in backend.queriedPackages)
+    }
+
+    @Test
+    fun `M122-A4 - DPM suspend claims success but OS query returns UNKNOWN returns applied false and keeps tracked`() {
+        val backend = FakeBackend(
+            markUnknownAfterSuspend = setOf(youtube),
+        )
+        val result = ManagedSuspensionReconciler.applyBlockedPackages(
+            blockedPackages = setOf(youtube),
+            exemptPackages = emptySet(),
+            ownPackage = ownPkg,
+            deviceEssential = emptySet(),
+            backend = backend,
+        )
+        assertFalse(result.applied)
+        assertEquals(listOf(youtube), result.unknownPackages)
+        assertEquals(setOf(youtube), backend.tracked)
+
+        val audit = ManagedSuspensionReconciler.auditPolicy(setOf(youtube), backend)
+        assertEquals(ProtectionLevel.DEGRADED, evaluateAudit(audit, 1).level)
+    }
+
+    @Test
+    fun `M122-A5 - DPM suspend claims success but OS stays NOT_SUSPENDED returns applied false`() {
+        val backend = FakeBackend(
+            ignoreOsSuspend = setOf(youtube),
+        )
+        val result = ManagedSuspensionReconciler.applyBlockedPackages(
+            blockedPackages = setOf(youtube),
+            exemptPackages = emptySet(),
+            ownPackage = ownPkg,
+            deviceEssential = emptySet(),
+            backend = backend,
+        )
+        assertFalse(result.applied)
+        assertEquals(0, result.suspendedPackages)
+        assertEquals(listOf(youtube), result.failedToSuspend)
+        assertTrue(backend.tracked.isEmpty())
+
+        val audit = ManagedSuspensionReconciler.auditPolicy(setOf(youtube), backend)
+        assertEquals(setOf(youtube), audit.requiredNotSuspended)
+        assertEquals(ProtectionLevel.DEGRADED, evaluateAudit(audit, 1).level)
+    }
+
+    @Test
+    fun `M122-A6 - mixed suspend and unsuspend detects exact mismatched package`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube, instagram),
+            initialOsSuspended = setOf(youtube, instagram),
+            ignoreOsUnsuspend = setOf(instagram), // DPM lies that instagram unsuspended
+        )
+        // Target removes youtube & instagram, adds tiktok.
+        val result = ManagedSuspensionReconciler.applyBlockedPackages(
+            blockedPackages = setOf(tiktok),
+            exemptPackages = emptySet(),
+            ownPackage = ownPkg,
+            deviceEssential = emptySet(),
+            backend = backend,
+        )
+        assertFalse(result.applied)
+        assertEquals(listOf(instagram), result.failedToUnsuspend)
+        assertTrue(result.failedToSuspend.isEmpty())
+        assertEquals(setOf(tiktok, instagram), backend.tracked)
+
+        val audit = ManagedSuspensionReconciler.auditPolicy(setOf(tiktok), backend)
+        assertEquals(setOf(instagram), audit.extraSuspended)
+        assertTrue(audit.requiredNotSuspended.isEmpty())
+        assertEquals(ProtectionLevel.DEGRADED, evaluateAudit(audit, 1).level)
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 1.2.2 Group B: Clear post-operation verification
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `M122-B1 - clearSuspensions DPM claims success but OS still SUSPENDED returns applied false`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+            ignoreOsUnsuspend = setOf(youtube),
+        )
+        val result = ManagedSuspensionReconciler.clearSuspensions(backend)
+        assertFalse(result.applied)
+        assertEquals(1, result.suspendedPackages)
+        assertEquals(listOf(youtube), result.failedToUnsuspend)
+        assertEquals(setOf(youtube), backend.tracked)
+    }
+
+    @Test
+    fun `M122-B2 - clearSuspensions DPM claims success but OS query returns UNKNOWN returns applied false and keeps tracked`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+            markUnknownAfterUnsuspend = setOf(youtube),
+        )
+        val result = ManagedSuspensionReconciler.clearSuspensions(backend)
+        assertFalse(result.applied)
+        assertEquals(listOf(youtube), result.unknownPackages)
+        assertEquals(setOf(youtube), backend.tracked)
+    }
+
+    @Test
+    fun `M122-B3 - clearSuspensions verifies all NOT_SUSPENDED returns applied true and empty tracking`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube, tiktok),
+            initialOsSuspended = setOf(youtube, tiktok),
+        )
+        val result = ManagedSuspensionReconciler.clearSuspensions(backend)
+        assertTrue(result.applied)
+        assertEquals(0, result.suspendedPackages)
+        assertTrue(backend.tracked.isEmpty())
+        assertTrue(backend.osSuspended.isEmpty())
+    }
+
+    @Test
+    fun `M122-B4 - retry clear after UNKNOWN transitions to NOT_SUSPENDED and succeeds`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+            markUnknownAfterUnsuspend = setOf(youtube),
+        )
+        val first = ManagedSuspensionReconciler.clearSuspensions(backend)
+        assertFalse(first.applied)
+        assertEquals(setOf(youtube), backend.tracked)
+
+        // Second attempt: OS recovers and reports NOT_SUSPENDED.
+        backend.markUnknownAfterUnsuspend = emptySet()
+        backend.unknownStatePackages.clear()
+        val second = ManagedSuspensionReconciler.clearSuspensions(backend)
+        assertTrue(second.applied)
+        assertTrue(backend.tracked.isEmpty())
+    }
+
+    @Test
+    fun `M122-B5 - Device Owner lost during clearSuspensions never claims success`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+            revokeDeviceOwnerAfterOperation = true,
+        )
+        val result = ManagedSuspensionReconciler.clearSuspensions(backend)
+        assertFalse(result.applied)
+        assertEquals(setOf(youtube), backend.tracked)
+        assertEquals(listOf(youtube), result.unknownPackages)
+    }
+
+    // -------------------------------------------------------------------------
+    // Milestone 1.2.2 Group C: Audit correctness
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `M122-C1 - extra package suspended outside policy is detected by auditPolicy`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube, tiktok),
+            initialOsSuspended = setOf(youtube, tiktok),
+            ignoreOsUnsuspend = setOf(tiktok),
+        )
+        ManagedSuspensionReconciler.applyBlockedPackages(
+            blockedPackages = setOf(youtube),
+            exemptPackages = emptySet(),
+            ownPackage = ownPkg,
+            deviceEssential = emptySet(),
+            backend = backend,
+        )
+        val audit = ManagedSuspensionReconciler.auditPolicy(setOf(youtube), backend)
+        assertEquals(setOf(tiktok), audit.extraSuspended)
+        assertFalse(audit.isExactMatch)
+    }
+
+    @Test
+    fun `M122-C2 - UNKNOWN package is never counted in verifiedSuspended`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+            unknownStatePackages = mutableSetOf(youtube),
+        )
+        val snapshot = ManagedSuspensionReconciler.reconcile(setOf(youtube), setOf(youtube), backend)
+        assertTrue(snapshot.verifiedSuspended.isEmpty())
+        assertEquals(setOf(youtube), snapshot.unknownState)
+        assertEquals(setOf(youtube), snapshot.trackedPackages)
+    }
+
+    @Test
+    fun `M122-C3 - applyBlockedPackages queries every involved package including unsuspendedOk`() {
+        val backend = FakeBackend(
+            initialTracked = setOf(youtube),
+            initialOsSuspended = setOf(youtube),
+        )
+        backend.queriedPackages.clear()
+        val result = ManagedSuspensionReconciler.applyBlockedPackages(
+            blockedPackages = setOf(tiktok),
+            exemptPackages = emptySet(),
+            ownPackage = ownPkg,
+            deviceEssential = emptySet(),
+            backend = backend,
+        )
+        assertTrue(result.applied)
+        // youtube was in unsuspendedOk and must have been queried at least twice (before & after).
+        assertTrue(backend.queriedPackages.count { it == youtube } >= 2)
+        assertTrue(backend.queriedPackages.count { it == tiktok } >= 2)
     }
 }

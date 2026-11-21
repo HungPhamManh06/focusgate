@@ -5,9 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import android.util.Log
-import com.focusgate.app.admin.ManagedDeviceController
-import com.focusgate.app.data.FocusGateDatabase
-import com.focusgate.app.util.AgentPreferences
+import com.focusgate.app.FocusGateApp
 import com.focusgate.app.util.EmergencyAccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,9 +13,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * The emergency window is bounded. When it ends, re-apply managed-device
- * suspensions that were lifted for the window. Personal mode is re-armed by the
- * running foreground service as soon as the window expires.
+ * The emergency window is bounded. When it ends, re-reconcile policy via
+ * [FocusGateApp.coordinator] so the latest saved policy and mode are applied.
  */
 class EmergencyExpiryReceiver : BroadcastReceiver() {
 
@@ -32,26 +29,13 @@ class EmergencyExpiryReceiver : BroadcastReceiver() {
             return
         }
 
-        EmergencyAccess.end(appContext)
-
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                if (!AgentPreferences.isMonitorEnabled(appContext) ||
-                    !AgentPreferences.isManagedEnforcementEnabled(appContext)
-                ) {
-                    return@launch
-                }
-                val controller = ManagedDeviceController(appContext)
-                if (!controller.isDeviceOwner()) return@launch
-
-                val dao = FocusGateDatabase.get(appContext).blockedAppDao()
-                val result = controller.applyBlockedPackages(
-                    blockedPackages = dao.blockedPackages().toSet(),
-                    exemptPackages = dao.exemptPackages().toSet(),
-                )
-                if (!result.applied) {
-                    Log.w(TAG, result.message)
+                val outcome = FocusGateApp.coordinator(appContext).endEmergency()
+                val applyResult = outcome.applyResult
+                if (applyResult != null && !applyResult.applied) {
+                    Log.w(TAG, applyResult.message)
                 }
             } catch (throwable: Throwable) {
                 Log.w(TAG, "Could not restore policy after emergency access", throwable)
