@@ -10,6 +10,11 @@ class ManagedDeviceController(@Suppress("UNUSED_PARAMETER") context: Context) {
 
     fun suspendedPackages(): Set<String> = emptySet()
 
+    fun auditPolicy(
+        @Suppress("UNUSED_PARAMETER") blockedPackages: Set<String>,
+        @Suppress("UNUSED_PARAMETER") exemptPackages: Set<String>,
+    ): ManagedPolicyAudit = ManagedPolicyAudit(deviceOwnerValid = false)
+
     fun applyBlockedPackages(
         blockedPackages: Set<String>,
         exemptPackages: Set<String>,

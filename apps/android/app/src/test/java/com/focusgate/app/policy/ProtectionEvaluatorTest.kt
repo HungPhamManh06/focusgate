@@ -187,4 +187,73 @@ class ProtectionEvaluatorTest {
         assertEquals(ProtectionLevel.DEGRADED, result.level)
         assertTrue(result.issues.any { it.contains("syncing") })
     }
+
+    @Test
+    fun `managed mode with extra suspended apps outside policy is Degraded`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 1,
+            usageAccess = false,
+            overlayAccess = false,
+            serviceRunning = false,
+            managedEnforced = true,
+            emergencyActive = false,
+            managedUnsuspendedCount = 0,
+            managedExtraSuspendedCount = 1,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertEquals(1, result.managedExtraSuspendedCount)
+        assertTrue(result.issues.any { it.contains("extra") })
+    }
+
+    @Test
+    fun `managed mode with unknown packages is Degraded, never Protected`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = false,
+            overlayAccess = false,
+            serviceRunning = false,
+            managedEnforced = true,
+            emergencyActive = false,
+            managedUnknownCount = 1,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertEquals(1, result.managedUnknownCount)
+        assertTrue(result.issues.any { it.contains("unverified") })
+    }
+
+    @Test
+    fun `empty policy with lingering suspended apps reports Degraded with restore flag`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = false,
+            restrictedAppCount = 0,
+            usageAccess = false,
+            overlayAccess = false,
+            serviceRunning = false,
+            managedEnforced = false,
+            emergencyActive = false,
+            managedExtraSuspendedCount = 2,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertTrue(result.needsManagedRestore)
+        assertTrue(result.issues.any { it.contains("restored") })
+    }
+
+    @Test
+    fun `lost Device Owner reports Degraded`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = false,
+            overlayAccess = false,
+            serviceRunning = false,
+            managedEnforced = false,
+            emergencyActive = false,
+            managedUnknownCount = 2,
+            managedDeviceOwnerLost = true,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertTrue(result.issues.any { it.contains("Device Owner") })
+    }
 }

@@ -65,15 +65,34 @@ class ManagedDeviceController(context: Context) {
         dpm?.isAdminActive(admin) == true
 
     /**
-     * Packages actually suspended by FocusGate, reconciled with
-     * `DevicePolicyManager.isPackageSuspended` when the device is a Device Owner.
+     * Packages verified as suspended by `DevicePolicyManager.isPackageSuspended`.
+     * Packages with `UNKNOWN` state are never returned as verified suspended.
      */
     fun suspendedPackages(): Set<String> {
         val tracked = backend.loadTrackedSuspended()
         if (!isDeviceOwner()) return emptySet()
-        return ManagedSuspensionReconciler.reconcileActualSuspended(
+        return ManagedSuspensionReconciler.reconcile(
             tracked = tracked,
             candidates = emptySet(),
+            backend = backend,
+        ).verifiedSuspended
+    }
+
+    /**
+     * Two-way audit of the saved policy against verified OS state.
+     */
+    fun auditPolicy(
+        blockedPackages: Set<String>,
+        exemptPackages: Set<String>,
+    ): ManagedPolicyAudit {
+        val required = com.focusgate.app.policy.PolicyEvaluator.effectiveBlocked(
+            blockedPackages = blockedPackages,
+            exemptPackages = exemptPackages,
+            ownPackage = appContext.packageName,
+            deviceEssential = SystemPackages.deviceEssential(appContext),
+        )
+        return ManagedSuspensionReconciler.auditPolicy(
+            requiredPackages = required,
             backend = backend,
         )
     }

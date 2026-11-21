@@ -47,6 +47,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.focusgate.app.BuildConfig
 import com.focusgate.app.admin.ManagedDeviceController
+import com.focusgate.app.admin.ManagedPolicyAudit
 import com.focusgate.app.data.BlockedApp
 import com.focusgate.app.data.FocusGateDatabase
 import com.focusgate.app.policy.PolicyEvaluator
@@ -97,7 +98,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         mutableStateOf(AgentPreferences.isManagedEnforcementEnabled(context))
     }
     var deviceOwner by remember { mutableStateOf(managedController.isDeviceOwner()) }
-    var suspendedPackages by remember { mutableStateOf(managedController.suspendedPackages()) }
+    var managedAudit by remember {
+        mutableStateOf(ManagedPolicyAudit(deviceOwnerValid = managedController.isDeviceOwner()))
+    }
     var deviceEssential by remember { mutableStateOf(SystemPackages.deviceEssential(context)) }
     var serviceRunning by remember { mutableStateOf(AppUsageMonitorService.isRunning) }
     var monitorAppliedBlocked by remember {
@@ -111,6 +114,17 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var banner by remember { mutableStateOf<String?>(null) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
 
+    fun refreshManagedAudit(
+        blockedSet: Set<String> = savedBlocked,
+        exemptSet: Set<String> = savedExempt,
+    ) {
+        managedAudit = if (BuildConfig.MANAGED_MODE && (managedEnabled || managedController.isDeviceOwner())) {
+            managedController.auditPolicy(blockedSet, exemptSet)
+        } else {
+            ManagedPolicyAudit(deviceOwnerValid = managedController.isDeviceOwner())
+        }
+    }
+
     fun refreshRuntime() {
         usageGranted = PermissionChecks.hasUsageAccess(context)
         overlayGranted = PermissionChecks.hasOverlayAccess(context)
@@ -118,7 +132,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         monitorEnabled = AgentPreferences.isMonitorEnabled(context)
         managedEnabled = AgentPreferences.isManagedEnforcementEnabled(context)
         deviceOwner = managedController.isDeviceOwner()
-        suspendedPackages = managedController.suspendedPackages()
+        refreshManagedAudit()
         val updatedEssential = SystemPackages.deviceEssential(context)
         if (updatedEssential != deviceEssential) {
             deviceEssential = updatedEssential
@@ -153,6 +167,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         pendingBlocked = loadedBlocked
         pendingExempt = loadedExempt
         refreshRuntime()
+        refreshManagedAudit(loadedBlocked, loadedExempt)
     }
 
     LaunchedEffect(Unit) {
@@ -167,6 +182,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     val hasUnsavedChanges = pendingBlocked != savedBlocked || pendingExempt != savedExempt
     val managedActive = managedEnabled && deviceOwner
+    val managedDeviceOwnerLost = BuildConfig.MANAGED_MODE && managedEnabled && !deviceOwner
     val savedEffectiveBlocked = PolicyEvaluator.effectiveBlocked(
         blockedPackages = savedBlocked,
         exemptPackages = savedExempt,
@@ -174,8 +190,19 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         deviceEssential = deviceEssential,
     )
     val emergencyActive = emergencyRemaining > 0L
-    val managedUnsuspended = if (managedActive) {
-        savedEffectiveBlocked.count { it !in suspendedPackages }
+    val managedUnsuspended = if (managedActive && monitorEnabled && !emergencyActive) {
+        managedAudit.requiredNotSuspended.size
+    } else {
+        0
+    }
+    val managedExtraSuspended = when {
+        !BuildConfig.MANAGED_MODE -> 0
+        !monitorEnabled || emergencyActive -> managedAudit.verifiedSuspended.size
+        managedActive -> managedAudit.extraSuspended.size
+        else -> managedAudit.verifiedSuspended.size
+    }
+    val managedUnknown = if (BuildConfig.MANAGED_MODE && (managedEnabled || managedAudit.trackedPackages.isNotEmpty())) {
+        managedAudit.unknownPackages.size
     } else {
         0
     }
@@ -196,6 +223,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         managedEnforced = managedActive && !emergencyActive,
         emergencyActive = emergencyActive,
         managedUnsuspendedCount = managedUnsuspended,
+        managedExtraSuspendedCount = managedExtraSuspended,
+        managedUnknownCount = managedUnknown,
+        managedDeviceOwnerLost = managedDeviceOwnerLost,
         hasUnsavedChanges = hasUnsavedChanges,
         monitorPolicySynced = monitorPolicySynced,
     )
@@ -232,9 +262,10 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                 val result = withContext(Dispatchers.IO) {
                     managedController.applyBlockedPackages(savedBlocked, savedExempt)
                 }
-                suspendedPackages = managedController.suspendedPackages()
+                refreshManagedAudit(savedBlocked, savedExempt)
                 result.message
             } else {
+                refreshManagedAudit(savedBlocked, savedExempt)
                 "Policy saved. The monitor reads it immediately."
             }
         }
@@ -242,13 +273,13 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     fun applyManagedPolicy() {
         val result = managedController.applyBlockedPackages(savedBlocked, savedExempt)
-        suspendedPackages = managedController.suspendedPackages()
+        refreshManagedAudit(savedBlocked, savedExempt)
         banner = result.message
     }
 
     fun clearManagedSuspensions(): String {
         val result = managedController.clearSuspensions()
-        suspendedPackages = managedController.suspendedPackages()
+        refreshManagedAudit(savedBlocked, savedExempt)
         return result.message
     }
 
@@ -418,6 +449,19 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 ProtectionLevel.OFF -> MaterialTheme.colorScheme.error
                             },
                         )
+                        Text(
+                            when (protection.level) {
+                                ProtectionLevel.PROTECTED ->
+                                    "Policy verified and fully applied."
+                                ProtectionLevel.DEGRADED ->
+                                    "Action needed: protection is incomplete or has unverified apps."
+                                ProtectionLevel.OFF ->
+                                    "No active policy and no apps suspended by FocusGate."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
                         if (protection.issues.isNotEmpty()) {
                             Text(
                                 protection.issues.joinToString(" • "),
@@ -425,6 +469,40 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
+                        }
+                        if (protection.level == ProtectionLevel.DEGRADED &&
+                            (protection.managedMissingCount > 0 ||
+                                protection.managedExtraSuspendedCount > 0 ||
+                                protection.managedUnknownCount > 0)
+                        ) {
+                            Text(
+                                "Not suspended: ${protection.managedMissingCount} • " +
+                                    "Extra suspended: ${protection.managedExtraSuspendedCount} • " +
+                                    "Unverified: ${protection.managedUnknownCount}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            if (deviceOwner) {
+                                OutlinedButton(
+                                    onClick = {
+                                        if (protection.needsManagedRestore) {
+                                            banner = clearManagedSuspensions()
+                                        } else {
+                                            applyManagedPolicy()
+                                        }
+                                    },
+                                    modifier = Modifier.padding(top = 8.dp),
+                                ) {
+                                    Text(
+                                        if (protection.needsManagedRestore) {
+                                            "Restore suspended apps"
+                                        } else {
+                                            "Re-apply policy"
+                                        },
+                                    )
+                                }
+                            }
                         }
                         if (protection.hasUnsavedChanges) {
                             Text(

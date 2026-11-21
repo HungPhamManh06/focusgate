@@ -7,4 +7,5 @@ data class ManagedApplyResult(
     val message: String,
     val failedToSuspend: List<String> = emptyList(),
     val failedToUnsuspend: List<String> = emptyList(),
+    val unknownPackages: List<String> = emptyList(),
 )
