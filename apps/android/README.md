@@ -32,11 +32,11 @@ APKs:
 - `app/build/outputs/apk/personal/debug/app-personal-debug.apk`
 - `app/build/outputs/apk/managed/debug/app-managed-debug.apk`
 
-The Android 16 (API 36) emulator run and Milestone 1.2 unit test suite are
+The Android 16 (API 36) emulator run and Milestone 1.2.1 unit test suite are
 documented in [`../../docs/ANDROID_LOCK.md`](../../docs/ANDROID_LOCK.md) and
-[`../../docs/MILESTONE1_2_TEST_REPORT.md`](../../docs/MILESTONE1_2_TEST_REPORT.md):
-build, **44/44 unit tests per flavour** (`ManagedSuspensionReconcilerTest` 12,
-`PolicyEvaluatorTest` 13, `ProtectionEvaluatorTest` 16, `EmergencyAccessTest` 3),
+[`../../docs/MILESTONE1_2_1_TEST_REPORT.md`](../../docs/MILESTONE1_2_1_TEST_REPORT.md):
+build, **60/60 unit tests per flavour** (`ManagedSuspensionReconcilerTest` 26,
+`PolicyEvaluatorTest` 13, `ProtectionEvaluatorTest` 18, `EmergencyAccessTest` 3),
 onboarding, block overlay, emergency access, permission revocation, reboot
 restore, Device Owner suspension and managed reboot restore. Physical-device
 testing (Redmi Note 13 / Android 15) has **not** been executed yet.

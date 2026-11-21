@@ -256,4 +256,44 @@ class ProtectionEvaluatorTest {
         assertEquals(ProtectionLevel.DEGRADED, result.level)
         assertTrue(result.issues.any { it.contains("Device Owner") })
     }
+
+    @Test
+    fun `personal mode cannot report Protected when lingering managed suspensions remain`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = true,
+            managedEnforced = false,
+            emergencyActive = false,
+            managedExtraSuspendedCount = 1,
+            managedUnknownCount = 0,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertEquals(false, result.personalModeReady)
+        assertTrue(result.needsManagedRestore)
+        assertEquals(1, result.managedExtraSuspendedCount)
+        assertTrue(result.issues.any { it.contains("Managed Mode") })
+    }
+
+    @Test
+    fun `personal mode cannot report Protected when unverified managed packages remain`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = true,
+            managedEnforced = false,
+            emergencyActive = false,
+            managedExtraSuspendedCount = 0,
+            managedUnknownCount = 1,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertEquals(false, result.personalModeReady)
+        assertTrue(result.needsManagedRestore)
+        assertEquals(1, result.managedUnknownCount)
+        assertTrue(result.issues.any { it.contains("unverified") })
+    }
 }

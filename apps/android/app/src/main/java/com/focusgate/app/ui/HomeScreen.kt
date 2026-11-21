@@ -117,11 +117,16 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     fun refreshManagedAudit(
         blockedSet: Set<String> = savedBlocked,
         exemptSet: Set<String> = savedExempt,
+        isManagedOn: Boolean = managedEnabled,
     ) {
-        managedAudit = if (BuildConfig.MANAGED_MODE && (managedEnabled || managedController.isDeviceOwner())) {
-            managedController.auditPolicy(blockedSet, exemptSet)
+        managedAudit = if (BuildConfig.MANAGED_MODE) {
+            if (isManagedOn) {
+                managedController.auditPolicy(blockedSet, exemptSet)
+            } else {
+                managedController.auditPolicy(emptySet(), emptySet())
+            }
         } else {
-            ManagedPolicyAudit(deviceOwnerValid = managedController.isDeviceOwner())
+            ManagedPolicyAudit(deviceOwnerValid = false)
         }
     }
 
@@ -182,7 +187,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     val hasUnsavedChanges = pendingBlocked != savedBlocked || pendingExempt != savedExempt
     val managedActive = managedEnabled && deviceOwner
-    val managedDeviceOwnerLost = BuildConfig.MANAGED_MODE && managedEnabled && !deviceOwner
+    val managedDeviceOwnerLost = BuildConfig.MANAGED_MODE &&
+        (managedEnabled || managedAudit.trackedPackages.isNotEmpty()) &&
+        !deviceOwner
     val savedEffectiveBlocked = PolicyEvaluator.effectiveBlocked(
         blockedPackages = savedBlocked,
         exemptPackages = savedExempt,
@@ -201,7 +208,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         managedActive -> managedAudit.extraSuspended.size
         else -> managedAudit.verifiedSuspended.size
     }
-    val managedUnknown = if (BuildConfig.MANAGED_MODE && (managedEnabled || managedAudit.trackedPackages.isNotEmpty())) {
+    val managedUnknown = if (BuildConfig.MANAGED_MODE &&
+        (managedEnabled || managedAudit.trackedPackages.isNotEmpty() || managedAudit.unknownPackages.isNotEmpty())
+    ) {
         managedAudit.unknownPackages.size
     } else {
         0

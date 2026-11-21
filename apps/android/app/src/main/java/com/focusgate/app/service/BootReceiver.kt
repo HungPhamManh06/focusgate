@@ -60,10 +60,14 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         if (!monitorEnabled) {
-            if (managedRequested && controller.isDeviceOwner()) {
+            if (controller.isDeviceOwner()) {
                 controller.clearSuspensions()
             }
             return
+        }
+
+        if (!managedRequested && controller.isDeviceOwner()) {
+            controller.clearSuspensions()
         }
 
         if (!PermissionChecks.hasUsageAccess(context)) {

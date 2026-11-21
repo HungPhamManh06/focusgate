@@ -191,49 +191,77 @@ object ManagedSuspensionReconciler {
 
         // Re-reconcile against actual OS state after operations (including after
         // a partial SecurityException) so earlier successful steps are preserved
-        // and unverified packages remain tracked for recovery.
+        // and any failed/unverified packages (both unsuspend and suspend) remain
+        // tracked for recovery.
         val candidateTracked = (before.trackedPackages - unsuspendedOk) +
             suspendedOk +
-            failedToUnsuspend
-        val after = reconcile(candidateTracked, target, backend)
+            failedToUnsuspend +
+            failedToSuspend
+        val ownerStillValid = backend.isDeviceOwner()
+        val after = if (ownerStillValid) {
+            reconcile(candidateTracked, target, backend)
+        } else {
+            val unverified = candidateTracked + target
+            ManagedSuspensionSnapshot(
+                verifiedSuspended = emptySet(),
+                verifiedNotSuspended = emptySet(),
+                unknownState = unverified,
+                trackedPackages = unverified,
+            )
+        }
         backend.saveTrackedSuspended(after.trackedPackages)
 
-        val suspendFailList = failedToSuspend.toList().sorted()
-        val unsuspendFailList = failedToUnsuspend.toList().sorted()
         val unknownList = after.unknownState.toList().sorted()
-
         val remainingMissing = target - after.verifiedSuspended - after.unknownState
         val remainingExtra = after.verifiedSuspended - target
 
-        val exactMatch = securityError == null &&
-            suspendFailList.isEmpty() &&
-            unsuspendFailList.isEmpty() &&
+        // Final OS state after reconciliation is the primary source of truth.
+        // If an exception was thrown but OS state is verified exact match, do
+        // not contradict Protection Status; keep exceptionMessage for logging.
+        val exactMatch = ownerStillValid &&
             remainingMissing.isEmpty() &&
             remainingExtra.isEmpty() &&
             unknownList.isEmpty()
 
-        val allFailures = buildList {
-            addAll((failedToSuspend + failedToUnsuspend).sorted())
-            if (securityError != null && isEmpty()) {
-                add(securityError.message ?: "SecurityException")
+        val effectiveFailedToSuspend = if (exactMatch) {
+            emptyList()
+        } else {
+            (failedToSuspend.intersect(remainingMissing + after.unknownState)).toList().sorted()
+        }
+        val effectiveFailedToUnsuspend = if (exactMatch) {
+            emptyList()
+        } else {
+            (failedToUnsuspend.intersect(remainingExtra + after.unknownState)).toList().sorted()
+        }
+
+        val exceptionMsg = securityError?.let { it.message ?: "SecurityException" }
+        val allFailures = if (exactMatch) {
+            emptyList()
+        } else {
+            buildList {
+                addAll((effectiveFailedToSuspend + effectiveFailedToUnsuspend).distinct().sorted())
+                if (exceptionMsg != null && isEmpty()) {
+                    add(exceptionMsg)
+                }
             }
         }
 
         val message = when {
             exactMatch -> "Managed policy verified and applied to ${after.verifiedSuspended.size} app(s)."
+            !ownerStillValid -> "Device Owner permission was lost during policy update."
             securityError != null -> buildString {
                 append("Android rejected part of the managed policy update.")
                 if (unknownList.isNotEmpty()) {
                     append(" ${unknownList.size} app(s) could not be verified.")
                 }
             }
-            suspendFailList.isNotEmpty() && unsuspendFailList.isNotEmpty() ->
-                "${suspendFailList.size} app(s) could not be suspended and " +
-                    "${unsuspendFailList.size} could not be resumed."
-            suspendFailList.isNotEmpty() ->
-                "${suspendFailList.size} app(s) could not be suspended."
-            unsuspendFailList.isNotEmpty() ->
-                "${unsuspendFailList.size} app(s) could not be resumed."
+            effectiveFailedToSuspend.isNotEmpty() && effectiveFailedToUnsuspend.isNotEmpty() ->
+                "${effectiveFailedToSuspend.size} app(s) could not be suspended and " +
+                    "${effectiveFailedToUnsuspend.size} could not be resumed."
+            effectiveFailedToSuspend.isNotEmpty() ->
+                "${effectiveFailedToSuspend.size} app(s) could not be suspended."
+            effectiveFailedToUnsuspend.isNotEmpty() ->
+                "${effectiveFailedToUnsuspend.size} app(s) could not be resumed."
             unknownList.isNotEmpty() ->
                 "${unknownList.size} app(s) could not be verified with DevicePolicyManager."
             remainingMissing.isNotEmpty() || remainingExtra.isNotEmpty() ->
@@ -246,19 +274,22 @@ object ManagedSuspensionReconciler {
             suspendedPackages = after.verifiedSuspended.size,
             failures = allFailures,
             message = message,
-            failedToSuspend = suspendFailList,
-            failedToUnsuspend = unsuspendFailList,
+            failedToSuspend = effectiveFailedToSuspend,
+            failedToUnsuspend = effectiveFailedToUnsuspend,
             unknownPackages = unknownList,
+            exceptionMessage = exceptionMsg,
         )
     }
 
     fun clearSuspensions(backend: ManagedSuspensionBackend): ManagedApplyResult {
         if (!backend.isDeviceOwner()) {
+            val tracked = backend.loadTrackedSuspended()
             return ManagedApplyResult(
                 applied = false,
                 suspendedPackages = 0,
                 failures = emptyList(),
                 message = "Not a Device Owner.",
+                unknownPackages = tracked.toList().sorted(),
             )
         }
 
@@ -288,20 +319,39 @@ object ManagedSuspensionReconciler {
         }
 
         val candidateTracked = (toClear - unsuspendedOk) + failedToUnsuspend
-        val after = reconcile(candidateTracked, emptySet(), backend)
+        val ownerStillValid = backend.isDeviceOwner()
+        val after = if (ownerStillValid) {
+            reconcile(candidateTracked, emptySet(), backend)
+        } else {
+            ManagedSuspensionSnapshot(
+                verifiedSuspended = emptySet(),
+                verifiedNotSuspended = emptySet(),
+                unknownState = candidateTracked,
+                trackedPackages = candidateTracked,
+            )
+        }
         backend.saveTrackedSuspended(after.trackedPackages)
 
-        val unsuspendFailList = failedToUnsuspend.toList().sorted()
         val unknownList = after.unknownState.toList().sorted()
-        val cleared = securityError == null &&
-            unsuspendFailList.isEmpty() &&
+        val cleared = ownerStillValid &&
             after.verifiedSuspended.isEmpty() &&
-            unknownList.isEmpty()
+            after.unknownState.isEmpty()
 
-        val allFailures = buildList {
-            addAll(unsuspendFailList)
-            if (securityError != null && isEmpty()) {
-                add(securityError.message ?: "SecurityException")
+        val effectiveFailedToUnsuspend = if (cleared) {
+            emptyList()
+        } else {
+            (toClear.intersect(after.verifiedSuspended + after.unknownState)).toList().sorted()
+        }
+
+        val exceptionMsg = securityError?.let { it.message ?: "SecurityException" }
+        val allFailures = if (cleared) {
+            emptyList()
+        } else {
+            buildList {
+                addAll(effectiveFailedToUnsuspend)
+                if (exceptionMsg != null && isEmpty()) {
+                    add(exceptionMsg)
+                }
             }
         }
 
@@ -311,13 +361,17 @@ object ManagedSuspensionReconciler {
             failures = allFailures,
             message = when {
                 cleared -> "All managed suspensions removed."
+                !ownerStillValid -> "Device Owner permission was lost while resuming apps."
                 securityError != null -> "Android rejected the request to resume suspended apps."
-                unsuspendFailList.isNotEmpty() -> "${unsuspendFailList.size} app(s) could not be resumed."
-                unknownList.isNotEmpty() -> "${unknownList.size} app(s) could not be verified after resuming."
+                effectiveFailedToUnsuspend.isNotEmpty() ->
+                    "${effectiveFailedToUnsuspend.size} app(s) could not be resumed."
+                unknownList.isNotEmpty() ->
+                    "${unknownList.size} app(s) could not be verified after resuming."
                 else -> "Some apps remain suspended."
             },
-            failedToUnsuspend = unsuspendFailList,
+            failedToUnsuspend = effectiveFailedToUnsuspend,
             unknownPackages = unknownList,
+            exceptionMessage = exceptionMsg,
         )
     }
 }

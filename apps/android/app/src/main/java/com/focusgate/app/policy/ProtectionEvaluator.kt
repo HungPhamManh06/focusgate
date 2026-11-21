@@ -167,19 +167,31 @@ object ProtectionEvaluator {
         }
 
         val issues = buildList {
+            if (managedExtraSuspendedCount > 0) {
+                add("$managedExtraSuspendedCount app(s) are still suspended by Managed Mode and need to be restored")
+            }
+            if (managedUnknownCount > 0) {
+                add("$managedUnknownCount managed app(s) have an unverified suspension state")
+            }
             if (!usageAccess) add("Usage Access is missing")
             if (!overlayAccess) add("Display over other apps is missing")
             if (!serviceRunning) add("Monitoring service is not running")
             if (serviceRunning && !monitorPolicySynced) add("Monitoring service is syncing saved policy")
         }
 
-        val ready = issues.isEmpty()
+        // Personal Mode cannot claim Protected while managed suspensions or
+        // unverified managed packages remain active on the device.
+        val ready = issues.isEmpty() && !hasLingeringManaged
         return ProtectionSnapshot(
             level = if (ready) ProtectionLevel.PROTECTED else ProtectionLevel.DEGRADED,
             issues = issues,
             personalModeReady = ready,
             managedModeReady = false,
             hasUnsavedChanges = hasUnsavedChanges,
+            managedMissingCount = 0,
+            managedExtraSuspendedCount = managedExtraSuspendedCount,
+            managedUnknownCount = managedUnknownCount,
+            needsManagedRestore = hasLingeringManaged,
         )
     }
 }
