@@ -113,9 +113,9 @@ A compiled and unit-tested module under `apps/android` with two product flavors:
 - **Verified (automated + API 36 emulator):**
   - `assemblePersonalDebug` and `assembleManagedDebug` build cleanly with JDK 17
     + Android SDK 36 / Build Tools 36.0.0.
-  - `testPersonalDebugUnitTest`: **22/22 passed** (`PolicyEvaluatorTest` 10,
-    `ProtectionEvaluatorTest` 9, `EmergencyAccessTest` 3).
-  - `testManagedDebugUnitTest`: **22/22 passed**.
+  - `testPersonalDebugUnitTest`: **38/38 passed** (`ManagedSuspensionReconcilerTest` 10,
+    `PolicyEvaluatorTest` 13, `ProtectionEvaluatorTest` 12, `EmergencyAccessTest` 3).
+  - `testManagedDebugUnitTest`: **38/38 passed** (76 total across both flavors).
   - API 36 emulator walkthrough documented in `docs/ANDROID_LOCK.md`.
 - **Not verified:**
   - **Physical device testing** (target: Redmi Note 13 / Android 15 HyperOS) has

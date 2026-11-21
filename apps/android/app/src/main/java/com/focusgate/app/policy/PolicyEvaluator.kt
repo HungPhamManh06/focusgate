@@ -90,11 +90,13 @@ object PolicyEvaluator {
         ownPackage: String? = null,
         deviceEssential: Set<String> = emptySet(),
     ): Boolean {
+        val normalized = packageName.trim()
+        if (normalized.isEmpty()) return false
         if (emergencyActive) return false
-        if (ownPackage != null && packageName == ownPackage) return false
-        return packageName in blockedPackages &&
-            packageName !in exemptPackages &&
-            !isEssential(packageName, deviceEssential)
+        if (ownPackage != null && normalized == ownPackage) return false
+        return normalized in blockedPackages &&
+            normalized !in exemptPackages &&
+            !isEssential(normalized, deviceEssential)
     }
 
     fun effectiveBlocked(
@@ -103,6 +105,9 @@ object PolicyEvaluator {
         ownPackage: String? = null,
         deviceEssential: Set<String> = emptySet(),
     ): Set<String> = blockedPackages
+        .asSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
         .filterNot { it in exemptPackages || isEssential(it, deviceEssential) || it == ownPackage }
         .toSet()
 

@@ -113,6 +113,8 @@ class AppUsageMonitorService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        appliedBlockedPackages = emptySet()
+        appliedExemptPackages = emptySet()
         hideOverlayNow()
         scope.cancel()
         started = false
@@ -120,14 +122,20 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun applyRules(rules: List<BlockedApp>) {
-        blockedPackages = rules
+        val nextBlocked = rules
             .filter { it.enabled && !it.isExempt }
             .map { it.packageName }
             .toSet()
-        exemptPackages = rules
+        val nextExempt = rules
             .filter { it.enabled && it.isExempt }
             .map { it.packageName }
             .toSet()
+        blockedPackages = nextBlocked
+        exemptPackages = nextExempt
+        appliedBlockedPackages = nextBlocked
+        appliedExemptPackages = nextExempt
+        deviceEssential = SystemPackages.deviceEssential(this)
+        deviceEssentialRefreshedAt = System.currentTimeMillis()
     }
 
     private suspend fun monitorLoop() {
@@ -256,6 +264,8 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun resyncForeground(manager: UsageStatsManager, now: Long) {
+        deviceEssential = SystemPackages.deviceEssential(this)
+        deviceEssentialRefreshedAt = now
         val events = manager.queryEvents(now - INITIAL_LOOKBACK_MS, now) ?: return
         val event = UsageEvents.Event()
         var latest: String? = null
@@ -402,6 +412,14 @@ class AppUsageMonitorService : Service() {
 
         @Volatile
         var isOverlayVisible: Boolean = false
+            private set
+
+        @Volatile
+        var appliedBlockedPackages: Set<String> = emptySet()
+            private set
+
+        @Volatile
+        var appliedExemptPackages: Set<String> = emptySet()
             private set
     }
 }

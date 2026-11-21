@@ -123,18 +123,20 @@ cd apps/android
   :app:testPersonalDebugUnitTest :app:testManagedDebugUnitTest
 ```
 
-Observed: `BUILD SUCCESSFUL`; **22/22 unit tests pass in each flavor**
-(`PolicyEvaluatorTest` 10, `ProtectionEvaluatorTest` 9, `EmergencyAccessTest` 3),
-including OEM essential allowlist (Xiaomi/Samsung/Google dialers & launchers),
-runtime default-app protection (`SystemPackages`), stopped-service degradation,
-and Managed Mode partial-suspension degradation.
+Observed: `BUILD SUCCESSFUL`; **38/38 unit tests pass in each flavor** (76 total:
+`ManagedSuspensionReconcilerTest` 10, `PolicyEvaluatorTest` 13,
+`ProtectionEvaluatorTest` 12, `EmergencyAccessTest` 3), covering Managed Mode
+suspend/unsuspend failure separation, OS state reconciliation, `SecurityException`
+handling, saved vs. pending policy status, Personal Mode monitor sync, OEM
+essential allowlist (Xiaomi/Samsung/Google dialers & launchers), dynamic
+default-app protection (`SystemPackages`), and invalid policy entries.
 `connectedPersonalDebugAndroidTest` ran 2/2 Compose onboarding tests on the
 emulator (`BUILD SUCCESSFUL`).
 
 > **Note:** Passing unit tests and builds does **not** verify real-device
 > enforcement. Physical-device testing on Redmi Note 13 (Android 15 / HyperOS)
-> has not been executed yet; see `docs/MILESTONE1_TEST_REPORT.md` for the
-> manual test checklist.
+> has not been executed yet; see `docs/MILESTONE1_1_TEST_REPORT.md` and
+> `docs/MILESTONE1_TEST_REPORT.md` for the manual test checklist.
 
 Manual emulator checks performed with `adb`:
 

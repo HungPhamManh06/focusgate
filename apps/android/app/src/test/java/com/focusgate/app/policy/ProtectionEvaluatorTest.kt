@@ -138,4 +138,53 @@ class ProtectionEvaluatorTest {
         assertEquals(ProtectionLevel.DEGRADED, result.level)
         assertTrue(result.issues.any { it.contains("not suspended") })
     }
+
+    @Test
+    fun `unsaved pending selection never causes Protected when saved policy is empty`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 0, // saved policy still empty
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = true,
+            managedEnforced = true,
+            emergencyActive = false,
+            managedUnsuspendedCount = 0,
+            hasUnsavedChanges = true,
+        )
+        assertEquals(ProtectionLevel.OFF, result.level)
+        assertTrue(result.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `unsaved changes flag is surfaced while protection reflects saved policy`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = true,
+            managedEnforced = false,
+            emergencyActive = false,
+            hasUnsavedChanges = true,
+        )
+        assertEquals(ProtectionLevel.PROTECTED, result.level)
+        assertTrue(result.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `personal mode is degraded while monitor service policy is out of sync`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = true,
+            managedEnforced = false,
+            emergencyActive = false,
+            monitorPolicySynced = false,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertTrue(result.issues.any { it.contains("syncing") })
+    }
 }

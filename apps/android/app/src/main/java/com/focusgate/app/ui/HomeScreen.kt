@@ -78,8 +78,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     var apps by remember { mutableStateOf<List<InstalledApp>>(emptyList()) }
     var ruleLabels by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var blocked by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var exempt by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Separate persisted/applied policy from unsaved UI edits so protection
+    // status never claims Protected for changes that have not been saved.
+    var savedBlocked by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var savedExempt by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingBlocked by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingExempt by remember { mutableStateOf<Set<String>>(emptySet()) }
     var search by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(AppTab.RESTRICT) }
 
@@ -94,11 +98,16 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     }
     var deviceOwner by remember { mutableStateOf(managedController.isDeviceOwner()) }
     var suspendedPackages by remember { mutableStateOf(managedController.suspendedPackages()) }
-    val deviceEssential = remember { SystemPackages.deviceEssential(context) }
+    var deviceEssential by remember { mutableStateOf(SystemPackages.deviceEssential(context)) }
     var serviceRunning by remember { mutableStateOf(AppUsageMonitorService.isRunning) }
+    var monitorAppliedBlocked by remember {
+        mutableStateOf(AppUsageMonitorService.appliedBlockedPackages)
+    }
+    var monitorAppliedExempt by remember {
+        mutableStateOf(AppUsageMonitorService.appliedExemptPackages)
+    }
     var emergencyRemaining by remember { mutableLongStateOf(EmergencyAccess.remainingMillis(context)) }
 
-    var dirty by remember { mutableStateOf(false) }
     var banner by remember { mutableStateOf<String?>(null) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
 
@@ -110,7 +119,16 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         managedEnabled = AgentPreferences.isManagedEnforcementEnabled(context)
         deviceOwner = managedController.isDeviceOwner()
         suspendedPackages = managedController.suspendedPackages()
+        val updatedEssential = SystemPackages.deviceEssential(context)
+        if (updatedEssential != deviceEssential) {
+            deviceEssential = updatedEssential
+            scope.launch {
+                apps = withContext(Dispatchers.IO) { loadLauncherApps(context) }
+            }
+        }
         serviceRunning = AppUsageMonitorService.isRunning
+        monitorAppliedBlocked = AppUsageMonitorService.appliedBlockedPackages
+        monitorAppliedExempt = AppUsageMonitorService.appliedExemptPackages
         emergencyRemaining = EmergencyAccess.remainingMillis(context)
     }
 
@@ -128,8 +146,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
             database.blockedAppDao().observeAll().first()
         }
         ruleLabels = rows.associate { it.packageName to it.label }
-        blocked = rows.filter { it.enabled && !it.isExempt }.map { it.packageName }.toSet()
-        exempt = rows.filter { it.enabled && it.isExempt }.map { it.packageName }.toSet()
+        val loadedBlocked = rows.filter { it.enabled && !it.isExempt }.map { it.packageName }.toSet()
+        val loadedExempt = rows.filter { it.enabled && it.isExempt }.map { it.packageName }.toSet()
+        savedBlocked = loadedBlocked
+        savedExempt = loadedExempt
+        pendingBlocked = loadedBlocked
+        pendingExempt = loadedExempt
         refreshRuntime()
     }
 
@@ -137,29 +159,45 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         while (true) {
             emergencyRemaining = EmergencyAccess.remainingMillis(context)
             serviceRunning = AppUsageMonitorService.isRunning
+            monitorAppliedBlocked = AppUsageMonitorService.appliedBlockedPackages
+            monitorAppliedExempt = AppUsageMonitorService.appliedExemptPackages
             delay(1_000)
         }
     }
 
+    val hasUnsavedChanges = pendingBlocked != savedBlocked || pendingExempt != savedExempt
     val managedActive = managedEnabled && deviceOwner
-    val effectiveBlocked =
-        PolicyEvaluator.effectiveBlocked(blocked, exempt, context.packageName, deviceEssential)
+    val savedEffectiveBlocked = PolicyEvaluator.effectiveBlocked(
+        blockedPackages = savedBlocked,
+        exemptPackages = savedExempt,
+        ownPackage = context.packageName,
+        deviceEssential = deviceEssential,
+    )
     val emergencyActive = emergencyRemaining > 0L
-    // Compare against the saved policy only; unsaved edits are not yet applied.
-    val managedUnsuspended = if (managedActive && !dirty) {
-        effectiveBlocked.count { it !in suspendedPackages }
+    val managedUnsuspended = if (managedActive) {
+        savedEffectiveBlocked.count { it !in suspendedPackages }
     } else {
         0
     }
+    val monitorPolicySynced = !serviceRunning || (
+        PolicyEvaluator.effectiveBlocked(
+            blockedPackages = monitorAppliedBlocked,
+            exemptPackages = monitorAppliedExempt,
+            ownPackage = context.packageName,
+            deviceEssential = deviceEssential,
+        ) == savedEffectiveBlocked
+        )
     val protection = ProtectionEvaluator.evaluate(
         monitorEnabled = monitorEnabled,
-        restrictedAppCount = effectiveBlocked.size,
+        restrictedAppCount = savedEffectiveBlocked.size,
         usageAccess = usageGranted,
         overlayAccess = overlayGranted,
         serviceRunning = serviceRunning,
         managedEnforced = managedActive && !emergencyActive,
         emergencyActive = emergencyActive,
         managedUnsuspendedCount = managedUnsuspended,
+        hasUnsavedChanges = hasUnsavedChanges,
+        monitorPolicySynced = monitorPolicySynced,
     )
 
     fun labelFor(packageName: String): String =
@@ -168,22 +206,31 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
             ?: packageName
 
     fun savePolicy() {
-        val rows = (blocked + exempt).map { packageName ->
+        val nextBlocked = pendingBlocked
+        val nextExempt = pendingExempt
+        val rows = (nextBlocked + nextExempt).map { packageName ->
             BlockedApp(
                 packageName = packageName,
                 label = labelFor(packageName),
                 category = PolicyEvaluator.categoryFor(packageName, labelFor(packageName)),
                 enabled = true,
-                isExempt = packageName in exempt,
+                isExempt = packageName in nextExempt,
             )
         }
         scope.launch {
-            withContext(Dispatchers.IO) { database.blockedAppDao().replaceAll(rows) }
+            val persisted = runCatching {
+                withContext(Dispatchers.IO) { database.blockedAppDao().replaceAll(rows) }
+            }
+            if (persisted.isFailure) {
+                banner = "Could not save policy. Active protection still uses the previous saved policy."
+                return@launch
+            }
+            savedBlocked = nextBlocked
+            savedExempt = nextExempt
             ruleLabels = rows.associate { it.packageName to it.label }
-            dirty = false
             banner = if (managedActive) {
                 val result = withContext(Dispatchers.IO) {
-                    managedController.applyBlockedPackages(blocked, exempt)
+                    managedController.applyBlockedPackages(savedBlocked, savedExempt)
                 }
                 suspendedPackages = managedController.suspendedPackages()
                 result.message
@@ -194,7 +241,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     }
 
     fun applyManagedPolicy() {
-        val result = managedController.applyBlockedPackages(blocked, exempt)
+        val result = managedController.applyBlockedPackages(savedBlocked, savedExempt)
         suspendedPackages = managedController.suspendedPackages()
         banner = result.message
     }
@@ -379,6 +426,14 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 modifier = Modifier.padding(top = 4.dp),
                             )
                         }
+                        if (protection.hasUnsavedChanges) {
+                            Text(
+                                "Unsaved changes — active protection still uses the last saved policy.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
                         Text(
                             if (managedActive) {
                                 "Mode: Managed Device (Device Owner policy)"
@@ -545,12 +600,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             FilterChip(
                                 selected = tab == AppTab.RESTRICT,
                                 onClick = { tab = AppTab.RESTRICT },
-                                label = { Text("Restrict (${blocked.size})") },
+                                label = { Text("Restrict (${pendingBlocked.size})") },
                             )
                             FilterChip(
                                 selected = tab == AppTab.EXEMPT,
                                 onClick = { tab = AppTab.EXEMPT },
-                                label = { Text("Exempt (${exempt.size})") },
+                                label = { Text("Exempt (${pendingExempt.size})") },
                             )
                         }
                         OutlinedTextField(
@@ -569,16 +624,16 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                if (dirty) "Unsaved changes" else "Policy is saved",
+                                if (hasUnsavedChanges) "Unsaved changes" else "Policy is saved",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (dirty) {
+                                color = if (hasUnsavedChanges) {
                                     MaterialTheme.colorScheme.tertiary
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                                 modifier = Modifier.weight(1f),
                             )
-                            Button(onClick = ::savePolicy, enabled = dirty) {
+                            Button(onClick = ::savePolicy, enabled = hasUnsavedChanges) {
                                 Text("Save policy")
                             }
                         }
@@ -605,28 +660,27 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
             }
 
             items(visibleApps, key = { it.packageName }) { app ->
-                val isRestricted = app.packageName in blocked
-                val isExempt = app.packageName in exempt
+                val isRestricted = app.packageName in pendingBlocked
+                val isExempt = app.packageName in pendingExempt
                 val checked = if (tab == AppTab.RESTRICT) isRestricted else isExempt
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            dirty = true
                             if (tab == AppTab.RESTRICT) {
                                 if (isRestricted) {
-                                    blocked = blocked - app.packageName
+                                    pendingBlocked = pendingBlocked - app.packageName
                                 } else {
-                                    blocked = blocked + app.packageName
-                                    exempt = exempt - app.packageName
+                                    pendingBlocked = pendingBlocked + app.packageName
+                                    pendingExempt = pendingExempt - app.packageName
                                 }
                             } else {
                                 if (isExempt) {
-                                    exempt = exempt - app.packageName
+                                    pendingExempt = pendingExempt - app.packageName
                                 } else {
-                                    exempt = exempt + app.packageName
-                                    blocked = blocked - app.packageName
+                                    pendingExempt = pendingExempt + app.packageName
+                                    pendingBlocked = pendingBlocked - app.packageName
                                 }
                             }
                         }
@@ -653,20 +707,19 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                     Switch(
                         checked = checked,
                         onCheckedChange = { enable ->
-                            dirty = true
                             if (tab == AppTab.RESTRICT) {
                                 if (enable) {
-                                    blocked = blocked + app.packageName
-                                    exempt = exempt - app.packageName
+                                    pendingBlocked = pendingBlocked + app.packageName
+                                    pendingExempt = pendingExempt - app.packageName
                                 } else {
-                                    blocked = blocked - app.packageName
+                                    pendingBlocked = pendingBlocked - app.packageName
                                 }
                             } else {
                                 if (enable) {
-                                    exempt = exempt + app.packageName
-                                    blocked = blocked - app.packageName
+                                    pendingExempt = pendingExempt + app.packageName
+                                    pendingBlocked = pendingBlocked - app.packageName
                                 } else {
-                                    exempt = exempt - app.packageName
+                                    pendingExempt = pendingExempt - app.packageName
                                 }
                             }
                         },

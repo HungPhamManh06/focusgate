@@ -12,16 +12,22 @@ data class ProtectionSnapshot(
     val issues: List<String>,
     val personalModeReady: Boolean,
     val managedModeReady: Boolean,
+    val hasUnsavedChanges: Boolean = false,
 )
 
 /**
- * Pure status calculation. A personal-mode device is protected only when:
- * monitoring is enabled, at least one app is restricted, Usage Access is
- * granted, overlay access is granted and the foreground service is running.
+ * Pure status calculation. Protection level is ALWAYS derived from the saved
+ * and applied policy — never from unsaved pending UI edits.
+ *
+ * A personal-mode device is protected only when: monitoring is enabled, at
+ * least one app is restricted in the saved policy, Usage Access is granted,
+ * overlay access is granted, the foreground service is running, and the
+ * monitor has loaded the saved policy.
  *
  * Managed Device mode uses device-owner package suspension, so it does not
- * depend on Usage Access or overlay access. Emergency access always degrades
- * the status while it is active, because restrictions are temporarily paused.
+ * depend on Usage Access or overlay access, but every saved restricted app
+ * must actually be suspended. Emergency access always degrades the status
+ * while it is active, because restrictions are temporarily paused.
  */
 object ProtectionEvaluator {
 
@@ -34,6 +40,8 @@ object ProtectionEvaluator {
         managedEnforced: Boolean,
         emergencyActive: Boolean,
         managedUnsuspendedCount: Int = 0,
+        hasUnsavedChanges: Boolean = false,
+        monitorPolicySynced: Boolean = true,
     ): ProtectionSnapshot {
         if (!monitorEnabled || restrictedAppCount == 0) {
             return ProtectionSnapshot(
@@ -44,6 +52,7 @@ object ProtectionEvaluator {
                 },
                 personalModeReady = false,
                 managedModeReady = false,
+                hasUnsavedChanges = hasUnsavedChanges,
             )
         }
 
@@ -53,18 +62,20 @@ object ProtectionEvaluator {
                 issues = listOf("Emergency access is active"),
                 personalModeReady = false,
                 managedModeReady = false,
+                hasUnsavedChanges = hasUnsavedChanges,
             )
         }
 
         if (managedEnforced) {
-            // Device Owner mode is only "Protected" when every restricted app
-            // is actually suspended; a partial apply must not look complete.
+            // Device Owner mode is only "Protected" when every saved restricted
+            // app is actually suspended; a partial apply must not look complete.
             if (managedUnsuspendedCount > 0) {
                 return ProtectionSnapshot(
                     level = ProtectionLevel.DEGRADED,
                     issues = listOf("$managedUnsuspendedCount restricted app(s) are not suspended"),
                     personalModeReady = false,
                     managedModeReady = false,
+                    hasUnsavedChanges = hasUnsavedChanges,
                 )
             }
             return ProtectionSnapshot(
@@ -72,6 +83,7 @@ object ProtectionEvaluator {
                 issues = emptyList(),
                 personalModeReady = false,
                 managedModeReady = true,
+                hasUnsavedChanges = hasUnsavedChanges,
             )
         }
 
@@ -79,6 +91,7 @@ object ProtectionEvaluator {
             if (!usageAccess) add("Usage Access is missing")
             if (!overlayAccess) add("Display over other apps is missing")
             if (!serviceRunning) add("Monitoring service is not running")
+            if (serviceRunning && !monitorPolicySynced) add("Monitoring service is syncing saved policy")
         }
 
         val ready = issues.isEmpty()
@@ -87,6 +100,7 @@ object ProtectionEvaluator {
             issues = issues,
             personalModeReady = ready,
             managedModeReady = false,
+            hasUnsavedChanges = hasUnsavedChanges,
         )
     }
 }

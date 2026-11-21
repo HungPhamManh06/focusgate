@@ -1,6 +1,6 @@
 # FocusGate – Milestone 1 Test & Verification Report
 
-Date: 2026-11-22  
+Date: 2026-11-22 (superseded for Android unit test count by Milestone 1.1: **38/38 per flavor** in `docs/MILESTONE1_1_TEST_REPORT.md`)  
 Branch: `main` (based on commit `894c183` + preserved user uncommitted changes)
 
 > **Important distinction:** Build and automated unit-test success does **not**

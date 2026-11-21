@@ -112,4 +112,59 @@ class PolicyEvaluatorTest {
             assertFalse("$it should not be essential", PolicyEvaluator.isEssential(it))
         }
     }
+
+    @Test
+    fun `system UI, permission controller, and emergency apps are always protected`() {
+        listOf(
+            "com.android.systemui",
+            "com.android.permissioncontroller",
+            "com.google.android.permissioncontroller",
+            "com.android.emergency",
+            "com.android.cellbroadcastreceiver",
+            "com.google.android.cellbroadcastreceiver",
+        ).forEach { pkg ->
+            assertTrue("$pkg must be essential", PolicyEvaluator.isEssential(pkg))
+            assertFalse("$pkg must never be blocked", PolicyEvaluator.isBlocked(pkg, setOf(pkg)))
+        }
+    }
+
+    @Test
+    fun `changing default SMS, dialer, or launcher updates essential protection`() {
+        val oldSms = "com.example.sms.old"
+        val newSms = "com.example.sms.new"
+
+        assertFalse(
+            PolicyEvaluator.isBlocked(
+                packageName = oldSms,
+                blockedPackages = setOf(oldSms, newSms),
+                deviceEssential = setOf(oldSms),
+            ),
+        )
+        assertTrue(
+            PolicyEvaluator.isBlocked(
+                packageName = newSms,
+                blockedPackages = setOf(oldSms, newSms),
+                deviceEssential = setOf(oldSms),
+            ),
+        )
+        // After user switches default SMS to newSms:
+        assertFalse(
+            PolicyEvaluator.isBlocked(
+                packageName = newSms,
+                blockedPackages = setOf(oldSms, newSms),
+                deviceEssential = setOf(newSms),
+            ),
+        )
+    }
+
+    @Test
+    fun `blank or malformed entries in policy are ignored and never block`() {
+        val effective = PolicyEvaluator.effectiveBlocked(
+            blockedPackages = setOf("", "   ", facebook),
+            exemptPackages = emptySet(),
+        )
+        assertTrue(effective == setOf(facebook))
+        assertFalse(PolicyEvaluator.isBlocked("", setOf("", facebook)))
+        assertFalse(PolicyEvaluator.isBlocked("   ", setOf("   ", facebook)))
+    }
 }
