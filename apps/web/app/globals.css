@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --radius-card: 18px;
+
+  --shadow-card: 0 1px 2px rgb(20 21 26 / 0.04), 0 8px 24px -16px rgb(20 21 26 / 0.18);
+  --shadow-lift: 0 2px 4px rgb(20 21 26 / 0.04), 0 20px 48px -24px rgb(20 21 26 / 0.28);
+}
+
+:root {
+  --canvas: #f4f4f0;
+  --surface: #ffffff;
+  --surface-2: #fafaf7;
+  --ink: #14151a;
+  --ink-soft: #3b3e47;
+  --muted: #70747d;
+  --line: #e5e4de;
+  --accent: #2b59ff;
+  --accent-strong: #1e43d6;
+  --accent-soft: #e9eeff;
+  --success: #0d7a58;
+  --success-soft: #e2f3ec;
+  --warning: #9a5b08;
+  --warning-soft: #fbf0de;
+  --danger: #bf3a32;
+  --danger-soft: #fbe9e7;
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #0b0c10;
+  --surface: #121318;
+  --surface-2: #17181f;
+  --ink: #f2f2ed;
+  --ink-soft: #d4d5dc;
+  --muted: #8d909b;
+  --line: #262830;
+  --accent: #809dff;
+  --accent-strong: #b3c4ff;
+  --accent-soft: #1a2340;
+  --success: #5dd6ab;
+  --success-soft: #112a24;
+  --warning: #e2a552;
+  --warning-soft: #2b2011;
+  --danger: #ff8f86;
+  --danger-soft: #2c1715;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    outline-offset: 2px;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+  }
+}
+
+@utility label-xs {
+  font-size: 10.5px;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+@utility surface-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* Thin, unobtrusive scrollbars for the desktop shell. */
+@supports (scrollbar-width: thin) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+}

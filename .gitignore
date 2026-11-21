@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js / web
+.next/
+out/
+build/
+dist/
+.turbo/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+!.env.example
+supabase/.env
+supabase/.temp/
+.temp/
+*.pem
+*.p12
+*.pfx
+
+# Local web database (PGlite data directory)
+apps/web/.data/
+.data/
+
+# .NET / Windows agent
+bin/
+obj/
+*.user
+*.suo
+.vs/
+apps/windows-agent/**/bin/
+apps/windows-agent/**/obj/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+agent-poc-data/
+
+# Android / Gradle
+.gradle/
+local.properties
+*.iml
+.idea/
+apps/android/**/build/
+apps/android/captures/
+*.jks
+*.keystore
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+logs/
+
+# Freebuff local state
+.freebuff/
+
+# Local Android build toolchain (not committed)
+.android-tools/

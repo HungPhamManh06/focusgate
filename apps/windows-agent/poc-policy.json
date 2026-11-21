@@ -1,0 +1,45 @@
+{
+  "$comment": "PoC policy. Process names are exe names without .exe. Allowlist always wins. Essential apps (explorer, shell, terminals, settings) are allowlisted so the demo cannot lock the desktop.",
+  "blocked": [
+    {
+      "category": "social",
+      "processNames": ["Discord", "Telegram", "WhatsApp", "Slack", "Signal"],
+      "appUserModelIds": []
+    },
+    {
+      "category": "video",
+      "processNames": ["Spotify", "VLC", "mpc-hc64", "Video.UI"],
+      "appUserModelIds": ["Microsoft.ZuneVideo"]
+    },
+    {
+      "category": "games",
+      "processNames": ["Steam", "EpicGamesLauncher", "Battle.net", "RiotClientServices", "RobloxPlayerBeta"],
+      "appUserModelIds": ["Microsoft.MinecraftUWP"]
+    },
+    {
+      "category": "entertainment",
+      "processNames": ["Netflix", "DisneyPlus"],
+      "appUserModelIds": []
+    }
+  ],
+  "allowlistProcessNames": [
+    "explorer",
+    "dwm",
+    "SearchHost",
+    "StartMenuExperienceHost",
+    "ShellExperienceHost",
+    "LockApp",
+    "LogonUI",
+    "TextInputHost",
+    "TabTip",
+    "Taskmgr",
+    "cmd",
+    "powershell",
+    "pwsh",
+    "WindowsTerminal",
+    "conhost",
+    "SystemSettings",
+    "ApplicationFrameHost_PoC_never_allowlisted",
+    "FocusGate.Agent.Poc"
+  ]
+}

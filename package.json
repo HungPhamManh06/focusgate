@@ -1,0 +1,26 @@
+{
+  "name": "focusgate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FocusGate – finish your tasks, earn your freedom.",
+  "workspaces": [
+    "apps/web",
+    "packages/shared-contracts"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:verify": "node scripts/verify-db.mjs",
+    "shared:typecheck": "npm run typecheck -w @focusgate/shared-contracts",
+    "web:dev": "npm run dev -w @focusgate/web",
+    "web:build": "npm run build -w @focusgate/web"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "typescript": "^5.7.2"
+  }
+}

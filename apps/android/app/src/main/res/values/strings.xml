@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">FocusGate</string>
+    <string name="device_admin_label">FocusGate managed device</string>
+    <string name="device_admin_description">Allows an administrator to apply FocusGate app restrictions on a fully managed or dedicated device.</string>
+
+    <string name="notification_channel_name">Protection status</string>
+    <string name="notification_channel_description">Shows whether FocusGate monitoring is active and permissions are intact.</string>
+    <string name="notification_alerts_channel_name">Protection alerts</string>
+    <string name="notification_alerts_channel_description">Warns when protection stops or the block screen cannot be shown.</string>
+    <string name="notification_title">FocusGate protection</string>
+    <string name="notification_text">Monitoring is active</string>
+    <string name="notification_usage_missing">Usage Access is missing - protection is not active</string>
+    <string name="notification_overlay_missing">Display over other apps is missing - the block screen cannot appear</string>
+    <string name="notification_emergency_active">Emergency access is active - restrictions are paused</string>
+    <string name="notification_protection_off_title">FocusGate protection is off</string>
+    <string name="notification_block_failed_title">Block screen could not open</string>
+    <string name="notification_block_failed_body">Android refused the overlay for %1$s. Open FocusGate to check permissions.</string>
+    <string name="notification_watchdog_body">FocusGate monitoring is not running. Open FocusGate and tap Restart protection.</string>
+
+    <string name="blocked_title">Locked by FocusGate</string>
+    <string name="blocked_body">%1$s is restricted. Finish your Must Do tasks to earn unlock time.</string>
+    <string name="blocked_back_home">Back to my tasks</string>
+    <string name="blocked_emergency">Emergency access for 10 minutes</string>
+    <string name="blocked_emergency_confirm_title">Use emergency access?</string>
+    <string name="blocked_emergency_confirm_body">This pauses all app restrictions for 10 minutes. Use it only for an urgent need; the status screen will show that protection is paused.</string>
+    <string name="blocked_emergency_confirm_action">Use emergency access</string>
+    <string name="blocked_cancel">Cancel</string>
+    <string name="blocked_open_focusgate">Open FocusGate</string>
+    <string name="blocked_honesty_note">Personal Strict Mode: this is a friction layer, not a tamper-proof lock. Usage and overlay permissions can be revoked at any time in system settings. Emergency access pauses restrictions for 10 minutes.</string>
+</resources>

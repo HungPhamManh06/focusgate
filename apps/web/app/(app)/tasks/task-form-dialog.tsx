@@ -1,0 +1,227 @@
+"use client";
+
+import { Loader2, Pencil, Plus, X } from "lucide-react";
+import { useActionState, useEffect, useState } from "react";
+import { createTaskAction, updateTaskAction } from "@/lib/actions/tasks";
+import { EMPTY_ACTION_STATE } from "@/lib/actions/types";
+import type { Task } from "@/lib/data/types";
+import { isoToDateInput } from "@/lib/validation";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input, Label, Select, Textarea } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+
+export function TaskFormDialog({
+  task,
+  trigger = "create",
+  className,
+}: {
+  task?: Task;
+  trigger?: "create" | "edit";
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction, pending] = useActionState(
+    task ? updateTaskAction : createTaskAction,
+    EMPTY_ACTION_STATE,
+  );
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!state.success) return;
+    toast.push("success", state.success);
+    setOpen(false);
+  }, [state.success, toast]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  const isEdit = trigger === "edit";
+
+  return (
+    <>
+      {isEdit ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={`Edit ${task?.title ?? "task"}`}
+          className={cn(
+            "flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink",
+            className,
+          )}
+        >
+          <Pencil className="size-3.5" />
+        </button>
+      ) : (
+        <Button variant="accent" onClick={() => setOpen(true)} className={className}>
+          <Plus className="size-4" /> New task
+        </Button>
+      )}
+
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 backdrop-blur-[2px] sm:items-center sm:p-6"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-dialog-title"
+            className="max-h-[92vh] w-full max-w-[560px] overflow-y-auto rounded-t-[22px] border border-line bg-surface shadow-lift sm:rounded-[22px]"
+          >
+            <div className="flex items-start justify-between border-b border-line px-6 py-5">
+              <div>
+                <p className="label-xs text-muted">{isEdit ? "Edit task" : "New task"}</p>
+                <h2 id="task-dialog-title" className="mt-2 font-display text-[26px] leading-none">
+                  {isEdit ? "Refine the work." : "What needs doing?"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close dialog"
+                className="flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <form action={formAction} className="space-y-4 px-6 py-5">
+              {task ? <input type="hidden" name="id" value={task.id} /> : null}
+
+              {state.error ? (
+                <p className="rounded-xl border border-danger/20 bg-danger-soft px-3.5 py-2.5 text-[12px] text-danger">
+                  {state.error}
+                </p>
+              ) : null}
+
+              <div>
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  name="title"
+                  defaultValue={task?.title ?? ""}
+                  placeholder="e.g. Finish the onboarding copy"
+                  maxLength={160}
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description">Notes</Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  defaultValue={task?.description ?? ""}
+                  placeholder="Optional context, links, or the definition of done."
+                  maxLength={2000}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="kind">Gate type</Label>
+                  <Select id="kind" name="kind" defaultValue={task?.kind ?? "should_do"}>
+                    <option value="must_do">Must-do</option>
+                    <option value="should_do">Should-do</option>
+                    <option value="bonus">Bonus</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="priority">Priority</Label>
+                  <Select id="priority" name="priority" defaultValue={task?.priority ?? "medium"}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="category">Category</Label>
+                  <Select id="category" name="category" defaultValue={task?.category ?? "work"}>
+                    <option value="work">Work</option>
+                    <option value="study">Study</option>
+                    <option value="health">Health</option>
+                    <option value="personal">Personal</option>
+                    <option value="finance">Finance</option>
+                    <option value="other">Other</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="dueDate">Due date</Label>
+                  <Input
+                    id="dueDate"
+                    name="dueDate"
+                    type="date"
+                    defaultValue={isoToDateInput(task?.dueDate ?? null)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="estimatedMinutes">Estimate (min)</Label>
+                  <Input
+                    id="estimatedMinutes"
+                    name="estimatedMinutes"
+                    type="number"
+                    min={5}
+                    max={480}
+                    step={5}
+                    defaultValue={task?.estimatedMinutes ?? 30}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="requiredFocusMinutes">Focus required (min)</Label>
+                  <Input
+                    id="requiredFocusMinutes"
+                    name="requiredFocusMinutes"
+                    type="number"
+                    min={0}
+                    max={480}
+                    step={5}
+                    defaultValue={task?.requiredFocusMinutes ?? 25}
+                    required
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] leading-relaxed text-muted">
+                Must-do tasks need this many valid focus minutes before they can be completed in an
+                active plan. Set 0 to complete without focus.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 border-t border-line pt-5">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className={buttonVariants({ variant: "ghost", size: "md" })}
+                >
+                  Cancel
+                </button>
+                <Button type="submit" variant="accent" disabled={pending}>
+                  {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {isEdit ? "Save changes" : "Create task"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
