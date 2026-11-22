@@ -235,7 +235,8 @@ class AppUsageMonitorService : Service() {
         }
 
         refreshDeviceEssential(now)
-        val isBlocked = PolicyEvaluator.isBlocked(
+        val unlockedByPlan = AgentPreferences.isPlanUnlocked(this)
+        val isBlocked = !unlockedByPlan && PolicyEvaluator.isBlocked(
             packageName = current,
             blockedPackages = blockedPackages,
             exemptPackages = exemptPackages,

@@ -5,6 +5,8 @@ import { computeAgentPolicySnapshot, type AgentPolicyPayload } from "@/lib/domai
 import {
   assertSupabaseOk,
   getSupabaseContext,
+  getSupabaseUserTimezone,
+  localDateInTimezone,
   unwrapSupabase,
 } from "@/lib/supabase/data-client";
 import { toIso } from "./format";
@@ -289,7 +291,9 @@ export async function getAgentPolicyForDevice(
       return { status: "forbidden" };
     }
 
-    const [, grantsRes, rulesRes] = await Promise.all([
+    const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+    const today = localDateInTimezone(timezone);
+    const [, grantsRes, rulesRes, todayPlanRes] = await Promise.all([
       ctx.supabase
         .from("devices")
         .update({ last_seen_at: new Date().toISOString() })
@@ -308,6 +312,12 @@ export async function getAgentPolicyForDevice(
         .eq("user_id", ctx.userId)
         .eq("device_id", deviceId)
         .order("identifier", { ascending: true }),
+      ctx.supabase
+        .from("daily_plans")
+        .select("id")
+        .eq("user_id", ctx.userId)
+        .eq("plan_date", today)
+        .maybeSingle(),
     ]);
 
     const grantRows = unwrapSupabase(grantsRes) as Array<{ remaining_minutes: number }>;
@@ -316,6 +326,25 @@ export async function getAgentPolicyForDevice(
       identifier: string;
       is_enabled: boolean;
     }>;
+
+    let allPlanTasksCompleted = false;
+    const planId = (todayPlanRes.data as { id?: string } | null)?.id;
+    if (planId) {
+      const planTasksRes = await ctx.supabase
+        .from("daily_plan_tasks")
+        .select("tasks!inner(status)")
+        .eq("plan_id", planId)
+        .eq("user_id", ctx.userId);
+      const planTaskRows = unwrapSupabase(planTasksRes) as Array<{
+        tasks: { status: string } | Array<{ status: string }>;
+      }>;
+      if (planTaskRows.length > 0) {
+        allPlanTasksCompleted = planTaskRows.every((row) => {
+          const t = Array.isArray(row.tasks) ? row.tasks[0] : row.tasks;
+          return t?.status === "completed";
+        });
+      }
+    }
 
     const activeGrantMinutes = grantRows.reduce((sum, row) => sum + row.remaining_minutes, 0);
     const policy = computeAgentPolicySnapshot({
@@ -326,6 +355,10 @@ export async function getAgentPolicyForDevice(
         isEnabled: row.is_enabled,
       })),
     });
+
+    if (allPlanTasksCompleted) {
+      policy.lockActive = false;
+    }
 
     return { status: "ok", policy };
   }

@@ -18,6 +18,40 @@ data class RemoteDeviceRegistration(
     val status: String,
 )
 
+data class SupabaseAuthSession(
+    val accessToken: String,
+    val refreshToken: String,
+    val email: String,
+)
+
+data class RemotePlanTask(
+    val planTaskId: String,
+    val taskId: String,
+    val title: String,
+    val kind: String,
+    val status: String,
+    val requiredFocusMinutes: Int,
+    val focusDone: Int,
+)
+
+data class RemoteDailyPlan(
+    val id: String,
+    val planDate: String,
+    val status: String,
+    val allTasksTotal: Int,
+    val allTasksCompleted: Int,
+    val allCompleted: Boolean,
+    val tasks: List<RemotePlanTask>,
+)
+
+data class RemotePlanSnapshot(
+    val plan: RemoteDailyPlan?,
+    val activeGrantMinutes: Int,
+    val unlocked: Boolean,
+)
+
+class UnauthorizedApiException : IOException("Unauthorized")
+
 /**
  * Pure parser and policy reconciler for FocusGate `/api/agent/policy` JSON responses.
  * Uses pure Kotlin parsing (no Android `org.json` stub dependency in JVM unit tests).
@@ -256,6 +290,172 @@ class RemoteAgentSyncClient(
             throw IOException("Policy pull failed ($code): $body")
         }
         return RemotePolicySync.parsePolicyJson(body)
+    }
+
+    fun signInWithPassword(
+        supabaseUrl: String,
+        anonKey: String,
+        email: String,
+        password: String,
+    ): SupabaseAuthSession {
+        val base = supabaseUrl.trimEnd('/')
+        val conn = (URL("$base/auth/v1/token?grant_type=password").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("apikey", anonKey)
+            setRequestProperty("Content-Type", "application/json")
+        }
+        val payload = """{"email":${quoteJson(email)},"password":${quoteJson(password)}}"""
+        conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+        val code = conn.responseCode
+        val body = readResponseBody(conn, code)
+        if (code !in 200..299) {
+            throw IOException(parseErrorMessage(body, "Sign in failed ($code)"))
+        }
+        return parseAuthSession(body, email)
+    }
+
+    fun refreshSession(
+        supabaseUrl: String,
+        anonKey: String,
+        refreshToken: String,
+        fallbackEmail: String,
+    ): SupabaseAuthSession {
+        val base = supabaseUrl.trimEnd('/')
+        val conn = (URL("$base/auth/v1/token?grant_type=refresh_token").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("apikey", anonKey)
+            setRequestProperty("Content-Type", "application/json")
+        }
+        val payload = """{"refresh_token":${quoteJson(refreshToken)}}"""
+        conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+        val code = conn.responseCode
+        val body = readResponseBody(conn, code)
+        if (code !in 200..299) {
+            throw IOException("Session expired ($code)")
+        }
+        return parseAuthSession(body, fallbackEmail)
+    }
+
+    fun fetchTodayPlan(
+        apiBaseUrl: String,
+        accessToken: String,
+    ): RemotePlanSnapshot {
+        val base = apiBaseUrl.trimEnd('/')
+        val conn = (URL("$base/api/agent/plan").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            setRequestProperty("Authorization", "Bearer $accessToken")
+        }
+        val code = conn.responseCode
+        val body = readResponseBody(conn, code)
+        if (code == 401) throw UnauthorizedApiException()
+        if (code !in 200..299) {
+            throw IOException(parseErrorMessage(body, "Plan sync failed ($code)"))
+        }
+        return parsePlanSnapshot(body)
+    }
+
+    fun completePlanTask(
+        apiBaseUrl: String,
+        accessToken: String,
+        planTaskId: String,
+        deviceId: String?,
+    ): RemotePlanSnapshot {
+        val base = apiBaseUrl.trimEnd('/')
+        val conn = (URL("$base/api/agent/plan/complete").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        val deviceField = if (deviceId != null) ""","deviceId":${quoteJson(deviceId)}""" else ""
+        val payload = """{"planTaskId":${quoteJson(planTaskId)}$deviceField}"""
+        conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+        val code = conn.responseCode
+        val body = readResponseBody(conn, code)
+        if (code == 401) throw UnauthorizedApiException()
+        if (code !in 200..299) {
+            throw IOException(parseErrorMessage(body, "Could not complete task ($code)"))
+        }
+        return parsePlanSnapshot(body)
+    }
+
+    private fun parseAuthSession(body: String, fallbackEmail: String): SupabaseAuthSession {
+        val obj = RemotePolicySync.parseJsonObject(body)
+        val accessToken = obj["access_token"] as? String
+            ?: throw IOException("Missing access_token")
+        val refreshToken = obj["refresh_token"] as? String
+            ?: throw IOException("Missing refresh_token")
+        val userObj = obj["user"] as? Map<*, *>
+        val email = (userObj?.get("email") as? String)?.takeIf { it.isNotBlank() } ?: fallbackEmail
+        return SupabaseAuthSession(
+            accessToken = accessToken,
+            refreshToken = refreshToken,
+            email = email,
+        )
+    }
+
+    private fun parsePlanSnapshot(body: String): RemotePlanSnapshot {
+        val obj = RemotePolicySync.parseJsonObject(body)
+        val activeGrantMinutes = (obj["activeGrantMinutes"] as? Number)?.toInt() ?: 0
+        val unlocked = obj["unlocked"] as? Boolean ?: false
+        val planObj = obj["plan"] as? Map<*, *>
+        if (planObj == null) {
+            return RemotePlanSnapshot(
+                plan = null,
+                activeGrantMinutes = activeGrantMinutes,
+                unlocked = unlocked,
+            )
+        }
+
+        val rawTasks = (planObj["tasks"] as? List<*>)?.mapNotNull { entry ->
+            val t = entry as? Map<*, *> ?: return@mapNotNull null
+            RemotePlanTask(
+                planTaskId = t["planTaskId"] as? String ?: return@mapNotNull null,
+                taskId = t["taskId"] as? String ?: "",
+                title = t["title"] as? String ?: "Untitled task",
+                kind = t["kind"] as? String ?: "must_do",
+                status = t["status"] as? String ?: "todo",
+                requiredFocusMinutes = (t["requiredFocusMinutes"] as? Number)?.toInt() ?: 0,
+                focusDone = (t["focusDone"] as? Number)?.toInt() ?: 0,
+            )
+        }.orEmpty()
+
+        return RemotePlanSnapshot(
+            plan = RemoteDailyPlan(
+                id = planObj["id"] as? String ?: "",
+                planDate = planObj["planDate"] as? String ?: "",
+                status = planObj["status"] as? String ?: "draft",
+                allTasksTotal = (planObj["allTasksTotal"] as? Number)?.toInt() ?: rawTasks.size,
+                allTasksCompleted = (planObj["allTasksCompleted"] as? Number)?.toInt()
+                    ?: rawTasks.count { it.status == "completed" },
+                allCompleted = planObj["allCompleted"] as? Boolean ?: false,
+                tasks = rawTasks,
+            ),
+            activeGrantMinutes = activeGrantMinutes,
+            unlocked = unlocked,
+        )
+    }
+
+    private fun parseErrorMessage(body: String, fallback: String): String {
+        return try {
+            val obj = RemotePolicySync.parseJsonObject(body)
+            (obj["error_description"] as? String)
+                ?: (obj["msg"] as? String)
+                ?: (obj["error"] as? String)
+                ?: fallback
+        } catch (_: Exception) {
+            fallback
+        }
     }
 
     private fun readResponseBody(conn: HttpURLConnection, code: Int): String {

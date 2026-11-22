@@ -26,6 +26,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,10 +58,12 @@ import com.focusgate.app.data.FocusGateDatabase
 import com.focusgate.app.policy.PolicyEvaluator
 import com.focusgate.app.policy.ProtectionEvaluator
 import com.focusgate.app.policy.ProtectionLevel
+import com.focusgate.app.policy.RemotePlanSnapshot
 import com.focusgate.app.service.AppUsageMonitorService
 import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.PermissionChecks
+import com.focusgate.app.util.PlanSyncManager
 import com.focusgate.app.util.ProtectionWatchdog
 import com.focusgate.app.util.SystemPackages
 import kotlinx.coroutines.Dispatchers
@@ -122,6 +125,89 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var operationSequence by remember { mutableIntStateOf(0) }
     val isOperationInProgress = activeOperations > 0
 
+    var signedInEmail by remember { mutableStateOf(AgentPreferences.getUserEmail(context)) }
+    var emailInput by remember { mutableStateOf(AgentPreferences.getUserEmail(context) ?: "") }
+    var passwordInput by remember { mutableStateOf("") }
+    var planSnapshot by remember { mutableStateOf<RemotePlanSnapshot?>(null) }
+    var planUnlocked by remember { mutableStateOf(AgentPreferences.isPlanUnlocked(context)) }
+    var planSyncBusy by remember { mutableStateOf(false) }
+    var completingTaskId by remember { mutableStateOf<String?>(null) }
+    var syncError by remember { mutableStateOf<String?>(null) }
+
+    fun syncPlanFromWeb() {
+        if (AgentPreferences.getAccessToken(context) == null || planSyncBusy) return
+        planSyncBusy = true
+        syncError = null
+        scope.launch {
+            try {
+                val snapshot = withContext(Dispatchers.IO) { PlanSyncManager.syncNow(context) }
+                planSnapshot = snapshot
+                planUnlocked = snapshot.unlocked
+                signedInEmail = AgentPreferences.getUserEmail(context)
+            } catch (e: Exception) {
+                syncError = e.message ?: "Could not sync plan."
+            } finally {
+                planSyncBusy = false
+            }
+        }
+    }
+
+    fun signInToWeb() {
+        val email = emailInput.trim()
+        if (email.isBlank() || passwordInput.isBlank()) {
+            syncError = "Enter your email and password."
+            return
+        }
+        planSyncBusy = true
+        syncError = null
+        scope.launch {
+            try {
+                val snapshot = withContext(Dispatchers.IO) {
+                    PlanSyncManager.signInAndSync(context, email, passwordInput)
+                }
+                passwordInput = ""
+                signedInEmail = AgentPreferences.getUserEmail(context)
+                planSnapshot = snapshot
+                planUnlocked = snapshot.unlocked
+                banner = "Synced with FocusGate web."
+            } catch (e: Exception) {
+                syncError = e.message ?: "Sign in failed."
+            } finally {
+                planSyncBusy = false
+            }
+        }
+    }
+
+    fun completeTaskFromPhone(planTaskId: String) {
+        if (completingTaskId != null) return
+        completingTaskId = planTaskId
+        syncError = null
+        scope.launch {
+            try {
+                val snapshot = withContext(Dispatchers.IO) {
+                    PlanSyncManager.completeTaskAndSync(context, planTaskId)
+                }
+                planSnapshot = snapshot
+                planUnlocked = snapshot.unlocked
+                if (snapshot.unlocked) {
+                    banner = "All planned tasks completed — restricted apps are now unlocked!"
+                }
+            } catch (e: Exception) {
+                syncError = e.message ?: "Could not complete task."
+            } finally {
+                completingTaskId = null
+            }
+        }
+    }
+
+    fun signOutFromWeb() {
+        AgentPreferences.clearAuthSession(context)
+        signedInEmail = null
+        planSnapshot = null
+        planUnlocked = false
+        syncError = null
+    }
+
     fun applyOutcome(outcome: PolicyOperationOutcome, seq: Int? = null) {
         val state = outcome.state
         val hadUnsaved = pendingBlocked != savedBlocked || pendingExempt != savedExempt
@@ -181,10 +267,22 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) refreshRuntime()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshRuntime()
+                syncPlanFromWeb()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(signedInEmail) {
+        if (signedInEmail != null) {
+            while (true) {
+                syncPlanFromWeb()
+                delay(25_000L)
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -367,6 +465,202 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         ) {
                             Text(message, modifier = Modifier.weight(1f))
                             TextButton(onClick = { banner = null }) { Text("Dismiss") }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("FocusGate Web Sync", fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        if (signedInEmail == null) {
+                            Text(
+                                "Sign in with your FocusGate web account to sync today's planned tasks and unlock apps when all tasks are done.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = emailInput,
+                                onValueChange = { emailInput = it },
+                                label = { Text("Email") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = passwordInput,
+                                onValueChange = { passwordInput = it },
+                                label = { Text("Password") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            if (syncError != null) {
+                                Text(
+                                    syncError!!,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
+                            }
+                            Button(
+                                onClick = ::signInToWeb,
+                                enabled = !planSyncBusy,
+                                modifier = Modifier.padding(top = 10.dp),
+                            ) {
+                                Text(if (planSyncBusy) "Signing in..." else "Sign in & Sync")
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "Signed in as $signedInEmail",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        if (planUnlocked) {
+                                            "Unlocked: all planned tasks completed"
+                                        } else {
+                                            "Locked until all planned tasks are completed"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (planUnlocked) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.error
+                                        },
+                                    )
+                                }
+                                TextButton(
+                                    onClick = ::syncPlanFromWeb,
+                                    enabled = !planSyncBusy,
+                                ) {
+                                    Text(if (planSyncBusy) "Syncing..." else "Sync")
+                                }
+                                TextButton(onClick = ::signOutFromWeb) {
+                                    Text("Sign out")
+                                }
+                            }
+                            if (syncError != null) {
+                                Text(
+                                    syncError!!,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (signedInEmail != null) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            val currentPlan = planSnapshot?.plan
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Today's Planned Tasks",
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (currentPlan != null && currentPlan.allTasksTotal > 0) {
+                                    Text(
+                                        "${currentPlan.allTasksCompleted}/${currentPlan.allTasksTotal} done",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (currentPlan.allCompleted) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            when {
+                                currentPlan == null || currentPlan.tasks.isEmpty() -> {
+                                    Text(
+                                        "No tasks in today's plan yet. Add tasks on FocusGate Web (Planner) and tap Sync.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                else -> {
+                                    currentPlan.tasks.forEach { task ->
+                                        val isDone = task.status == "completed"
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    task.title,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                val meta = buildString {
+                                                    append(
+                                                        when (task.kind) {
+                                                            "must_do" -> "Must do"
+                                                            "should_do" -> "Should do"
+                                                            else -> "Bonus"
+                                                        },
+                                                    )
+                                                    if (task.requiredFocusMinutes > 0) {
+                                                        append(" • Focus ${task.focusDone}/${task.requiredFocusMinutes}m")
+                                                    }
+                                                }
+                                                Text(
+                                                    meta,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                            Spacer(Modifier.width(8.dp))
+                                            if (isDone) {
+                                                Text(
+                                                    "Done",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                )
+                                            } else {
+                                                OutlinedButton(
+                                                    onClick = { completeTaskFromPhone(task.planTaskId) },
+                                                    enabled = completingTaskId == null,
+                                                ) {
+                                                    Text(
+                                                        if (completingTaskId == task.planTaskId) "..." else "Done",
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

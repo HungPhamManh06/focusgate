@@ -8,6 +8,16 @@ object AgentPreferences {
     private const val KEY_PRIVACY_CONSENT = "privacy_consent"
     private const val KEY_MONITOR_ENABLED = "monitor_enabled"
     private const val KEY_MANAGED_ENFORCEMENT = "managed_enforcement"
+    private const val KEY_ACCESS_TOKEN = "access_token"
+    private const val KEY_REFRESH_TOKEN = "refresh_token"
+    private const val KEY_USER_EMAIL = "user_email"
+    private const val KEY_DEVICE_ID = "device_id"
+    private const val KEY_PLAN_UNLOCKED = "plan_unlocked"
+    private const val KEY_LAST_SYNC_AT = "last_sync_at"
+
+    const val DEFAULT_API_BASE_URL = "https://focusgate-blue.vercel.app"
+    const val DEFAULT_SUPABASE_URL = "https://dyfdeceiszmxozdqugon.supabase.co"
+    const val DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_TPpxronGIazapp2ylFORIw_ejce1q9C"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
@@ -38,5 +48,59 @@ object AgentPreferences {
 
     fun setManagedEnforcementEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_MANAGED_ENFORCEMENT, enabled).apply()
+    }
+
+    fun getAccessToken(context: Context): String? =
+        prefs(context).getString(KEY_ACCESS_TOKEN, null)?.takeIf { it.isNotBlank() }
+
+    fun getRefreshToken(context: Context): String? =
+        prefs(context).getString(KEY_REFRESH_TOKEN, null)?.takeIf { it.isNotBlank() }
+
+    fun getUserEmail(context: Context): String? =
+        prefs(context).getString(KEY_USER_EMAIL, null)?.takeIf { it.isNotBlank() }
+
+    fun saveAuthSession(
+        context: Context,
+        accessToken: String,
+        refreshToken: String,
+        email: String,
+    ) {
+        prefs(context).edit()
+            .putString(KEY_ACCESS_TOKEN, accessToken)
+            .putString(KEY_REFRESH_TOKEN, refreshToken)
+            .putString(KEY_USER_EMAIL, email)
+            .apply()
+    }
+
+    fun clearAuthSession(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_ACCESS_TOKEN)
+            .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_USER_EMAIL)
+            .remove(KEY_DEVICE_ID)
+            .putBoolean(KEY_PLAN_UNLOCKED, false)
+            .remove(KEY_LAST_SYNC_AT)
+            .apply()
+    }
+
+    fun getDeviceId(context: Context): String? =
+        prefs(context).getString(KEY_DEVICE_ID, null)?.takeIf { it.isNotBlank() }
+
+    fun setDeviceId(context: Context, deviceId: String) {
+        prefs(context).edit().putString(KEY_DEVICE_ID, deviceId).apply()
+    }
+
+    fun isPlanUnlocked(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PLAN_UNLOCKED, false)
+
+    fun setPlanUnlocked(context: Context, unlocked: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PLAN_UNLOCKED, unlocked).apply()
+    }
+
+    fun getLastSyncAt(context: Context): Long =
+        prefs(context).getLong(KEY_LAST_SYNC_AT, 0L)
+
+    fun setLastSyncAt(context: Context, timestampMs: Long) {
+        prefs(context).edit().putLong(KEY_LAST_SYNC_AT, timestampMs).apply()
     }
 }
