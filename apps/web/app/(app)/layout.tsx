@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { formatMinutes, initials } from "@/lib/data/format";
 import { getWalletSummary } from "@/lib/data/rewards";
 import { getWorkspace } from "@/lib/data/workspace";
@@ -12,13 +13,26 @@ import { Sidebar } from "@/components/shell/sidebar";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [workspace, walletSummaryResult, authUser] = await Promise.all([
-    getWorkspace(),
+  const [workspaceResult, walletSummaryResult, authUser] = await Promise.all([
+    getWorkspace()
+      .then((data) => ({ ok: true as const, data }))
+      .catch((error: unknown) => ({
+        ok: false as const,
+        message: error instanceof Error ? error.message : String(error),
+      })),
     getWalletSummary()
       .then((minutes) => ({ minutes, error: false }))
       .catch(() => ({ minutes: null, error: true })),
     getAuthenticatedUser().catch(() => null),
   ]);
+
+  if (!workspaceResult.ok) {
+    if (workspaceResult.message.toLowerCase().includes("unauthorized")) {
+      redirect("/login");
+    }
+    throw new Error(workspaceResult.message);
+  }
+  const workspace = workspaceResult.data;
 
   const effectiveDisplayName =
     (typeof authUser?.user_metadata?.display_name === "string" &&
