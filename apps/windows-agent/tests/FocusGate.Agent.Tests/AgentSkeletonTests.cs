@@ -116,6 +116,15 @@ public sealed class AgentSkeletonTests : IDisposable
                 });
             }
 
+            if (request.RequestUri.AbsolutePath == "/api/agent/usage")
+            {
+                return JsonResponse(HttpStatusCode.OK, new
+                {
+                    accepted = 1,
+                    duplicates = 0,
+                });
+            }
+
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
@@ -129,7 +138,20 @@ public sealed class AgentSkeletonTests : IDisposable
         var policy = await client.PullPolicyAsync("http://localhost:3000", "jwt-token", reg.DeviceId);
         Assert.True(policy.LockActive);
         Assert.Equal(["steam", "discord"], policy.BlockedProcesses);
-        Assert.Equal(2, seenRequests.Count);
+
+        var upload = await client.PushUsageEventsAsync("http://localhost:3000", "jwt-token", reg.DeviceId,
+        [
+            new UsageEventUpload(
+                ClientEventId: "evt-12345678",
+                Identifier: "steam.exe",
+                DisplayName: "Steam",
+                StartedAt: new DateTimeOffset(2026, 11, 22, 8, 25, 0, TimeSpan.Zero),
+                EndedAt: new DateTimeOffset(2026, 11, 22, 8, 26, 0, TimeSpan.Zero),
+                DurationSeconds: 60,
+                WasBlocked: true),
+        ]);
+        Assert.Equal(1, upload.Accepted);
+        Assert.Equal(3, seenRequests.Count);
         Assert.All(seenRequests, req => Assert.Equal("Bearer jwt-token", req.Auth));
     }
 
@@ -143,6 +165,89 @@ public sealed class AgentSkeletonTests : IDisposable
 
         var status = AgentOptions.Parse(["--status"]);
         Assert.Equal(AgentMode.Status, status.Mode);
+    }
+
+    [Fact]
+    public void PolicyCacheStore_PersistsSnapshot_AndMapsBlockPolicy()
+    {
+        var cachePath = Path.Combine(_tempDir, "policy-cache.json");
+        var cache = new PolicyCacheStore(cachePath);
+        var snapshot = new AgentPolicySnapshot(
+            PulledAtUtc: new DateTimeOffset(2026, 11, 22, 9, 0, 0, TimeSpan.Zero),
+            LockActive: true,
+            BlockedProcesses: ["steam.exe", "discord.exe"],
+            AllowedProcesses: ["code.exe"]);
+
+        cache.Save(snapshot);
+        var loaded = cache.Load();
+        Assert.NotNull(loaded);
+        Assert.True(loaded.LockActive);
+        Assert.Equal(["steam.exe", "discord.exe"], loaded.BlockedProcesses);
+
+        var steamApp = new ForegroundApp(0, 1, "steam", "Steam", "SDL_app", null, null, false, DateTimeOffset.UtcNow);
+        var codeApp = new ForegroundApp(0, 2, "code", "VS Code", "Chrome_WidgetWin_1", null, null, false, DateTimeOffset.UtcNow);
+
+        var lockedPolicy = PolicyCacheStore.ToBlockPolicy(loaded);
+        Assert.Single(lockedPolicy.Blocked);
+        Assert.NotNull(lockedPolicy.Match(steamApp));
+        Assert.Null(lockedPolicy.Match(codeApp));
+
+        var unlockedPolicy = PolicyCacheStore.ToBlockPolicy(loaded with { LockActive = false });
+        Assert.Empty(unlockedPolicy.Blocked);
+        Assert.Null(unlockedPolicy.Match(steamApp));
+    }
+
+    [Fact]
+    public async Task OfflineUsageQueue_RetainsEventsOnFailure_AndClearsAfterRetry()
+    {
+        var queuePath = Path.Combine(_tempDir, "usage-queue.json");
+        var queue = new OfflineUsageQueue(queuePath);
+        queue.Enqueue(new UsageEventUpload(
+            ClientEventId: "evt-offline-001",
+            Identifier: "steam.exe",
+            DisplayName: "Steam",
+            StartedAt: DateTimeOffset.UtcNow.AddMinutes(-2),
+            EndedAt: DateTimeOffset.UtcNow,
+            DurationSeconds: 120,
+            WasBlocked: true));
+
+        Assert.Equal(1, queue.Count);
+
+        var failFirst = true;
+        var handler = new StubHttpMessageHandler(_ =>
+        {
+            if (failFirst)
+            {
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            }
+            return JsonResponse(HttpStatusCode.OK, new { accepted = 1, duplicates = 0 });
+        });
+
+        using var http = new HttpClient(handler);
+        using var client = new AgentSyncClient(http);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            queue.FlushAsync(client, "http://localhost:3000", "jwt", "dev-1"));
+        Assert.Equal(1, queue.Count);
+
+        failFirst = false;
+        var res = await queue.FlushAsync(client, "http://localhost:3000", "jwt", "dev-1");
+        Assert.Equal(1, res.Accepted);
+        Assert.Equal(0, queue.Count);
+    }
+
+    [Fact]
+    public void EnforcementEngine_UpdatePolicy_SwapsRulesAtomically()
+    {
+        var steamApp = new ForegroundApp(0, 1, "steam", "Steam", "SDL_app", null, null, false, DateTimeOffset.UtcNow);
+        var engine = new EnforcementEngine(new BlockPolicy());
+        Assert.False(engine.Evaluate(steamApp).ShouldBlock);
+
+        engine.UpdatePolicy(new BlockPolicy
+        {
+            Blocked = [new PolicyEntry { Category = "games", ProcessNames = ["steam.exe"] }],
+        });
+        Assert.True(engine.Evaluate(steamApp).ShouldBlock);
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, object body) =>

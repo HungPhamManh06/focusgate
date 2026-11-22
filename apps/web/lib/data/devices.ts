@@ -308,3 +308,108 @@ export async function deleteBlockRule(ruleId: string): Promise<void> {
     ]);
   });
 }
+
+export interface UsageEventRecord {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  identifier: string;
+  displayName: string | null;
+  startedAt: string;
+  durationSeconds: number;
+  wasBlocked: boolean;
+}
+
+export async function listRecentUsageEvents(limit = 15): Promise<UsageEventRecord[]> {
+  return withUser(async (db) => {
+    const result = await db.query<{
+      id: string;
+      device_id: string;
+      device_name: string;
+      identifier: string;
+      display_name: string | null;
+      started_at: string | Date;
+      duration_seconds: number;
+      was_blocked: boolean;
+    }>(
+      `select u.id, u.device_id, d.name as device_name, u.identifier, u.display_name,
+              u.started_at, u.duration_seconds, u.was_blocked
+       from public.usage_events u
+       join public.devices d on d.id = u.device_id and d.user_id = u.user_id
+       where u.user_id = $1
+       order by u.started_at desc
+       limit $2`,
+      [LOCAL_USER_ID, limit],
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      deviceId: row.device_id,
+      deviceName: row.device_name,
+      identifier: row.identifier,
+      displayName: row.display_name,
+      startedAt: toIso(row.started_at) ?? new Date().toISOString(),
+      durationSeconds: row.duration_seconds,
+      wasBlocked: row.was_blocked,
+    }));
+  });
+}
+
+export async function ingestUsageEvents(input: {
+  deviceId: string;
+  events: ReadonlyArray<{
+    clientEventId: string;
+    identifier: string;
+    displayName?: string | null;
+    startedAt: string;
+    endedAt?: string | null;
+    durationSeconds: number;
+    wasBlocked: boolean;
+  }>;
+}): Promise<{ status: "ok"; accepted: number; duplicates: number } | { status: "forbidden" }> {
+  return withUser(async (db) => {
+    const devRes = await db.query<{ status: DeviceStatus }>(
+      "select status from public.devices where id = $1 and user_id = $2 limit 1",
+      [input.deviceId, LOCAL_USER_ID],
+    );
+    const device = devRes.rows[0];
+    if (!device || device.status !== "active") {
+      return { status: "forbidden" };
+    }
+
+    let accepted = 0;
+    let duplicates = 0;
+
+    for (const evt of input.events) {
+      const inserted = await db.query<{ id: string }>(
+        `insert into public.usage_events
+           (user_id, device_id, client_event_id, identifier, display_name,
+            started_at, ended_at, duration_seconds, was_blocked)
+         values
+           ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8, $9)
+         on conflict (device_id, client_event_id) do nothing
+         returning id`,
+        [
+          LOCAL_USER_ID,
+          input.deviceId,
+          evt.clientEventId,
+          evt.identifier,
+          evt.displayName ?? null,
+          evt.startedAt,
+          evt.endedAt ?? null,
+          evt.durationSeconds,
+          evt.wasBlocked,
+        ],
+      );
+      if (inserted.rows.length > 0) accepted += 1;
+      else duplicates += 1;
+    }
+
+    await db.query(
+      "update public.devices set last_seen_at = now() where id = $1 and user_id = $2",
+      [input.deviceId, LOCAL_USER_ID],
+    );
+
+    return { status: "ok", accepted, duplicates };
+  });
+}

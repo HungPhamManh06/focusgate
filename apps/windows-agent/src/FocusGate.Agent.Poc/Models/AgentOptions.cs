@@ -18,6 +18,7 @@ public enum AgentMode
     WindowProbe,
     Tray,
     Status,
+    Register,
 }
 
 /// <summary>Command-line configuration for the PoC (no config file required).</summary>
@@ -31,6 +32,7 @@ public sealed class AgentOptions
         Path.Combine("agent-poc-data", "focusgate-poc.db");
     public string ApiBaseUrl { get; init; } = "http://localhost:3000";
     public string? DeviceName { get; init; }
+    public string? AccessToken { get; init; }
 
     public static AgentOptions Parse(string[] args)
     {
@@ -41,6 +43,7 @@ public sealed class AgentOptions
         var database = Path.Combine("agent-poc-data", "focusgate-poc.db");
         var apiUrl = Environment.GetEnvironmentVariable("FOCUSGATE_API_URL") ?? "http://localhost:3000";
         string? deviceName = null;
+        string? accessToken = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -88,6 +91,12 @@ public sealed class AgentOptions
                 case "--device-name":
                     deviceName = ReadValue(args, ref i, arg);
                     break;
+                case "--register":
+                    mode = AgentMode.Register;
+                    break;
+                case "--token":
+                    accessToken = ReadValue(args, ref i, arg);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown argument: {arg}");
             }
@@ -102,6 +111,7 @@ public sealed class AgentOptions
             DatabasePath = database,
             ApiBaseUrl = apiUrl,
             DeviceName = deviceName,
+            AccessToken = accessToken,
         };
     }
 
@@ -122,8 +132,10 @@ public sealed class AgentOptions
               --policy <path>             JSON policy file (default poc-policy.json).
               --db <path>                 SQLite event log path.
               --tray                      Start the Phase 1.4 system tray agent shell.
+              --register                  Register this device and store DPAPI credentials.
               --status                    Print DPAPI credential & registration status.
               --api-url <url>             Web API origin (default http://localhost:3000).
+              --token <jwt>               Bearer token used with --register (optional in local mode).
               --device-name <name>        Override local device name.
               -h, --help                  This text.
 

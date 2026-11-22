@@ -12,6 +12,8 @@ public sealed class TrayAgentContext : ApplicationContext
 {
     private readonly AgentOptions _options;
     private readonly DpapiCredentialStore _credentialStore;
+    private readonly PolicyCacheStore _policyCache;
+    private readonly OfflineUsageQueue _usageQueue;
     private readonly StructuredLogger _logger;
     private readonly AgentSyncClient _syncClient;
     private readonly NotifyIcon _trayIcon;
@@ -25,11 +27,15 @@ public sealed class TrayAgentContext : ApplicationContext
     public TrayAgentContext(
         AgentOptions options,
         DpapiCredentialStore credentialStore,
+        PolicyCacheStore policyCache,
+        OfflineUsageQueue usageQueue,
         StructuredLogger logger,
         AgentSyncClient syncClient)
     {
         _options = options;
         _credentialStore = credentialStore;
+        _policyCache = policyCache;
+        _usageQueue = usageQueue;
         _logger = logger;
         _syncClient = syncClient;
 
@@ -66,6 +72,8 @@ public sealed class TrayAgentContext : ApplicationContext
         _syncTimer.Tick += async (_, _) => await SyncPolicyAsync();
 
         LoadInitialCredentials();
+        _lastPolicy = _policyCache.Load();
+        UpdateMenuLabels();
         _syncTimer.Start();
         _ = SyncPolicyAsync();
     }
@@ -115,18 +123,34 @@ public sealed class TrayAgentContext : ApplicationContext
                 _credentials.AccessToken,
                 _credentials.DeviceId);
             _lastPolicy = policy;
+            _policyCache.Save(policy);
             _logger.Info("agent.policy_pulled", "Pulled policy snapshot from server.", new Dictionary<string, object?>
             {
                 ["deviceId"] = _credentials.DeviceId,
                 ["lockActive"] = policy.LockActive,
                 ["blockedCount"] = policy.BlockedProcesses.Count,
             });
+
+            if (_usageQueue.Count > 0)
+            {
+                var uploaded = await _usageQueue.FlushAsync(
+                    _syncClient,
+                    _credentials.ApiBaseUrl,
+                    _credentials.AccessToken,
+                    _credentials.DeviceId);
+                _logger.Info("agent.usage_flushed", "Flushed queued usage events.", new Dictionary<string, object?>
+                {
+                    ["accepted"] = uploaded.Accepted,
+                    ["duplicates"] = uploaded.Duplicates,
+                });
+            }
         }
         catch (Exception ex)
         {
-            _logger.Warn("agent.policy_pull_failed", "Policy pull failed; retaining last state.", new Dictionary<string, object?>
+            _logger.Warn("agent.policy_pull_failed", "Policy pull failed; retaining cached policy.", new Dictionary<string, object?>
             {
                 ["error"] = ex.Message,
+                ["queuedEvents"] = _usageQueue.Count,
             });
         }
 

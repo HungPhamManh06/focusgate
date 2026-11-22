@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { computeAgentPolicySnapshot } from "../lib/domain/agent-policy.ts";
-import { blockRuleSchema } from "../lib/validation.ts";
+import { blockRuleSchema, usageBatchSchema } from "../lib/validation.ts";
 
 describe("computeAgentPolicySnapshot", () => {
   it("activates lock when activeGrantMinutes is 0 and filters enabled rules", () => {
@@ -59,5 +59,32 @@ describe("blockRuleSchema", () => {
       assert.equal(ok.data.identifier, "steam.exe");
       assert.equal(ok.data.displayName, "Steam");
     }
+  });
+});
+
+describe("usageBatchSchema", () => {
+  it("validates batch payload and rejects short clientEventId or empty batches", () => {
+    assert.equal(
+      usageBatchSchema.safeParse({
+        deviceId: "11111111-1111-4111-8111-111111111111",
+        events: [],
+      }).success,
+      false,
+    );
+
+    const ok = usageBatchSchema.safeParse({
+      deviceId: "11111111-1111-4111-8111-111111111111",
+      events: [
+        {
+          clientEventId: "evt-12345678",
+          identifier: "steam.exe",
+          displayName: "Steam",
+          startedAt: "2026-11-22T08:00:00.000Z",
+          durationSeconds: 45,
+          wasBlocked: true,
+        },
+      ],
+    });
+    assert.equal(ok.success, true);
   });
 });

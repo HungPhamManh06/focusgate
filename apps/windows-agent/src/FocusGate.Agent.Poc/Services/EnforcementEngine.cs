@@ -11,23 +11,30 @@ public sealed record EnforcementDecision(bool ShouldBlock, string? Category, str
 /// </summary>
 public sealed class EnforcementEngine
 {
-    private readonly BlockPolicy _policy;
+    private volatile BlockPolicy _policy;
 
     public EnforcementEngine(BlockPolicy policy) => _policy = policy;
 
+    public void UpdatePolicy(BlockPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        _policy = policy;
+    }
+
     public EnforcementDecision Evaluate(ForegroundApp app)
     {
+        var policy = _policy;
         if (app.ProcessId == Environment.ProcessId)
         {
             return new EnforcementDecision(false, null, "own process");
         }
 
-        if (_policy.IsAllowlisted(app))
+        if (policy.IsAllowlisted(app))
         {
             return new EnforcementDecision(false, null, "allowlisted");
         }
 
-        var match = _policy.Match(app);
+        var match = policy.Match(app);
         if (match is null)
         {
             return new EnforcementDecision(false, null, "not in block list");

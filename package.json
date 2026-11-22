@@ -12,6 +12,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "db:verify": "node scripts/verify-db.mjs",
+    "verify:all": "npm run lint && npm run typecheck && npm run test && npm run db:verify",
     "shared:typecheck": "npm run typecheck -w @focusgate/shared-contracts",
     "web:dev": "npm run dev -w @focusgate/web",
     "web:build": "npm run build -w @focusgate/web"

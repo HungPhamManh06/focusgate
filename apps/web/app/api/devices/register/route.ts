@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { upsertDeviceRegistration } from "@/lib/data/devices";
 import { friendlyDbError } from "@/lib/data/errors";
-import { isSupabaseConfigured } from "@/lib/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isAuthorizedApiRequest } from "@/lib/supabase/api-auth";
 import { devicePlatforms } from "@/lib/validation";
 
 const registerBodySchema = z.object({
@@ -13,22 +12,8 @@ const registerBodySchema = z.object({
   appVersion: z.string().trim().max(64).optional().nullable(),
 });
 
-async function isAuthorizedRequest(request: Request): Promise<boolean> {
-  if (!isSupabaseConfigured()) return true;
-
-  const supabase = await createSupabaseServerClient();
-  const authHeader = request.headers.get("authorization");
-  const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
-
-  const {
-    data: { user },
-  } = bearer ? await supabase.auth.getUser(bearer) : await supabase.auth.getUser();
-
-  return Boolean(user);
-}
-
 export async function POST(request: Request) {
-  if (!(await isAuthorizedRequest(request))) {
+  if (!(await isAuthorizedApiRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

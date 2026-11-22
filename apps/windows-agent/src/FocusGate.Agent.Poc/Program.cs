@@ -34,6 +34,7 @@ internal static class Program
             AgentMode.WindowProbe => RunWindowProbe(),
             AgentMode.Tray => RunTray(options),
             AgentMode.Status => PrintStatus(options),
+            AgentMode.Register => RunRegister(options),
             _ => 2,
         };
     }
@@ -133,9 +134,11 @@ internal static class Program
         Application.SetCompatibleTextRenderingDefault(false);
 
         var store = new DpapiCredentialStore();
+        var policyCache = new PolicyCacheStore();
+        var usageQueue = new OfflineUsageQueue();
         var logger = new StructuredLogger();
         using var syncClient = new AgentSyncClient();
-        using var context = new TrayAgentContext(options, store, logger, syncClient);
+        using var context = new TrayAgentContext(options, store, policyCache, usageQueue, logger, syncClient);
         Application.Run(context);
         return 0;
     }
@@ -160,6 +163,62 @@ internal static class Program
         Console.WriteLine($"Registered at (UTC): {credentials.RegisteredAtUtc:O}");
         Console.WriteLine($"Logs directory: {logger.LogDirectory}");
         return 0;
+    }
+
+    private static int RunRegister(AgentOptions options)
+    {
+        var store = new DpapiCredentialStore();
+        var policyCache = new PolicyCacheStore();
+        var logger = new StructuredLogger();
+        using var syncClient = new AgentSyncClient();
+
+        var deviceName = string.IsNullOrWhiteSpace(options.DeviceName)
+            ? Environment.MachineName
+            : options.DeviceName.Trim();
+        var token = options.AccessToken ?? "local-dev-token";
+
+        try
+        {
+            var reg = syncClient
+                .RegisterDeviceAsync(options.ApiBaseUrl, token, deviceName, "0.1.0")
+                .GetAwaiter()
+                .GetResult();
+
+            var creds = new AgentCredentials(
+                ApiBaseUrl: options.ApiBaseUrl,
+                DeviceId: reg.DeviceId,
+                DeviceName: reg.Name,
+                AccessToken: token,
+                RefreshToken: null,
+                RegisteredAtUtc: DateTimeOffset.UtcNow);
+            store.Save(creds);
+
+            var policy = syncClient
+                .PullPolicyAsync(options.ApiBaseUrl, token, reg.DeviceId)
+                .GetAwaiter()
+                .GetResult();
+            policyCache.Save(policy);
+
+            logger.Info("agent.registered", "Registered Windows device and pulled initial policy.", new Dictionary<string, object?>
+            {
+                ["deviceId"] = reg.DeviceId,
+                ["deviceName"] = reg.Name,
+                ["lockActive"] = policy.LockActive,
+            });
+
+            Console.WriteLine($"Registered device '{reg.Name}' ({reg.DeviceId})");
+            Console.WriteLine($"Policy: {(policy.LockActive ? "Lock Active" : "Unlocked")} ({policy.BlockedProcesses.Count} blocked rules)");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            logger.Error("agent.register_failed", "Device registration failed.", new Dictionary<string, object?>
+            {
+                ["error"] = ex.Message,
+            });
+            Console.Error.WriteLine($"Registration failed: {ex.Message}");
+            return 1;
+        }
     }
 
     private static string Trim(string? value, int max)

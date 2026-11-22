@@ -44,6 +44,21 @@ export const blockRuleSchema = z.object({
   action: z.enum(blockActions),
 });
 
+export const usageEventInputSchema = z.object({
+  clientEventId: z.string().trim().min(8).max(100),
+  identifier: z.string().trim().min(1).max(256),
+  displayName: z.string().trim().max(200).optional().nullable(),
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime().optional().nullable(),
+  durationSeconds: z.coerce.number().int().min(0).max(86_400),
+  wasBlocked: z.boolean(),
+});
+
+export const usageBatchSchema = z.object({
+  deviceId: z.string().uuid("Valid deviceId UUID is required."),
+  events: z.array(usageEventInputSchema).min(1).max(100),
+});
+
 export const taskFormSchema = z
   .object({
     title: z.string().trim().min(1, "Give the task a title.").max(160, "Keep the title under 160 characters."),

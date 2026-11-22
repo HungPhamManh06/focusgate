@@ -16,6 +16,17 @@ public sealed record AgentPolicySnapshot(
     IReadOnlyList<string> BlockedProcesses,
     IReadOnlyList<string> AllowedProcesses);
 
+public sealed record UsageEventUpload(
+    string ClientEventId,
+    string Identifier,
+    string? DisplayName,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? EndedAt,
+    int DurationSeconds,
+    bool WasBlocked);
+
+public sealed record UsageUploadResult(int Accepted, int Duplicates);
+
 /// <summary>
 /// HTTP client for registering this Windows device and pulling enforcement policy
 /// without executing enforcement yet (Phase 1.4 skeleton).
@@ -87,6 +98,36 @@ public sealed class AgentSyncClient : IDisposable
 
         var result = await response.Content.ReadFromJsonAsync<AgentPolicySnapshot>(JsonOptions, cancellationToken);
         return result ?? throw new InvalidDataException("Empty policy response.");
+    }
+
+    public async Task<UsageUploadResult> PushUsageEventsAsync(
+        string apiBaseUrl,
+        string accessToken,
+        string deviceId,
+        IReadOnlyList<UsageEventUpload> events,
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri = NormalizeBaseUrl(apiBaseUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/api/agent/usage"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = JsonContent.Create(new
+        {
+            deviceId,
+            events,
+        });
+
+        using var response = await _http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Usage upload failed ({(int)response.StatusCode}): {body}",
+                null,
+                response.StatusCode);
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<UsageUploadResult>(JsonOptions, cancellationToken);
+        return result ?? throw new InvalidDataException("Empty usage upload response.");
     }
 
     private static Uri NormalizeBaseUrl(string apiBaseUrl)

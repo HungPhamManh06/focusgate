@@ -1,9 +1,11 @@
 import { Laptop, ShieldCheck, ShieldOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
-import { listBlockRules, listDevices } from "@/lib/data/devices";
+import { formatDurationSeconds, formatTime } from "@/lib/data/format";
+import { listBlockRules, listDevices, listRecentUsageEvents } from "@/lib/data/devices";
 import { getWorkspace } from "@/lib/data/workspace";
 import { BlockRulesCard } from "./block-rules-card";
 import { DeviceRow } from "./device-row";
@@ -12,10 +14,11 @@ import { RegisterDeviceForm } from "./register-device-form";
 export const dynamic = "force-dynamic";
 
 export default async function DevicesPage() {
-  const [workspace, devices, rules] = await Promise.all([
+  const [workspace, devices, rules, usageEvents] = await Promise.all([
     getWorkspace(),
     listDevices(),
     listBlockRules(),
+    listRecentUsageEvents(10),
   ]);
   const activeCount = devices.filter((device) => device.status === "active").length;
   const revokedCount = devices.length - activeCount;
@@ -98,6 +101,36 @@ export default async function DevicesPage() {
       <div className="mt-4">
         <BlockRulesCard devices={devices} rules={rules} />
       </div>
+
+      {usageEvents.length > 0 ? (
+        <div className="mt-4">
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle>Recent device activity</CardTitle>
+              <span className="text-[12px] text-muted">{usageEvents.length} latest events</span>
+            </CardHeader>
+            <div className="divide-y divide-line">
+              {usageEvents.map((evt) => (
+                <div
+                  key={evt.id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-[12.5px] sm:px-6"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-ink">{evt.displayName ?? evt.identifier}</p>
+                    <p className="text-[11.5px] text-muted">
+                      {evt.deviceName} · {formatTime(evt.startedAt, workspace.profile.timezone)} ·{" "}
+                      {formatDurationSeconds(evt.durationSeconds)}
+                    </p>
+                  </div>
+                  <Badge tone={evt.wasBlocked ? "danger" : "neutral"}>
+                    {evt.wasBlocked ? "Blocked" : "Observed"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
 }
