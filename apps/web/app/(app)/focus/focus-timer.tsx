@@ -5,6 +5,7 @@ import {
   Check,
   Clock3,
   Loader2,
+  Pause,
   Play,
   RotateCcw,
   ShieldAlert,
@@ -12,7 +13,12 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { cancelFocusAction, completeFocusAction } from "@/lib/actions/focus";
+import {
+  cancelFocusAction,
+  completeFocusAction,
+  pauseFocusAction,
+  resumeFocusAction,
+} from "@/lib/actions/focus";
 import { formatMinutes } from "@/lib/data/format";
 import type { FocusSession } from "@/lib/data/types";
 import {
@@ -43,8 +49,26 @@ export function FocusTimer({
   const [pending, startTransition] = useTransition();
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [optimisticSession, setOptimisticSession] = useState<{
+    status: "running" | "paused";
+    pausedAt: string | null;
+    pausedSeconds: number;
+  }>(() => ({
+    status: session.status === "paused" ? "paused" : "running",
+    pausedAt: session.pausedAt ?? null,
+    pausedSeconds: session.pausedSeconds ?? 0,
+  }));
   const inFlightRef = useRef(false);
+  const pauseInFlightRef = useRef(false);
   const toast = useToast();
+
+  useEffect(() => {
+    setOptimisticSession({
+      status: session.status === "paused" ? "paused" : "running",
+      pausedAt: session.pausedAt ?? null,
+      pausedSeconds: session.pausedSeconds ?? 0,
+    });
+  }, [session.status, session.pausedAt, session.pausedSeconds]);
 
   // Always use the session's snapshotted minValidMinutes (falling back to workspace setting
   // only if an older unmigrated object lacked the field). This guarantees a settings change
@@ -55,9 +79,12 @@ export function FocusTimer({
   );
 
   // Always derive elapsed time from the authoritative server `startedAt` timestamp.
+  // While paused, freeze the clock at `pausedAt` and avoid background ticking.
   useEffect(() => {
     const syncClock = () => setNow(Date.now());
     syncClock();
+
+    if (optimisticSession.status === "paused") return;
 
     const interval = window.setInterval(syncClock, 1000);
     const onVisibility = () => {
@@ -71,7 +98,7 @@ export function FocusTimer({
       window.removeEventListener("focus", syncClock);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [session.startedAt]);
+  }, [session.startedAt, optimisticSession.status]);
 
   const timerState = computeFocusTimerState({
     startedAtIso: session.startedAt,
@@ -79,6 +106,9 @@ export function FocusTimer({
     plannedMinutes: session.plannedMinutes,
     minValidMinutes: effectiveMinValidMinutes,
     keepFocusingOvertime,
+    status: optimisticSession.status,
+    pausedAtIso: optimisticSession.pausedAt,
+    pausedSeconds: optimisticSession.pausedSeconds,
   });
 
   const uiLabels = getFocusSubmissionUiLabels(submission, pending);
@@ -120,8 +150,60 @@ export function FocusTimer({
     });
   }
 
+  async function togglePauseResume() {
+    if (uiLabels.isBusy || pauseInFlightRef.current) return;
+    pauseInFlightRef.current = true;
+    const prev = optimisticSession;
+    const clickMs = Date.now();
+    const isCurrentlyPaused = prev.status === "paused";
+
+    // Instant optimistic transition so Pause/Resume responds in 0ms.
+    if (isCurrentlyPaused) {
+      const pausedAtMs = prev.pausedAt ? new Date(prev.pausedAt).getTime() : clickMs;
+      const extraPause = Number.isFinite(pausedAtMs)
+        ? Math.max(0, Math.floor((clickMs - pausedAtMs) / 1000))
+        : 0;
+      setNow(clickMs);
+      setOptimisticSession({
+        status: "running",
+        pausedAt: null,
+        pausedSeconds: prev.pausedSeconds + extraPause,
+      });
+    } else {
+      setNow(clickMs);
+      setOptimisticSession({
+        status: "paused",
+        pausedAt: new Date(clickMs).toISOString(),
+        pausedSeconds: prev.pausedSeconds,
+      });
+    }
+
+    try {
+      const result = isCurrentlyPaused
+        ? await resumeFocusAction(session.id)
+        : await pauseFocusAction(session.id);
+      if (result.error) {
+        setOptimisticSession(prev);
+        toast.push("error", result.error);
+      } else if (result.status) {
+        setOptimisticSession({
+          status: result.status,
+          pausedAt: result.pausedAt ?? null,
+          pausedSeconds: result.pausedSeconds ?? prev.pausedSeconds,
+        });
+      }
+    } catch {
+      setOptimisticSession(prev);
+      toast.push("error", "Could not update session state. Please try again.");
+    } finally {
+      pauseInFlightRef.current = false;
+    }
+  }
+
   const headerDotTone =
-    timerState.phase === "credit_limit_reached" || timerState.isImpossibleConfiguration
+    timerState.isPaused ||
+    timerState.phase === "credit_limit_reached" ||
+    timerState.isImpossibleConfiguration
       ? "bg-warning"
       : timerState.phase === "target_reached" || timerState.phase === "overtime"
         ? "bg-success"
@@ -144,7 +226,9 @@ export function FocusTimer({
           <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink">
             {timerState.statusHeader}
           </p>
-          {timerState.phase === "target_reached" ? (
+          {timerState.isPaused ? (
+            <Badge tone="warning">Paused</Badge>
+          ) : timerState.phase === "target_reached" ? (
             <Badge tone="success">Planned target met</Badge>
           ) : timerState.phase === "overtime" ? (
             <Badge tone="accent">Overtime</Badge>
@@ -317,9 +401,28 @@ export function FocusTimer({
           ) : (
             <>
               <Button
+                onClick={togglePauseResume}
+                disabled={uiLabels.isBusy}
+                variant={timerState.isPaused ? "accent" : "outline"}
+                size="lg"
+              >
+                {timerState.isPaused ? (
+                  <>
+                    <Play className="size-4" />
+                    Resume
+                  </>
+                ) : (
+                  <>
+                    <Pause className="size-4" />
+                    Pause
+                  </>
+                )}
+              </Button>
+
+              <Button
                 onClick={endSession}
                 disabled={uiLabels.isBusy}
-                variant="accent"
+                variant={timerState.isPaused ? "outline" : "accent"}
                 size="lg"
               >
                 {uiLabels.isCompleting ? (

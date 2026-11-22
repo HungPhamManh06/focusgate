@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatMinutes, initials } from "@/lib/data/format";
 import { getWalletSummary } from "@/lib/data/rewards";
 import { getWorkspace } from "@/lib/data/workspace";
+import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ToastProvider } from "@/components/ui/toast";
@@ -11,12 +12,19 @@ import { Sidebar } from "@/components/shell/sidebar";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [workspace, walletSummaryResult] = await Promise.all([
+  const [workspace, walletSummaryResult, authUser] = await Promise.all([
     getWorkspace(),
     getWalletSummary()
       .then((minutes) => ({ minutes, error: false }))
       .catch(() => ({ minutes: null, error: true })),
+    getAuthenticatedUser().catch(() => null),
   ]);
+
+  const effectiveDisplayName =
+    (typeof authUser?.user_metadata?.display_name === "string" &&
+      authUser.user_metadata.display_name.trim()) ||
+    authUser?.email?.split("@")[0] ||
+    workspace.profile.displayName;
 
   return (
     <ToastProvider>
@@ -29,9 +37,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       <div className="min-h-screen lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
         <Sidebar
-          displayName={workspace.profile.displayName}
+          displayName={effectiveDisplayName}
           availableMinutes={walletSummaryResult.minutes}
           walletError={walletSummaryResult.error}
+          authEmail={authUser?.email ?? null}
         />
 
         <div className="flex min-h-screen min-w-0 flex-col">
@@ -40,6 +49,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Logo />
             </Link>
             <div className="flex items-center gap-2">
+              <Link
+                href="/devices"
+                className="rounded-full border border-line bg-surface px-3 py-1.5 text-[11.5px] font-medium text-ink-soft"
+              >
+                Devices
+              </Link>
               <Link
                 href="/wallet"
                 className="rounded-full border border-line bg-surface px-3 py-1.5 text-[11.5px] font-medium text-ink-soft"

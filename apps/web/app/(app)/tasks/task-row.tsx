@@ -1,28 +1,50 @@
 "use client";
 
-import { Check, Loader2, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Check, Loader2, Plus, Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
+import { addSuggestedTaskToTodayPlanAction } from "@/lib/actions/planner";
 import {
   completeTaskAction,
   deleteTaskAction,
   reopenTaskAction,
 } from "@/lib/actions/tasks";
-import { formatDate, relativeDue } from "@/lib/data/format";
-import type { Task } from "@/lib/data/types";
+import { formatMinutes } from "@/lib/data/format";
+import type { PlanStatus, PlanTask, Task } from "@/lib/data/types";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import { categoryLabels, priorityLabels } from "@/components/domain/labels";
+import { categoryLabels, kindLabels } from "@/components/domain/labels";
+import { formatTaskRowStatus } from "@/lib/domain/tasks-planner-state";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "./task-form-dialog";
 
-export function TaskRow({ task, timezone }: { task: Task; timezone: string }) {
+export function TaskRow({
+  task,
+  timezone,
+  planId = null,
+  planStatus = null,
+  planTask = null,
+}: {
+  task: Task;
+  timezone: string;
+  planId?: string | null;
+  planStatus?: PlanStatus | null;
+  planTask?: PlanTask | null;
+}) {
   const [pending, startTransition] = useTransition();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const toast = useToast();
-  const completed = task.status === "completed";
-  const due = relativeDue(task.dueDate, timezone);
-  const overdue = due?.includes("overdue") ?? false;
+  const rowStatus = formatTaskRowStatus(task, timezone);
+  const { completed } = rowStatus;
+  const needsFocusInActivePlan =
+    planStatus === "active" &&
+    planTask !== null &&
+    !completed &&
+    planTask.requiredFocusMinutes > 0 &&
+    planTask.focusDone < planTask.requiredFocusMinutes;
+  const canAddToTodayPlan =
+    !planTask && !completed && (planStatus === null || planStatus === "draft");
 
   function toggleComplete() {
     startTransition(async () => {
@@ -43,19 +65,36 @@ export function TaskRow({ task, timezone }: { task: Task; timezone: string }) {
     });
   }
 
+  function addToTodayPlan() {
+    startTransition(async () => {
+      const result = await addSuggestedTaskToTodayPlanAction({
+        planId,
+        taskId: task.id,
+        kind: task.kind,
+      });
+      if (result.error) toast.push("error", result.error);
+      else if (result.success) toast.push("success", result.success);
+    });
+  }
+
   return (
     <div className="group flex items-start gap-3 border-b border-line px-5 py-4 transition-colors last:border-b-0 hover:bg-surface-2/50 sm:px-6">
       <button
         type="button"
         onClick={toggleComplete}
-        disabled={pending}
+        disabled={pending || needsFocusInActivePlan}
+        title={
+          needsFocusInActivePlan && planTask
+            ? `Needs ${formatMinutes(planTask.requiredFocusMinutes - planTask.focusDone)} more focus first`
+            : undefined
+        }
         aria-label={completed ? `Reopen ${task.title}` : `Complete ${task.title}`}
         aria-pressed={completed}
         className={cn(
-          "mt-0.5 flex size-[21px] shrink-0 items-center justify-center rounded-md border transition-colors",
+          "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors",
           completed
             ? "border-success bg-success text-white"
-            : "border-line bg-surface hover:border-accent hover:text-accent",
+            : "border-line bg-surface hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-45",
           pending && "opacity-60",
         )}
       >
@@ -70,58 +109,93 @@ export function TaskRow({ task, timezone }: { task: Task; timezone: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <p
             className={cn(
-              "text-[13.5px] font-medium leading-snug",
+              "text-[14px] font-medium leading-snug",
               completed && "text-muted line-through",
             )}
           >
             {task.title}
           </p>
-          {task.priority === "urgent" ? <Badge tone="danger">Urgent</Badge> : null}
-          {task.priority === "high" ? <Badge tone="warning">High</Badge> : null}
+          {rowStatus.showPriorityBadge && task.priority === "urgent" ? (
+            <Badge tone="danger">Urgent</Badge>
+          ) : null}
+          {rowStatus.showPriorityBadge && task.priority === "high" ? (
+            <Badge tone="warning">High</Badge>
+          ) : null}
+          {planTask ? (
+            <Badge tone="accent">
+              In today&apos;s plan · {kindLabels[planTask.kind]}
+            </Badge>
+          ) : null}
         </div>
 
         {task.description ? (
-          <p className="mt-1 line-clamp-1 text-[12px] leading-relaxed text-muted">{task.description}</p>
+          <p className="mt-1 line-clamp-1 text-[12.5px] leading-relaxed text-muted">{task.description}</p>
         ) : null}
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
           <span>{categoryLabels[task.category] ?? task.category}</span>
           <span aria-hidden>·</span>
           <span>{task.estimatedMinutes}m estimate</span>
-          {task.requiredFocusMinutes > 0 ? (
+          {planTask && planTask.requiredFocusMinutes > 0 ? (
+            <>
+              <span aria-hidden>·</span>
+              <span>
+                {formatMinutes(planTask.focusDone)}/{formatMinutes(planTask.requiredFocusMinutes)} focus
+              </span>
+            </>
+          ) : task.requiredFocusMinutes > 0 ? (
             <>
               <span aria-hidden>·</span>
               <span>{task.requiredFocusMinutes}m focus</span>
             </>
           ) : null}
-          {due ? (
+          {rowStatus.completedLabel ? (
             <>
               <span aria-hidden>·</span>
-              <span className={overdue ? "font-medium text-danger" : undefined}>{due}</span>
+              <span>{rowStatus.completedLabel}</span>
             </>
-          ) : task.dueDate ? (
+          ) : rowStatus.dueLabel ? (
             <>
               <span aria-hidden>·</span>
-              <span>{formatDate(task.dueDate, undefined, timezone)}</span>
+              <span className={rowStatus.showOverdue ? "font-medium text-danger" : undefined}>
+                {rowStatus.dueLabel}
+              </span>
             </>
           ) : null}
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5">
-        <span className="mr-1 hidden text-[10.5px] text-muted sm:inline">
-          {priorityLabels[task.priority]}
-        </span>
-        <TaskFormDialog task={task} trigger="edit" />
-        <button
-          type="button"
-          onClick={() => setConfirmDeleteOpen(true)}
-          disabled={pending}
-          aria-label={`Delete ${task.title}`}
-          className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-danger-soft hover:text-danger"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
+      <div className="flex shrink-0 items-center gap-1">
+        {needsFocusInActivePlan ? (
+          <Link
+            href={`/focus?taskId=${task.id}`}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-accent/35 bg-accent-soft px-2.5 text-[12px] font-medium text-accent transition-colors hover:bg-accent hover:text-white"
+          >
+            Focus <ArrowRight className="size-3.5" />
+          </Link>
+        ) : canAddToTodayPlan ? (
+          <button
+            type="button"
+            onClick={addToTodayPlan}
+            disabled={pending}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface-2/70 px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:border-accent/40 hover:bg-accent-soft hover:text-accent disabled:opacity-50"
+          >
+            <Plus className="size-3.5" />
+            <span className="hidden sm:inline">Today</span>
+          </button>
+        ) : null}
+        <div className="flex items-center gap-0.5 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+          <TaskFormDialog task={task} trigger="edit" />
+          <button
+            type="button"
+            onClick={() => setConfirmDeleteOpen(true)}
+            disabled={pending}
+            aria-label={`Delete ${task.title}`}
+            className="flex size-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
       </div>
 
       <ConfirmDialog

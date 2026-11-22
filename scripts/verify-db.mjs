@@ -26,6 +26,7 @@ const MIGRATIONS = [
   "supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql",
   "supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql",
   "supabase/migrations/20260101000008_focus_migration_compatibility.sql",
+  "supabase/migrations/20260101000009_focus_pause_resume.sql",
 ];
 
 const USER_A = "11111111-1111-4111-8111-111111111111";
@@ -1703,6 +1704,60 @@ await asSuperuser(async () => {
 await asUser(USER_A11, () =>
   db.query("select public.rpc_cancel_focus_session($1)", [caseDSessionId]),
 );
+
+// ---------------------------------------------------------------------------
+// UX-008: Pause / Resume excludes paused duration from verified focus time
+// ---------------------------------------------------------------------------
+await db.query("update public.user_settings set min_valid_focus_minutes = 5 where user_id = $1", [
+  USER_A11,
+]);
+let ux008SessionId;
+await asUser(USER_A11, async () => {
+  const started = await db.query(
+    "select public.rpc_start_focus_session($1, 'ux008-pause-resume-01', 25, 'pomodoro_25_5', null, null) as res",
+    [deviceA11],
+  );
+  ux008SessionId = started.rows[0].res.sessionId;
+  const paused = await db.query("select public.rpc_pause_focus_session($1) as res", [ux008SessionId]);
+  check(
+    "UX-008: rpc_pause_focus_session transitions running -> paused and increments interruption_count",
+    paused.rows[0].res.status === "paused" && paused.rows[0].res.interruptionCount === 1,
+    JSON.stringify(paused.rows[0].res),
+  );
+  const pausedReplay = await db.query("select public.rpc_pause_focus_session($1) as res", [
+    ux008SessionId,
+  ]);
+  check(
+    "UX-008: rpc_pause_focus_session is idempotent while already paused",
+    pausedReplay.rows[0].res.idempotent === true && pausedReplay.rows[0].res.interruptionCount === 1,
+    JSON.stringify(pausedReplay.rows[0].res),
+  );
+  const resumed = await db.query("select public.rpc_resume_focus_session($1) as res", [
+    ux008SessionId,
+  ]);
+  check(
+    "UX-008: rpc_resume_focus_session transitions paused -> running",
+    resumed.rows[0].res.status === "running",
+    JSON.stringify(resumed.rows[0].res),
+  );
+});
+// Simulate a 30m wall-clock session with 20m (1200s) paused -> 10m active focus
+await db.query(
+  "update public.focus_sessions set started_at = now() - interval '30 minutes', paused_seconds = 1200 where id = $1",
+  [ux008SessionId],
+);
+await asUser(USER_A11, async () => {
+  const completed = await db.query("select public.rpc_complete_focus_session($1) as res", [
+    ux008SessionId,
+  ]);
+  check(
+    "UX-008: rpc_complete_focus_session excludes paused_seconds (30m wall - 20m paused = 10m credited)",
+    completed.rows[0].res.isValid === true &&
+      completed.rows[0].res.actualMinutes === 10 &&
+      completed.rows[0].res.creditedMinutes === 10,
+    JSON.stringify(completed.rows[0].res),
+  );
+});
 
 await db.close();
 

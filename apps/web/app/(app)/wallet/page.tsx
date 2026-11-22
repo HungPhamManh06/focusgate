@@ -69,7 +69,7 @@ export default async function WalletPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-5 py-8 sm:px-8 sm:py-10">
+    <div className="mx-auto w-full max-w-[1280px] px-5 py-8 sm:px-8 sm:py-10">
       <PageHeader
         eyebrow="Reward wallet"
         title="Earned, not given."
@@ -93,8 +93,8 @@ export default async function WalletPage() {
               <Sparkles className="size-4" />
             </span>
             <div>
-              <p className="text-[12.5px] font-medium">Today&apos;s gate is complete.</p>
-              <p className="mt-0.5 text-[11px] text-muted">
+              <p className="text-[13px] font-medium">Today&apos;s gate is complete.</p>
+              <p className="mt-0.5 text-[12px] text-muted">
                 Claim the daily reward to add the earned minutes to your wallet.
               </p>
             </div>
@@ -110,11 +110,11 @@ export default async function WalletPage() {
               <Timer className="size-4" />
             </span>
             <div>
-              <p className="text-[12.5px] font-medium">Today&apos;s reward is still locked.</p>
-              <p className="mt-0.5 text-[11px] text-muted">
-                {plan.progress.mustDoCompleted}/{plan.progress.mustDoTotal} must-dos complete ·{" "}
-                {formatMinutes(plan.progress.focusDone)} of {formatMinutes(plan.progress.focusRequired)}{" "}
-                focus verified.
+              <p className="text-[13px] font-medium">Today&apos;s reward is still locked.</p>
+              <p className="mt-0.5 text-[12px] text-muted">
+                {plan.progress.mustDoTotal > 0
+                  ? `${plan.progress.mustDoCompleted}/${plan.progress.mustDoTotal} must-dos complete · ${formatMinutes(plan.progress.focusDone)} of ${formatMinutes(plan.progress.focusRequired)} focus verified.`
+                  : "No Must-dos configured for today's gate yet."}
               </p>
             </div>
           </div>

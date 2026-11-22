@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/FocusGate.Agent.Poc/FocusGate.Agent.Poc.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FocusGate.Agent.Tests/FocusGate.Agent.Tests.csproj" />
+  </Folder>
 </Solution>

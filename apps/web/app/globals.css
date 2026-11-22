@@ -30,42 +30,42 @@
 }
 
 :root {
-  --canvas: #f4f4f0;
+  --canvas: #f7f3f3;
   --surface: #ffffff;
-  --surface-2: #fafaf7;
-  --ink: #14151a;
-  --ink-soft: #3b3e47;
-  --muted: #70747d;
-  --line: #e5e4de;
-  --accent: #2b59ff;
-  --accent-strong: #1e43d6;
-  --accent-soft: #e9eeff;
+  --surface-2: #fbf8f8;
+  --ink: #181213;
+  --ink-soft: #3f3335;
+  --muted: #625355;
+  --line: #e8dede;
+  --accent: #b91c1c;
+  --accent-strong: #991b1b;
+  --accent-soft: #fdeaea;
   --success: #0d7a58;
   --success-soft: #e2f3ec;
   --warning: #9a5b08;
   --warning-soft: #fbf0de;
-  --danger: #bf3a32;
+  --danger: #dc2626;
   --danger-soft: #fbe9e7;
   color-scheme: light;
 }
 
 .dark {
-  --canvas: #0b0c10;
-  --surface: #121318;
-  --surface-2: #17181f;
-  --ink: #f2f2ed;
-  --ink-soft: #d4d5dc;
-  --muted: #8d909b;
-  --line: #262830;
-  --accent: #809dff;
-  --accent-strong: #b3c4ff;
-  --accent-soft: #1a2340;
-  --success: #5dd6ab;
-  --success-soft: #112a24;
+  --canvas: #100b0c;
+  --surface: #181113;
+  --surface-2: #201618;
+  --ink: #f5eeee;
+  --ink-soft: #d9cbcd;
+  --muted: #a89698;
+  --line: #312326;
+  --accent: #f87171;
+  --accent-strong: #fca5a5;
+  --accent-soft: #331618;
+  --success: #34d399;
+  --success-soft: #102a22;
   --warning: #e2a552;
   --warning-soft: #2b2011;
-  --danger: #ff8f86;
-  --danger-soft: #2c1715;
+  --danger: #fb7185;
+  --danger-soft: #36151c;
   color-scheme: dark;
 }
 
@@ -106,9 +106,9 @@
 }
 
 @utility label-xs {
-  font-size: 10.5px;
-  line-height: 1.2;
-  letter-spacing: 0.16em;
+  font-size: 11.5px;
+  line-height: 1.25;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   font-weight: 600;
 }

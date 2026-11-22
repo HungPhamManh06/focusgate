@@ -96,6 +96,9 @@ export interface FocusSession {
   status: "running" | "paused" | "completed" | "cancelled";
   startedAt: string;
   endedAt: string | null;
+  pausedAt?: string | null;
+  pausedSeconds?: number;
+  interruptionCount?: number;
   isValid: boolean;
 }
 

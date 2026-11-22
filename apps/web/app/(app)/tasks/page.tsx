@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ListTodo, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, ListTodo, Search, SlidersHorizontal } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { getTodayPlan } from "@/lib/data/planner";
 import { getTaskCounts, listTasks, type TaskFilters } from "@/lib/data/tasks";
 import { getWorkspace } from "@/lib/data/workspace";
-import type { TaskKind } from "@/lib/data/types";
+import type { PlanTask, TaskKind } from "@/lib/data/types";
 import { kindDescriptions, kindLabels } from "@/components/domain/labels";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "./task-form-dialog";
@@ -26,7 +27,7 @@ interface SearchParams {
 function buildHref(current: SearchParams, next: Partial<SearchParams>): string {
   const merged = { ...current, ...next };
   const params = new URLSearchParams();
-  if (merged.view && merged.view !== "all") params.set("view", merged.view);
+  if (merged.view && merged.view !== "open") params.set("view", merged.view);
   if (merged.kind) params.set("kind", merged.kind);
   if (merged.q) params.set("q", merged.q);
   const query = params.toString();
@@ -39,17 +40,22 @@ export default async function TasksPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const view = params.view === "open" || params.view === "done" ? params.view : "all";
+  const view = params.view === "all" || params.view === "done" ? params.view : "open";
   const kind = kinds.includes(params.kind as TaskKind) ? (params.kind as TaskKind) : undefined;
   const search = params.q?.trim() || undefined;
 
   const filters: TaskFilters = { view, kind: kind ?? null, search: search ?? null };
 
-  const [workspace, tasks, counts] = await Promise.all([
+  const [workspace, tasks, counts, plan] = await Promise.all([
     getWorkspace(),
     listTasks(filters),
     getTaskCounts(),
+    getTodayPlan(),
   ]);
+
+  const planTaskByTaskId = new Map<string, PlanTask>(
+    (plan?.tasks ?? []).map((pt) => [pt.taskId, pt]),
+  );
 
   const groups = kinds
     .map((groupKind) => ({
@@ -59,18 +65,30 @@ export default async function TasksPage({
     .filter((group) => group.tasks.length > 0);
 
   const viewTabs = [
-    { value: "all", label: "All" },
     { value: "open", label: "Open" },
+    { value: "all", label: "All" },
     { value: "done", label: "Done" },
   ] as const;
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-5 py-8 sm:px-8 sm:py-10">
+    <div className="mx-auto w-full max-w-[1280px] px-5 py-8 sm:px-8 sm:py-10">
       <PageHeader
         eyebrow="Work queue"
         title="Decide what matters."
         description="Keep the list honest: must-dos are protected, should-dos move the day forward, bonuses earn extra time."
-        actions={<TaskFormDialog />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {counts.open > 0 && (!plan || plan.tasks.length === 0) ? (
+              <Link
+                href="/planner"
+                className={buttonVariants({ variant: "outline", size: "md" })}
+              >
+                Build today&apos;s plan <ArrowRight className="size-4" />
+              </Link>
+            ) : null}
+            <TaskFormDialog />
+          </div>
+        }
       />
 
       <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11.5px] text-muted">
@@ -180,7 +198,14 @@ export default async function TasksPage({
                 </div>
                 <Card className="overflow-hidden">
                   {group.tasks.map((task) => (
-                    <TaskRow key={task.id} task={task} timezone={workspace.profile.timezone} />
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      timezone={workspace.profile.timezone}
+                      planId={plan?.id ?? null}
+                      planStatus={plan?.status ?? null}
+                      planTask={planTaskByTaskId.get(task.id) ?? null}
+                    />
                   ))}
                 </Card>
               </section>

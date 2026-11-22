@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Laptop, LogOut } from "lucide-react";
 import { formatMinutes, initials } from "@/lib/data/format";
 import { isSidebarWalletActive } from "@/lib/domain/dashboard-state";
 import { cn } from "@/lib/utils";
@@ -14,10 +14,12 @@ export function Sidebar({
   displayName,
   availableMinutes,
   walletError = false,
+  authEmail = null,
 }: {
   displayName: string;
   availableMinutes: number | null;
   walletError?: boolean;
+  authEmail?: string | null;
 }) {
   const pathname = usePathname();
   const hasAvailableTime = isSidebarWalletActive(availableMinutes);
@@ -56,6 +58,27 @@ export function Sidebar({
               </li>
             );
           })}
+          <li>
+            <Link
+              href="/devices"
+              aria-current={pathname === "/devices" ? "page" : undefined}
+              className={cn(
+                "group flex h-10 items-center gap-3 rounded-xl px-3 text-[13.5px] transition-colors",
+                pathname === "/devices"
+                  ? "bg-accent-soft font-medium text-accent"
+                  : "text-ink-soft hover:bg-surface-2 hover:text-ink",
+              )}
+            >
+              <Laptop
+                className={cn(
+                  "size-[17px]",
+                  pathname === "/devices" ? "text-accent" : "text-muted group-hover:text-ink-soft",
+                )}
+                strokeWidth={1.8}
+              />
+              Devices
+            </Link>
+          </li>
         </ul>
       </nav>
 
@@ -96,10 +119,26 @@ export function Sidebar({
             </span>
             <div className="min-w-0">
               <p className="truncate text-[12.5px] font-medium">{displayName}</p>
-              <p className="text-[10.5px] text-muted">Local workspace</p>
+              <p className="truncate text-[11px] text-muted">
+                {authEmail ?? "Local workspace"}
+              </p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex shrink-0 items-center gap-1">
+            {authEmail ? (
+              <form action="/auth/signout" method="post">
+                <button
+                  type="submit"
+                  title="Sign out"
+                  aria-label="Sign out"
+                  className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                >
+                  <LogOut className="size-4" />
+                </button>
+              </form>
+            ) : null}
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </aside>

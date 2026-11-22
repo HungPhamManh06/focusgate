@@ -16,7 +16,7 @@ import {
 import {
   activatePlanAction,
   completePlanAction,
-  confirmPlanAction,
+  confirmAndActivatePlanAction,
   createPlanAction,
 } from "@/lib/actions/planner";
 import { claimRewardAction } from "@/lib/actions/rewards";
@@ -28,6 +28,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { KindBadge, PlanStatusBadge, kindDescriptions, kindLabels } from "@/components/domain/labels";
 import { formatDateLong, formatMinutes, formatTime, todayIso } from "@/lib/data/format";
+import { buildPlannerSummaryViewModel } from "@/lib/domain/tasks-planner-state";
 import { getPlannerBacklog, getTodayPlan } from "@/lib/data/planner";
 import { getWorkspace } from "@/lib/data/workspace";
 import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
@@ -59,7 +60,7 @@ function PlanStepper({ plan }: { plan: Plan }) {
   const currentIndex = Math.max(0, matchedIndex);
 
   return (
-    <div className="grid gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {steps.map((step, index) => {
         const complete = index < currentIndex || plan.status === "completed";
         const current = index === currentIndex && plan.status !== "completed";
@@ -67,7 +68,7 @@ function PlanStepper({ plan }: { plan: Plan }) {
           <div
             key={step.status}
             className={cn(
-              "relative rounded-xl border px-3.5 py-3",
+              "relative rounded-xl border px-3 py-2 sm:px-3.5 sm:py-3",
               current
                 ? "border-accent/35 bg-accent-soft/60"
                 : complete
@@ -78,7 +79,7 @@ function PlanStepper({ plan }: { plan: Plan }) {
             <div className="flex items-center gap-2">
               <span
                 className={cn(
-                  "flex size-5 items-center justify-center rounded-full text-[10px] font-semibold",
+                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
                   complete
                     ? "bg-success text-white"
                     : current
@@ -90,7 +91,9 @@ function PlanStepper({ plan }: { plan: Plan }) {
               </span>
               <p className={cn("text-[12px] font-medium", current && "text-accent")}>{step.label}</p>
             </div>
-            <p className="mt-1.5 pl-7 text-[10.5px] leading-snug text-muted">{step.hint}</p>
+            <p className="mt-1.5 hidden pl-7 text-[10.5px] leading-snug text-muted sm:block">
+              {step.hint}
+            </p>
           </div>
         );
       })}
@@ -107,14 +110,7 @@ export default async function PlannerPage() {
   const dateLabel = formatDateLong(`${planDate}T12:00:00Z`, timezone);
 
   const mustDoTasks = plan?.tasks.filter((task) => task.kind === "must_do") ?? [];
-  const progressPercent =
-    plan && plan.progress.mustDoTotal > 0
-      ? Math.round((plan.progress.mustDoCompleted / plan.progress.mustDoTotal) * 100)
-      : 0;
-  const focusPercent =
-    plan && plan.progress.focusRequired > 0
-      ? Math.round((plan.progress.focusDone / plan.progress.focusRequired) * 100)
-      : 0;
+  const summary = plan ? buildPlannerSummaryViewModel(plan) : null;
   const rewardEstimate = plan
     ? Math.min(
         workspace.settings.dailyCapMinutes,
@@ -127,7 +123,7 @@ export default async function PlannerPage() {
     : workspace.settings.baseMinutes;
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-5 py-8 sm:px-8 sm:py-10">
+    <div className="mx-auto w-full max-w-[1280px] px-5 py-8 sm:px-8 sm:py-10">
       <PageHeader
         eyebrow={dateLabel}
         title="The day, decided in advance."
@@ -216,10 +212,7 @@ export default async function PlannerPage() {
         <>
           <div className="mt-7 flex flex-wrap items-center gap-2">
             <PlanStatusBadge status={plan.status} />
-            <span className="text-[11.5px] text-muted">
-              {plan.tasks.length} task{plan.tasks.length === 1 ? "" : "s"} ·{" "}
-              {plan.progress.mustDoCompleted}/{plan.progress.mustDoTotal} must-dos done
-            </span>
+            <span className="text-[11.5px] text-muted">{summary?.headerMetaLine}</span>
           </div>
 
           <div className="mt-4">
@@ -276,7 +269,7 @@ export default async function PlannerPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    <AddPlanTask planId={plan.id} tasks={backlog} />
+                    <AddPlanTask planId={plan.id} tasks={backlog} timezone={timezone} />
                   </CardContent>
                 </Card>
               ) : null}
@@ -330,20 +323,27 @@ export default async function PlannerPage() {
                   <PlanStatusBadge status={plan.status} />
                 </CardHeader>
                 <CardContent className="pt-5">
-                  <div className="flex items-end justify-between">
+                  <div className="flex items-end justify-between gap-2">
                     <div>
                       <p className="label-xs text-muted">Must-do progress</p>
-                      <p className="mt-2 font-display text-[36px] leading-none">
-                        {progressPercent}%
+                      <p
+                        className={cn(
+                          "mt-2 font-display leading-none",
+                          summary?.hasMustDos ? "text-[36px]" : "text-[24px] text-muted",
+                        )}
+                      >
+                        {summary?.mustDoHeadline}
                       </p>
                     </div>
-                    <p className="pb-1 text-[11.5px] text-muted">
-                      {plan.progress.mustDoCompleted}/{plan.progress.mustDoTotal} done
-                    </p>
+                    <p className="pb-1 text-[11.5px] text-muted">{summary?.mustDoCountLabel}</p>
                   </div>
                   <Progress
-                    value={progressPercent}
-                    tone={progressPercent === 100 ? "success" : "accent"}
+                    value={summary?.mustDoProgressPercent ?? 0}
+                    tone={
+                      summary?.hasMustDos && summary.mustDoProgressPercent === 100
+                        ? "success"
+                        : "accent"
+                    }
                     className="mt-3"
                   />
 
@@ -353,18 +353,26 @@ export default async function PlannerPage() {
                         <Timer className="size-3.5" /> Focus done
                       </dt>
                       <dd className="text-[12px] font-medium">
-                        {formatMinutes(plan.progress.focusDone)}
-                        <span className="font-normal text-muted">
-                          {" "}
-                          / {formatMinutes(plan.progress.focusRequired)}
-                        </span>
+                        {summary?.focusDoneLabel}
+                        {summary?.focusTargetSuffix ? (
+                          <span className="font-normal text-muted">
+                            {" "}
+                            {summary.focusTargetSuffix}
+                          </span>
+                        ) : null}
                       </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="flex items-center gap-2 text-[11.5px] text-muted">
                         <Target className="size-3.5" /> Focus coverage
                       </dt>
-                      <dd className="text-[12px] font-medium">{focusPercent}%</dd>
+                      <dd className="text-[12px] font-medium">{summary?.focusCoverageLabel}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="flex items-center gap-2 text-[11.5px] text-muted">
+                        <Clock3 className="size-3.5" /> Total plan focus
+                      </dt>
+                      <dd className="text-[12px] font-medium">{summary?.totalPlanFocusLabel}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="flex items-center gap-2 text-[11.5px] text-muted">
@@ -387,20 +395,27 @@ export default async function PlannerPage() {
                     {formatMinutes(workspace.settings.minValidFocusMinutes)}.
                   </p>
 
+                  {summary?.isOverloaded ? (
+                    <p className="mt-3 rounded-xl border border-warning/25 bg-warning-soft px-3 py-2 text-[11px] leading-relaxed text-warning">
+                      Heavy commitment ({summary.totalPlanFocusLabel} required focus). Consider moving
+                      non-essential tasks out if 6h+ is unrealistic today.
+                    </p>
+                  ) : null}
+
                   <div className="mt-5 space-y-2">
                     {plan.status === "draft" ? (
                       <>
                         <ActionButton
-                          action={confirmPlanAction.bind(null, plan.id)}
+                          action={confirmAndActivatePlanAction.bind(null, plan.id)}
                           variant="accent"
                           className="w-full"
-                          confirmTitle="Lock today's gate?"
-                          confirmMessage="Confirming turns today's plan into a contract. You will not be able to freely add or remove tasks without recording an audited amendment."
-                          confirmLabel="Confirm & lock plan"
+                          confirmTitle="Confirm & start today's gate?"
+                          confirmMessage="Confirming locks today's plan as a contract and activates verified focus immediately. Amendments afterward are logged in Gate History."
+                          confirmLabel="Confirm & start plan"
                           disabled={plan.progress.mustDoTotal === 0}
-                          pendingLabel="Confirming…"
+                          pendingLabel="Starting…"
                         >
-                          <Lock className="size-4" /> Confirm plan
+                          <Lock className="size-4" /> Confirm &amp; start plan
                         </ActionButton>
                         {plan.progress.mustDoTotal === 0 ? (
                           <p className="text-center text-[10.5px] text-muted">

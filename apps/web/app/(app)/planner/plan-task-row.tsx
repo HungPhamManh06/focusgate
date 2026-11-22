@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, FileEdit, Loader2, Lock, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Check, FileEdit, Loader2, Lock, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import {
   amendPlanTaskAction,
@@ -119,7 +120,7 @@ export function PlanTaskRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className={cn("text-[13px] font-medium", done && "text-muted line-through")}>
+          <p className={cn("text-[14px] font-medium", done && "text-muted line-through")}>
             {task.title}
           </p>
           {task.priority === "urgent" ? <Badge tone="danger">Urgent</Badge> : null}
@@ -132,15 +133,23 @@ export function PlanTaskRow({
             tone={focusPercent >= 100 ? "success" : "accent"}
             className="max-w-[210px]"
           />
-          <span className="whitespace-nowrap text-[10.5px] text-muted">
+          <span className="whitespace-nowrap text-[12px] text-muted">
             {formatMinutes(task.focusDone)} / {formatMinutes(task.requiredFocusMinutes)} focus
           </span>
         </div>
 
         {planStatus === "active" && !done && remainingFocus > 0 ? (
-          <p className="mt-1.5 text-[10.5px] text-warning">
-            {formatMinutes(remainingFocus)} more verified focus needed to complete.
-          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <p className="text-[12px] text-warning">
+              {formatMinutes(remainingFocus)} more verified focus needed to complete.
+            </p>
+            <Link
+              href={`/focus?taskId=${task.taskId}`}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline"
+            >
+              Focus <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
         ) : null}
       </div>
 

@@ -113,17 +113,6 @@ export function TaskFormDialog({
                 />
               </div>
 
-              <div>
-                <Label htmlFor="description">Notes</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  defaultValue={task?.description ?? ""}
-                  placeholder="Optional context, links, or the definition of done."
-                  maxLength={2000}
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="kind">Gate type</Label>
@@ -141,29 +130,6 @@ export function TaskFormDialog({
                     <option value="high">High</option>
                     <option value="urgent">Urgent</option>
                   </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="category">Category</Label>
-                  <Select id="category" name="category" defaultValue={task?.category ?? "work"}>
-                    <option value="work">Work</option>
-                    <option value="study">Study</option>
-                    <option value="health">Health</option>
-                    <option value="personal">Personal</option>
-                    <option value="finance">Finance</option>
-                    <option value="other">Other</option>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="dueDate">Due date</Label>
-                  <Input
-                    id="dueDate"
-                    name="dueDate"
-                    type="date"
-                    defaultValue={isoToDateInput(task?.dueDate ?? null)}
-                  />
                 </div>
               </div>
 
@@ -197,9 +163,53 @@ export function TaskFormDialog({
               </div>
 
               <p className="text-[11px] leading-relaxed text-muted">
-                Must-do tasks need this many valid focus minutes before they can be completed in an
-                active plan. Set 0 to complete without focus.
+                Any task with focus required &gt; 0 needs that many valid focus minutes in an active
+                plan before completion (up to the estimate). Set 0 to complete without focus.
               </p>
+
+              <details
+                className="rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5"
+                open={Boolean(task?.description || task?.dueDate || (task && task.category !== "work"))}
+              >
+                <summary className="cursor-pointer select-none text-[12px] font-medium text-ink">
+                  More details (notes, category, due date)
+                </summary>
+                <div className="mt-3 space-y-3 border-t border-line pt-3">
+                  <div>
+                    <Label htmlFor="description">Notes</Label>
+                    <Textarea
+                      id="description"
+                      name="description"
+                      defaultValue={task?.description ?? ""}
+                      placeholder="Optional context, links, or the definition of done."
+                      maxLength={2000}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="category">Category</Label>
+                      <Select id="category" name="category" defaultValue={task?.category ?? "work"}>
+                        <option value="work">Work</option>
+                        <option value="study">Study</option>
+                        <option value="health">Health</option>
+                        <option value="personal">Personal</option>
+                        <option value="finance">Finance</option>
+                        <option value="other">Other</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="dueDate">Due date</Label>
+                      <Input
+                        id="dueDate"
+                        name="dueDate"
+                        type="date"
+                        defaultValue={isoToDateInput(task?.dueDate ?? null)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </details>
 
               <div className="flex items-center justify-end gap-2 border-t border-line pt-5">
                 <button

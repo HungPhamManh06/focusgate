@@ -102,6 +102,17 @@ export async function confirmPlanAction(planId: string): Promise<ActionState> {
   }
 }
 
+export async function confirmAndActivatePlanAction(planId: string): Promise<ActionState> {
+  try {
+    await confirmPlan(planId);
+    await activatePlan(planId);
+    revalidateWorkspace();
+    return { success: "Plan confirmed and focus is now active." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
 export async function activatePlanAction(planId: string): Promise<ActionState> {
   try {
     await activatePlan(planId);

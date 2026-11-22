@@ -3,6 +3,8 @@
 import {
   cancelFocusSession,
   completeFocusSession,
+  pauseFocusSession,
+  resumeFocusSession,
   startFocusSession,
 } from "@/lib/data/focus";
 import { friendlyDbError } from "@/lib/data/errors";
@@ -50,6 +52,40 @@ export async function cancelFocusAction(sessionId: string): Promise<ActionState>
     await cancelFocusSession(sessionId);
     revalidateWorkspace();
     return { success: "Session cancelled. Nothing was counted." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export interface FocusPauseResumeResult extends ActionState {
+  status?: "running" | "paused";
+  pausedAt?: string | null;
+  pausedSeconds?: number;
+}
+
+export async function pauseFocusAction(sessionId: string): Promise<FocusPauseResumeResult> {
+  try {
+    const res = await pauseFocusSession(sessionId);
+    return {
+      success: "Focus session paused.",
+      status: "paused",
+      pausedAt: res.pausedAt,
+      pausedSeconds: res.pausedSeconds,
+    };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function resumeFocusAction(sessionId: string): Promise<FocusPauseResumeResult> {
+  try {
+    const res = await resumeFocusSession(sessionId);
+    return {
+      success: "Focus session resumed.",
+      status: "running",
+      pausedAt: null,
+      pausedSeconds: res.pausedSeconds,
+    };
   } catch (error) {
     return { error: friendlyDbError(error) };
   }

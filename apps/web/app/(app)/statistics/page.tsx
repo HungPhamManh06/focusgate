@@ -50,7 +50,7 @@ export default async function StatisticsPage({
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-5 py-8 sm:px-8 sm:py-10">
+    <div className="mx-auto w-full max-w-[1280px] px-5 py-8 sm:px-8 sm:py-10">
       <PageHeader
         eyebrow="Statistics"
         title="Proof, not vibes."
@@ -96,7 +96,11 @@ export default async function StatisticsPage({
         <StatCard
           label="Tasks completed"
           value={String(stats.tasksCompleted)}
-          hint={`${stats.openTasks} open · ${stats.completionRate}% completion`}
+          hint={
+            stats.tasksCompleted + stats.openTasks > 0
+              ? `${stats.openTasks} open · ${stats.completionRate}% completion`
+              : "No tasks logged in this period"
+          }
           icon={CheckCircle2}
           tone={stats.tasksCompleted > 0 ? "success" : "default"}
         />
@@ -109,8 +113,12 @@ export default async function StatisticsPage({
         />
         <StatCard
           label="Valid sessions"
-          value={`${stats.validRate}%`}
-          hint={`${stats.sessionCount - Math.round((stats.sessionCount * stats.validRate) / 100)} below the minimum`}
+          value={stats.sessionCount > 0 ? `${stats.validRate}%` : "—"}
+          hint={
+            stats.sessionCount > 0
+              ? `${stats.sessionCount - Math.round((stats.sessionCount * stats.validRate) / 100)} below the minimum`
+              : "No completed sessions in this period"
+          }
           icon={Flame}
         />
       </section>

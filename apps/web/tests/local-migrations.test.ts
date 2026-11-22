@@ -125,6 +125,7 @@ test("Scenario A — Existing 0005 upgrade: supersedes 0006, applies 0007+0008, 
   assert.deepEqual(res.applied, [
     "20260101000007_focus_snapshot_backfill_safety.sql",
     "20260101000008_focus_migration_compatibility.sql",
+    "20260101000009_focus_pause_resume.sql",
   ]);
   assert.deepEqual(res.recovered, []);
 
@@ -239,6 +240,7 @@ test("Scenario B — Real existing 0006 upgrade: preserves 0006 marker as '1', r
   assert.deepEqual(res.applied, [
     "20260101000007_focus_snapshot_backfill_safety.sql",
     "20260101000008_focus_migration_compatibility.sql",
+    "20260101000009_focus_pause_resume.sql",
   ]);
 
   const marker0006 = await db.query<{ value: string }>(
@@ -312,8 +314,11 @@ test("Scenario C — Interrupted 0005 upgrade: recovers 0006 as 'superseded_by_0
   const res = await applyLocalMigrations(db, MIGRATIONS_DIR);
   assert.deepEqual(res.recovered, ["20260101000006_legacy_snapshot_and_insert_hardening.sql"]);
   assert.deepEqual(res.superseded, ["20260101000006_legacy_snapshot_and_insert_hardening.sql"]);
-  // 0007 was NOT re-executed because its marker already existed; 0008 WAS applied
-  assert.deepEqual(res.applied, ["20260101000008_focus_migration_compatibility.sql"]);
+  // 0007 was NOT re-executed because its marker already existed; 0008+0009 WERE applied
+  assert.deepEqual(res.applied, [
+    "20260101000008_focus_migration_compatibility.sql",
+    "20260101000009_focus_pause_resume.sql",
+  ]);
 
   const marker0006 = await db.query<{ value: string }>(
     "select value from auth.local_meta where key = 'migration:20260101000006_legacy_snapshot_and_insert_hardening.sql'",
@@ -385,6 +390,7 @@ test("Scenario D — Failure before 0007 completes: keeps pending_supersede, nev
     assert.deepEqual(retryRes.applied, [
       "20260101000007_focus_snapshot_backfill_safety.sql",
       "20260101000008_focus_migration_compatibility.sql",
+      "20260101000009_focus_pause_resume.sql",
     ]);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
@@ -420,7 +426,10 @@ test("Scenario E — Existing 0007 database & Fresh 0001..0008: applies 0008 onl
   }
 
   const res0007 = await applyLocalMigrations(db0007, MIGRATIONS_DIR);
-  assert.deepEqual(res0007.applied, ["20260101000008_focus_migration_compatibility.sql"]);
+  assert.deepEqual(res0007.applied, [
+    "20260101000008_focus_migration_compatibility.sql",
+    "20260101000009_focus_pause_resume.sql",
+  ]);
   assert.deepEqual(res0007.superseded, []);
 
   const repeat0007 = await applyLocalMigrations(db0007, MIGRATIONS_DIR);
@@ -428,10 +437,10 @@ test("Scenario E — Existing 0007 database & Fresh 0001..0008: applies 0008 onl
   assert.deepEqual(repeat0007.superseded, []);
   await db0007.close();
 
-  // 2. Fresh 0001..0008 installation
+  // 2. Fresh 0001..0009 installation
   const dbFresh = await createBootstrappedDb();
   const freshFirst = await applyLocalMigrations(dbFresh, MIGRATIONS_DIR);
-  assert.equal(freshFirst.applied.length, 8);
+  assert.equal(freshFirst.applied.length, 9);
   assert.deepEqual(freshFirst.superseded, []);
 
   const freshSecond = await applyLocalMigrations(dbFresh, MIGRATIONS_DIR);

@@ -8,6 +8,7 @@ import {
   Timer,
   Wallet,
 } from "lucide-react";
+import { ActionButton } from "@/components/ui/action-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -15,6 +16,11 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
+import {
+  activatePlanAction,
+  completePlanTaskAction,
+  confirmAndActivatePlanAction,
+} from "@/lib/actions/planner";
 import { formatMinutes, formatTime } from "@/lib/data/format";
 import {
   getActiveSession,
@@ -29,12 +35,21 @@ import {
   formatFocusModeLabel,
   formatSessionDurationSummary,
 } from "@/lib/domain/focus-timer-state";
+import {
+  findReadyToCompletePlanTasks,
+  resolveInitialFocusTaskId,
+} from "@/lib/domain/tasks-planner-state";
 import { FocusStarter } from "./focus-starter";
 import { FocusTimer } from "./focus-timer";
 
 export const dynamic = "force-dynamic";
 
-export default async function FocusPage() {
+export default async function FocusPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ taskId?: string }>;
+}) {
+  const params = searchParams ? await searchParams : {};
   const [workspace, active, candidates, sessions, summary, plan] = await Promise.all([
     getWorkspace(),
     getActiveSession(),
@@ -45,6 +60,8 @@ export default async function FocusPage() {
   ]);
 
   const { timezone } = workspace.profile;
+  const initialTaskId = resolveInitialFocusTaskId(candidates, params.taskId ?? null);
+  const readyToComplete = active ? [] : findReadyToCompletePlanTasks(plan);
   const metrics = buildFocusPageMetrics({
     sessionsCount: summary.sessions,
     validSessionsCount: summary.validSessions,
@@ -69,42 +86,132 @@ export default async function FocusPage() {
         }
       />
 
-      <section className="mt-8 grid gap-3 sm:grid-cols-3">
-        <StatCard
-          label="Focus today"
-          value={formatMinutes(summary.minutes)}
-          hint={
-            summary.sessions > 0
-              ? `${summary.validSessions} verified of ${summary.sessions} session${summary.sessions === 1 ? "" : "s"}`
-              : "No completed sessions today"
-          }
-          icon={Timer}
-          tone="accent"
-        />
-        <StatCard
-          label="Valid rate"
-          value={metrics.validRateValue}
-          hint={metrics.validRateHint}
-          icon={ShieldCheck}
-          tone={metrics.validRateTone}
-        />
-        <StatCard
-          label="Plan focus left"
-          value={metrics.planFocusLeftValue}
-          hint={metrics.planFocusLeftHint}
-          icon={Clock3}
-          tone={metrics.planFocusLeftTone}
-        />
-      </section>
+      {active ? (
+        <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-xl border border-line bg-surface px-4 py-2.5 text-[12px] text-muted">
+          <span>
+            Focus today: <strong className="font-medium text-ink">{formatMinutes(summary.minutes)}</strong>
+          </span>
+          <span aria-hidden>·</span>
+          <span>
+            Valid rate: <strong className="font-medium text-ink">{metrics.validRateValue}</strong>
+          </span>
+          <span aria-hidden>·</span>
+          <span>
+            Plan focus left: <strong className="font-medium text-ink">{metrics.planFocusLeftValue}</strong>
+          </span>
+        </div>
+      ) : (
+        <section className="mt-8 grid gap-3 sm:grid-cols-3">
+          <StatCard
+            label="Focus today"
+            value={formatMinutes(summary.minutes)}
+            hint={
+              summary.sessions > 0
+                ? `${summary.validSessions} verified of ${summary.sessions} session${summary.sessions === 1 ? "" : "s"}`
+                : "No completed sessions today"
+            }
+            icon={Timer}
+            tone="accent"
+          />
+          <StatCard
+            label="Valid rate"
+            value={metrics.validRateValue}
+            hint={metrics.validRateHint}
+            icon={ShieldCheck}
+            tone={metrics.validRateTone}
+          />
+          <StatCard
+            label="Plan focus left"
+            value={metrics.planFocusLeftValue}
+            hint={metrics.planFocusLeftHint}
+            icon={Clock3}
+            tone={metrics.planFocusLeftTone}
+          />
+        </section>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div>
+        <div className="space-y-4">
+          {plan && (plan.status === "draft" || plan.status === "confirmed") ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warning/25 bg-warning-soft px-4 py-3 text-[12px]">
+              <p className="text-ink-soft">
+                Today&apos;s plan is still <strong className="font-semibold">{plan.status}</strong>
+                {plan.progress.mustDoTotal === 0
+                  ? " with no Must-do tasks yet. Add Must-dos in Planner to lock today's gate."
+                  : ". Activate it so verified focus counts toward today's gate."}
+              </p>
+              {plan.status === "draft" && plan.progress.mustDoTotal > 0 ? (
+                <ActionButton
+                  action={confirmAndActivatePlanAction.bind(null, plan.id)}
+                  variant="primary"
+                  size="sm"
+                >
+                  Confirm &amp; activate
+                </ActionButton>
+              ) : plan.status === "confirmed" ? (
+                <ActionButton
+                  action={activatePlanAction.bind(null, plan.id)}
+                  variant="primary"
+                  size="sm"
+                >
+                  Activate focus
+                </ActionButton>
+              ) : (
+                <Link
+                  href="/planner"
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  Open planner <ArrowRight className="size-3.5" />
+                </Link>
+              )}
+            </div>
+          ) : null}
+
+          {!active && readyToComplete.length > 0 ? (
+            <div className="rounded-2xl border border-success/25 bg-success-soft px-4 py-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[12.5px] font-semibold text-success">
+                  Focus requirement met — ready to mark complete
+                </p>
+                <Link
+                  href="/planner"
+                  className="inline-flex items-center gap-1 text-[11.5px] font-medium text-success hover:underline"
+                >
+                  Open Planner <ArrowRight className="size-3.5" />
+                </Link>
+              </div>
+              <div className="mt-2.5 space-y-2">
+                {readyToComplete.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-success/20 bg-surface px-3 py-2 text-[12px]"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink">{task.title}</p>
+                      <p className="text-[11px] text-muted">
+                        {formatMinutes(task.focusDone)} / {formatMinutes(task.requiredFocusMinutes)} verified focus
+                      </p>
+                    </div>
+                    <ActionButton
+                      action={completePlanTaskAction.bind(null, task.id)}
+                      variant="primary"
+                      size="sm"
+                    >
+                      Mark complete
+                    </ActionButton>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {active ? (
             <FocusTimer session={active} minValidMinutes={workspace.settings.minValidFocusMinutes} />
           ) : (
             <FocusStarter
               candidates={candidates}
               minValidMinutes={workspace.settings.minValidFocusMinutes}
+              initialTaskId={initialTaskId}
             />
           )}
         </div>

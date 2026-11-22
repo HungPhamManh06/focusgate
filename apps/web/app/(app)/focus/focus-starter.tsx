@@ -16,9 +16,11 @@ import { cn } from "@/lib/utils";
 export function FocusStarter({
   candidates,
   minValidMinutes,
+  initialTaskId = null,
 }: {
   candidates: FocusCandidate[];
   minValidMinutes: number;
+  initialTaskId?: string | null;
 }) {
   const starterConfig = useMemo(
     () => evaluateFocusStarterOptions(minValidMinutes),
@@ -26,6 +28,9 @@ export function FocusStarter({
   );
 
   const [taskId, setTaskId] = useState(() => {
+    if (initialTaskId && candidates.some((candidate) => candidate.id === initialTaskId)) {
+      return initialTaskId;
+    }
     const planned = candidates.find((candidate) => candidate.inTodayPlan);
     return planned?.id ?? candidates[0]?.id ?? "";
   });

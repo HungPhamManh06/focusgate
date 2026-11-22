@@ -2,6 +2,7 @@ using System.Text;
 using FocusGate.Agent.Poc.Models;
 using FocusGate.Agent.Poc.Monitors;
 using FocusGate.Agent.Poc.Services;
+using FocusGate.Agent.Poc.UI;
 
 namespace FocusGate.Agent.Poc;
 
@@ -31,6 +32,8 @@ internal static class Program
             AgentMode.SelfTest => SelfTest.Run(options),
             AgentMode.Monitor => RunMonitor(options),
             AgentMode.WindowProbe => RunWindowProbe(),
+            AgentMode.Tray => RunTray(options),
+            AgentMode.Status => PrintStatus(options),
             _ => 2,
         };
     }
@@ -121,6 +124,42 @@ internal static class Program
             Application.Run(host);
             return host.ExitCode;
         }
+    }
+
+    private static int RunTray(AgentOptions options)
+    {
+        Application.SetHighDpiMode(HighDpiMode.SystemAware);
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+
+        var store = new DpapiCredentialStore();
+        var logger = new StructuredLogger();
+        using var syncClient = new AgentSyncClient();
+        using var context = new TrayAgentContext(options, store, logger, syncClient);
+        Application.Run(context);
+        return 0;
+    }
+
+    private static int PrintStatus(AgentOptions options)
+    {
+        var store = new DpapiCredentialStore();
+        var logger = new StructuredLogger();
+        var credentials = store.Load();
+        if (credentials is null)
+        {
+            Console.WriteLine("Status: Unregistered");
+            Console.WriteLine($"Target API: {options.ApiBaseUrl}");
+            Console.WriteLine($"Credentials file: {store.FilePath} (not present)");
+            Console.WriteLine($"Logs directory: {logger.LogDirectory}");
+            return 0;
+        }
+
+        Console.WriteLine("Status: Registered");
+        Console.WriteLine($"Device: {credentials.DeviceName} ({credentials.DeviceId})");
+        Console.WriteLine($"API: {credentials.ApiBaseUrl}");
+        Console.WriteLine($"Registered at (UTC): {credentials.RegisteredAtUtc:O}");
+        Console.WriteLine($"Logs directory: {logger.LogDirectory}");
+        return 0;
     }
 
     private static string Trim(string? value, int max)

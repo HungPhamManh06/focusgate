@@ -567,3 +567,37 @@ test("A1.1-B (Cases 8, 9, 10): Timer projected credit never contradicts minimum 
   assert.equal(legacyAt65m.meetsMinimumThreshold, false);
   assert.equal(legacyAt65m.projectedCreditedMinutes, 0);
 });
+
+test("UX-008: Paused sessions freeze clock at pausedAt and exclude pausedSeconds when resumed", () => {
+  const pausedAt = new Date(STARTED_MS + 12 * 60 * 1000).toISOString();
+  const pausedState = computeFocusTimerState({
+    startedAtIso: STARTED_AT,
+    nowMs: STARTED_MS + 30 * 60 * 1000, // 18m later while still paused
+    plannedMinutes: 25,
+    minValidMinutes: 5,
+    status: "paused",
+    pausedAtIso: pausedAt,
+    pausedSeconds: 120, // 2m prior pause
+  });
+
+  assert.equal(pausedState.phase, "paused");
+  assert.equal(pausedState.isPaused, true);
+  assert.equal(pausedState.elapsedMinutes, 10); // 12m - 2m prior pause
+  assert.equal(pausedState.clockDisplay, "10:00");
+
+  // Resumed after 10m total paused time (600s), at wall clock 25m -> 15m active focus
+  const resumedState = computeFocusTimerState({
+    startedAtIso: STARTED_AT,
+    nowMs: STARTED_MS + 25 * 60 * 1000,
+    plannedMinutes: 25,
+    minValidMinutes: 5,
+    status: "running",
+    pausedAtIso: null,
+    pausedSeconds: 600,
+  });
+
+  assert.equal(resumedState.isPaused, false);
+  assert.equal(resumedState.phase, "focusing");
+  assert.equal(resumedState.elapsedMinutes, 15);
+  assert.equal(resumedState.clockDisplay, "15:00");
+});

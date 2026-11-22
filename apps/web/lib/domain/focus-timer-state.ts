@@ -75,6 +75,7 @@ export function evaluateFocusStarterOptions(
 }
 
 export type FocusTimerPhase =
+  | "paused"
   | "below_min"
   | "focusing"
   | "target_reached"
@@ -96,6 +97,7 @@ export interface FocusTimerComputedState {
   maxCreditedMinutes: number;
   projectedCreditedMinutes: number;
   overtimeSeconds: number;
+  isPaused: boolean;
   meetsMinimumThreshold: boolean;
   isImpossibleConfiguration: boolean;
   isTargetReached: boolean;
@@ -123,15 +125,22 @@ export function computeFocusTimerState(input: {
   plannedMinutes: number;
   minValidMinutes: number;
   keepFocusingOvertime?: boolean;
+  status?: "running" | "paused";
+  pausedAtIso?: string | null;
+  pausedSeconds?: number;
 }): FocusTimerComputedState {
   const plannedMinutes = Math.max(1, Math.min(600, Math.round(input.plannedMinutes)));
   const minValidMinutes = Math.max(1, Math.round(input.minValidMinutes));
   const maxCreditedMinutes = plannedMinutes * 2;
   const isImpossibleConfiguration = maxCreditedMinutes < minValidMinutes;
+  const isPaused = input.status === "paused";
 
   const startedMs = new Date(input.startedAtIso).getTime();
+  const pausedAtMs = isPaused && input.pausedAtIso ? new Date(input.pausedAtIso).getTime() : NaN;
+  const effectiveNowMs = Number.isFinite(pausedAtMs) ? pausedAtMs : input.nowMs;
+  const priorPausedSeconds = Math.max(0, Math.round(input.pausedSeconds ?? 0));
   const rawDiffSeconds = Number.isFinite(startedMs)
-    ? Math.floor((input.nowMs - startedMs) / 1000)
+    ? Math.floor((effectiveNowMs - startedMs) / 1000) - priorPausedSeconds
     : 0;
   const elapsedSeconds = Math.max(0, rawDiffSeconds);
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
@@ -152,11 +161,23 @@ export function computeFocusTimerState(input: {
   // It can never earn credit, so projectedCreditedMinutes is strictly 0 and the banner
   // explicitly explains why.
   if (isImpossibleConfiguration) {
-    const phase: FocusTimerPhase = isCreditLimitReached ? "credit_limit_reached" : "below_min";
+    const phase: FocusTimerPhase = isPaused
+      ? "paused"
+      : isCreditLimitReached
+        ? "credit_limit_reached"
+        : "below_min";
     return {
       phase,
-      statusHeader: isCreditLimitReached ? "FOCUS CREDIT LIMIT REACHED" : "FOCUSING",
-      ringLabel: isCreditLimitReached ? "Credit limit reached" : "Below minimum",
+      statusHeader: isPaused
+        ? "PAUSED"
+        : isCreditLimitReached
+          ? "FOCUS CREDIT LIMIT REACHED"
+          : "FOCUSING",
+      ringLabel: isPaused
+        ? "Paused"
+        : isCreditLimitReached
+          ? "Credit limit reached"
+          : "Below minimum",
       clockDisplay: formatClock(elapsedSeconds),
       subLabel: `${elapsedMinutes} / ${plannedMinutes} minutes (0m eligible)`,
       ringProgress,
@@ -168,6 +189,7 @@ export function computeFocusTimerState(input: {
       maxCreditedMinutes,
       projectedCreditedMinutes: 0,
       overtimeSeconds,
+      isPaused,
       meetsMinimumThreshold: false,
       isImpossibleConfiguration: true,
       isTargetReached,
@@ -176,6 +198,39 @@ export function computeFocusTimerState(input: {
       bannerTone: "warning",
       bannerTitle: `Minimum threshold (${formatMinutes(minValidMinutes)}) exceeds this session's ${formatMinutes(maxCreditedMinutes)} credit cap`,
       bannerMessage: `This legacy ${formatMinutes(plannedMinutes)} block caps credit at ${formatMinutes(maxCreditedMinutes)} (2× planned), so it cannot satisfy a ${formatMinutes(minValidMinutes)} minimum threshold. Cancel and start a block of at least ${formatMinutes(Math.ceil(minValidMinutes / 2))}.`,
+    };
+  }
+
+  const projectedCreditedMinutes = meetsMinimumThreshold
+    ? Math.min(Math.max(elapsedMinutes, minValidMinutes), maxCreditedMinutes)
+    : 0;
+
+  if (isPaused) {
+    return {
+      phase: "paused",
+      statusHeader: "PAUSED",
+      ringLabel: "Paused",
+      clockDisplay: formatClock(elapsedSeconds),
+      subLabel: `${elapsedMinutes} / ${plannedMinutes} minutes (timer frozen)`,
+      ringProgress,
+      ringTone: "warning",
+      elapsedSeconds,
+      elapsedMinutes,
+      plannedMinutes,
+      minValidMinutes,
+      maxCreditedMinutes,
+      projectedCreditedMinutes,
+      overtimeSeconds,
+      isPaused: true,
+      meetsMinimumThreshold,
+      isImpossibleConfiguration: false,
+      isTargetReached,
+      isOvertime: isTargetReached,
+      isCreditLimitReached,
+      bannerTone: "warning",
+      bannerTitle: "Session paused",
+      bannerMessage:
+        "Paused time is tracked on the server and does not count toward verified focus. Resume when you are ready to continue.",
     };
   }
 
@@ -193,10 +248,6 @@ export function computeFocusTimerState(input: {
   } else {
     phase = "focusing";
   }
-
-  const projectedCreditedMinutes = meetsMinimumThreshold
-    ? Math.min(Math.max(elapsedMinutes, minValidMinutes), maxCreditedMinutes)
-    : 0;
 
   if (phase === "below_min") {
     const subLabel = isTargetReached
@@ -218,6 +269,7 @@ export function computeFocusTimerState(input: {
       maxCreditedMinutes,
       projectedCreditedMinutes: 0,
       overtimeSeconds,
+      isPaused: false,
       meetsMinimumThreshold: false,
       isImpossibleConfiguration: false,
       isTargetReached,
@@ -247,6 +299,7 @@ export function computeFocusTimerState(input: {
       maxCreditedMinutes,
       projectedCreditedMinutes,
       overtimeSeconds,
+      isPaused: false,
       meetsMinimumThreshold: true,
       isImpossibleConfiguration: false,
       isTargetReached,
@@ -274,6 +327,7 @@ export function computeFocusTimerState(input: {
       maxCreditedMinutes,
       projectedCreditedMinutes,
       overtimeSeconds,
+      isPaused: false,
       meetsMinimumThreshold: true,
       isImpossibleConfiguration: false,
       isTargetReached,
@@ -302,6 +356,7 @@ export function computeFocusTimerState(input: {
       maxCreditedMinutes,
       projectedCreditedMinutes,
       overtimeSeconds,
+      isPaused: false,
       meetsMinimumThreshold: true,
       isImpossibleConfiguration: false,
       isTargetReached,
@@ -329,6 +384,7 @@ export function computeFocusTimerState(input: {
     maxCreditedMinutes,
     projectedCreditedMinutes: maxCreditedMinutes,
     overtimeSeconds,
+    isPaused: false,
     meetsMinimumThreshold: true,
     isImpossibleConfiguration: false,
     isTargetReached,

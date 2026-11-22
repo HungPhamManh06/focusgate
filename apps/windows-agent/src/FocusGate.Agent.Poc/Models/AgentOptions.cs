@@ -16,6 +16,8 @@ public enum AgentMode
     SelfTest,
     Monitor,
     WindowProbe,
+    Tray,
+    Status,
 }
 
 /// <summary>Command-line configuration for the PoC (no config file required).</summary>
@@ -27,6 +29,8 @@ public sealed class AgentOptions
     public string PolicyPath { get; init; } = "poc-policy.json";
     public string DatabasePath { get; init; } =
         Path.Combine("agent-poc-data", "focusgate-poc.db");
+    public string ApiBaseUrl { get; init; } = "http://localhost:3000";
+    public string? DeviceName { get; init; }
 
     public static AgentOptions Parse(string[] args)
     {
@@ -35,6 +39,8 @@ public sealed class AgentOptions
         var seconds = 20;
         var policy = "poc-policy.json";
         var database = Path.Combine("agent-poc-data", "focusgate-poc.db");
+        var apiUrl = Environment.GetEnvironmentVariable("FOCUSGATE_API_URL") ?? "http://localhost:3000";
+        string? deviceName = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -70,6 +76,18 @@ public sealed class AgentOptions
                 case "--db":
                     database = ReadValue(args, ref i, arg);
                     break;
+                case "--tray":
+                    mode = AgentMode.Tray;
+                    break;
+                case "--status":
+                    mode = AgentMode.Status;
+                    break;
+                case "--api-url":
+                    apiUrl = ReadValue(args, ref i, arg);
+                    break;
+                case "--device-name":
+                    deviceName = ReadValue(args, ref i, arg);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown argument: {arg}");
             }
@@ -82,6 +100,8 @@ public sealed class AgentOptions
             Enforcement = enforcement,
             PolicyPath = policy,
             DatabasePath = database,
+            ApiBaseUrl = apiUrl,
+            DeviceName = deviceName,
         };
     }
 
@@ -101,6 +121,10 @@ public sealed class AgentOptions
                                           (observe only, never touches other apps).
               --policy <path>             JSON policy file (default poc-policy.json).
               --db <path>                 SQLite event log path.
+              --tray                      Start the Phase 1.4 system tray agent shell.
+              --status                    Print DPAPI credential & registration status.
+              --api-url <url>             Web API origin (default http://localhost:3000).
+              --device-name <name>        Override local device name.
               -h, --help                  This text.
 
             The PoC never blocks anything unless --enforce is passed explicitly.

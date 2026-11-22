@@ -31,6 +31,9 @@ interface SessionRow {
   status: FocusSession["status"];
   started_at: string | Date;
   ended_at: string | Date | null;
+  paused_at: string | Date | null;
+  paused_seconds: number | null;
+  interruption_count: number | null;
   is_valid: boolean;
 }
 
@@ -48,6 +51,9 @@ function mapSession(row: SessionRow): FocusSession {
     status: row.status,
     startedAt: toIso(row.started_at) ?? new Date().toISOString(),
     endedAt: toIso(row.ended_at),
+    pausedAt: toIso(row.paused_at),
+    pausedSeconds: Math.max(0, row.paused_seconds ?? 0),
+    interruptionCount: Math.max(0, row.interruption_count ?? 0),
     isValid: row.is_valid,
   };
 }
@@ -55,7 +61,8 @@ function mapSession(row: SessionRow): FocusSession {
 const SESSION_SELECT = `
   select fs.id, fs.task_id, t.title as task_title, fs.daily_plan_id, fs.mode,
          fs.planned_minutes, fs.min_valid_minutes, fs.actual_minutes, fs.credited_minutes,
-         fs.status, fs.started_at, fs.ended_at, fs.is_valid
+         fs.status, fs.started_at, fs.ended_at, fs.paused_at, fs.paused_seconds,
+         fs.interruption_count, fs.is_valid
   from public.focus_sessions fs
   left join public.tasks t on t.id = fs.task_id
 `;
@@ -207,6 +214,36 @@ export async function startFocusSession(input: {
 export async function cancelFocusSession(sessionId: string): Promise<void> {
   await withUser(async (db) => {
     await db.query("select public.rpc_cancel_focus_session($1)", [sessionId]);
+  });
+}
+
+export async function pauseFocusSession(sessionId: string): Promise<{
+  pausedAt: string;
+  pausedSeconds: number;
+}> {
+  return withUser(async (db) => {
+    const result = await db.query<{
+      result: { pausedAt?: string; pausedSeconds?: number };
+    }>("select public.rpc_pause_focus_session($1) as result", [sessionId]);
+    const payload = result.rows[0]?.result;
+    return {
+      pausedAt: payload?.pausedAt ?? new Date().toISOString(),
+      pausedSeconds: Math.max(0, payload?.pausedSeconds ?? 0),
+    };
+  });
+}
+
+export async function resumeFocusSession(sessionId: string): Promise<{
+  pausedSeconds: number;
+}> {
+  return withUser(async (db) => {
+    const result = await db.query<{
+      result: { pausedSeconds?: number };
+    }>("select public.rpc_resume_focus_session($1) as result", [sessionId]);
+    const payload = result.rows[0]?.result;
+    return {
+      pausedSeconds: Math.max(0, payload?.pausedSeconds ?? 0),
+    };
   });
 }
 
