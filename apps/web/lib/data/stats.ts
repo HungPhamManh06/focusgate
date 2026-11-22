@@ -30,7 +30,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
        ),
        focus as (
          select (started_at at time zone $2)::date as day,
-                coalesce(sum(actual_minutes), 0)::int as minutes
+                coalesce(sum(credited_minutes), 0)::int as minutes
          from public.focus_sessions
          where user_id = $1 and status = 'completed' and is_valid
          group by 1
@@ -70,7 +70,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     }>(
       `select
          coalesce((
-           select sum(actual_minutes) from public.focus_sessions
+           select sum(credited_minutes) from public.focus_sessions
            where user_id = $1 and status = 'completed' and is_valid
              and (started_at at time zone $2)::date >= (now() at time zone $2)::date - ($3::int - 1)
          ), 0)::int as focus_minutes,

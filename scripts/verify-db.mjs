@@ -21,6 +21,7 @@ const MIGRATIONS = [
   "supabase/migrations/20260101000001_init.sql",
   "supabase/migrations/20260101000002_plan_and_reward.sql",
   "supabase/migrations/20260101000003_backend_hardening.sql",
+  "supabase/migrations/20260101000004_focus_session_integrity.sql",
 ];
 
 const USER_A = "11111111-1111-4111-8111-111111111111";
@@ -957,6 +958,260 @@ const openIndex = await asSuperuser(async () => {
   return rows.rows.length;
 });
 check("one open session per user is enforced by a unique index", openIndex === 1);
+
+// ---------------------------------------------------------------------------
+// Milestone A1: Focus Session Integrity & Overtime Crediting Regression Suite
+// (Tests A1 - A12)
+// ---------------------------------------------------------------------------
+const USER_FOCUS = "55555555-5555-4555-8555-555555555555";
+let focusDevice;
+let overtimeTask;
+let overtimePlan;
+let overtimePlanTask;
+
+await asSuperuser(async () => {
+  await db.query(
+    "insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3::jsonb)",
+    [USER_FOCUS, "focus-a1@example.com", '{"display_name":"Focus Tester"}'],
+  );
+  // Set min_valid_focus_minutes = 5 so below-minimum vs at-minimum tests are crystal clear
+  await db.query(
+    "update public.user_settings set min_valid_focus_minutes = 5, extra_focus_block_minutes = 50, extra_focus_reward_minutes = 5 where user_id = $1",
+    [USER_FOCUS],
+  );
+});
+
+await asUser(USER_FOCUS, async () => {
+  const dev = await db.query(
+    "insert into public.devices (user_id, name, platform) values ($1, 'Focus Workstation', 'web') returning id",
+    [USER_FOCUS],
+  );
+  focusDevice = dev.rows[0].id;
+
+  const t = await db.query(
+    `insert into public.tasks (user_id, title, kind, required_focus_minutes, estimated_minutes)
+     values ($1, 'Deep architecture spec', 'must_do', 50, 50) returning id`,
+    [USER_FOCUS],
+  );
+  overtimeTask = t.rows[0].id;
+
+  const p = await db.query("select public.rpc_create_daily_plan(current_date) as res");
+  overtimePlan = p.rows[0].res.planId;
+  const pt = await db.query(
+    "select public.rpc_add_plan_task($1, $2, 'must_do'::public.task_kind) as res",
+    [overtimePlan, overtimeTask],
+  );
+  overtimePlanTask = pt.rows[0].res.planTaskId;
+  await db.query("select public.rpc_confirm_plan($1)", [overtimePlan]);
+  await db.query("select public.rpc_activate_plan($1)", [overtimePlan]);
+});
+
+async function runTimedSession(clientId, plannedMinutes, elapsedMinutes, linkToTask = false) {
+  let sid;
+  await asUser(USER_FOCUS, async () => {
+    const started = await db.query(
+      `select public.rpc_start_focus_session(
+         $1, $2, $3, 'pomodoro_25_5'::public.focus_mode, $4, $5
+       ) as res`,
+      [
+        focusDevice,
+        clientId,
+        plannedMinutes,
+        linkToTask ? overtimeTask : null,
+        linkToTask ? overtimePlan : null,
+      ],
+    );
+    sid = started.rows[0].res.sessionId;
+  });
+
+  await asSuperuser(() =>
+    db.query(
+      `update public.focus_sessions
+       set started_at = now() - ($2::text || ' minutes')::interval - interval '5 seconds'
+       where id = $1`,
+      [sid, elapsedMinutes],
+    ),
+  );
+
+  let completionRes;
+  await asUser(USER_FOCUS, async () => {
+    const completed = await db.query(
+      "select public.rpc_complete_focus_session($1) as res",
+      [sid],
+    );
+    completionRes = completed.rows[0].res;
+  });
+  return { sessionId: sid, ...completionRes };
+}
+
+// A1. Session below minimum duration (3m < 5m min_valid): invalid, 0 credited.
+const resA1 = await runTimedSession("a1-below-min-001", 25, 3, true);
+check(
+  "A1: session below minimum duration (3m < 5m) is invalid and credits 0m",
+  resA1.isValid === false && resA1.actualMinutes === 3 && resA1.creditedMinutes === 0,
+  JSON.stringify(resA1),
+);
+
+// A2. Session at exact minimum duration (5m == 5m min_valid): valid, 5m credited.
+const resA2 = await runTimedSession("a2-exact-min-001", 25, 5, false);
+check(
+  "A2: session at exact minimum duration (5m) is valid and credits 5m",
+  resA2.isValid === true && resA2.actualMinutes === 5 && resA2.creditedMinutes === 5,
+  JSON.stringify(resA2),
+);
+
+// A3. Session at exact planned duration (25m / 25m): valid, 25m credited.
+const resA3 = await runTimedSession("a3-exact-planned-001", 25, 25, false);
+check(
+  "A3: session at exact planned duration (25m) is valid and credits 25m",
+  resA3.isValid === true && resA3.actualMinutes === 25 && resA3.creditedMinutes === 25,
+  JSON.stringify(resA3),
+);
+
+// A4. Session over planned duration but under 2x (40m / 25m): valid, 40m credited.
+const resA4 = await runTimedSession("a4-overtime-under-2x", 25, 40, false);
+check(
+  "A4: session over planned duration but under 2x (40m / 25m) is valid and credits 40m",
+  resA4.isValid === true && resA4.actualMinutes === 40 && resA4.creditedMinutes === 40,
+  JSON.stringify(resA4),
+);
+
+// A5. Session at exact 2x planned duration (50m / 25m): valid, 50m credited.
+const resA5 = await runTimedSession("a5-exact-2x-001", 25, 50, false);
+check(
+  "A5: session at exact 2x planned duration (50m / 25m) is valid and credits 50m",
+  resA5.isValid === true && resA5.actualMinutes === 50 && resA5.creditedMinutes === 50,
+  JSON.stringify(resA5),
+);
+
+// A6 & A7. Session exceeding 2x planned duration (56m on a 25m Pomodoro, and 90m on a 25m Pomodoro):
+// MUST NOT be invalidated; raw actual_minutes is preserved (56m / 90m) and credited_minutes is capped at 50m!
+const resA7 = await runTimedSession("a7-overtime-56m-pomodoro", 25, 56, true);
+check(
+  "A6/A7: 56m actual on 25m planned session stays VALID, preserves actualMinutes=56, and caps creditedMinutes=50",
+  resA7.isValid === true && resA7.actualMinutes === 56 && resA7.creditedMinutes === 50,
+  JSON.stringify(resA7),
+);
+
+const resA6_90 = await runTimedSession("a6-overtime-90m-pomodoro", 25, 90, true);
+check(
+  "A6: 90m actual on 25m planned session stays VALID, preserves actualMinutes=90, and caps creditedMinutes=50",
+  resA6_90.isValid === true && resA6_90.actualMinutes === 90 && resA6_90.creditedMinutes === 50,
+  JSON.stringify(resA6_90),
+);
+
+// A8. Session without valid planned duration (<= 0 or > 600) is rejected by validation rules.
+await expectError(
+  "A8: starting a session with planned_minutes = 0 is rejected",
+  () =>
+    asUser(USER_FOCUS, () =>
+      db.query(
+        "select public.rpc_start_focus_session($1, 'a8-zero-planned', 0, 'custom'::public.focus_mode, null, null)",
+        [focusDevice],
+      ),
+    ),
+  "planned minutes",
+);
+await expectError(
+  "A8: starting a session with planned_minutes = 601 is rejected",
+  () =>
+    asUser(USER_FOCUS, () =>
+      db.query(
+        "select public.rpc_start_focus_session($1, 'a8-over-planned', 601, 'custom'::public.focus_mode, null, null)",
+        [focusDevice],
+      ),
+    ),
+  "planned minutes",
+);
+
+// A9. Duplicate completion request is idempotent and does not add progress twice.
+await asUser(USER_FOCUS, async () => {
+  const replay1 = await db.query(
+    "select public.rpc_complete_focus_session($1) as res",
+    [resA7.sessionId],
+  );
+  const replay2 = await db.query(
+    "select public.rpc_complete_focus_session($1) as res",
+    [resA7.sessionId],
+  );
+  check(
+    "A9: duplicate completion request returns idempotent=true with identical creditedMinutes=50",
+    replay1.rows[0].res.idempotent === true &&
+      replay2.rows[0].res.idempotent === true &&
+      replay1.rows[0].res.creditedMinutes === 50,
+    JSON.stringify(replay1.rows[0].res),
+  );
+
+  // Verify v_plan_progress sums credited_minutes (50 + 50 = 100), NOT actual_minutes (56 + 90 = 146)
+  // and ignores the invalid 3m session (resA1).
+  const prog = await db.query(
+    "select must_do_focus_done, must_do_focus_required from public.v_plan_progress where plan_id = $1",
+    [overtimePlan],
+  );
+  check(
+    "A9/A10: plan progress sums credited_minutes (50 + 50 = 100), not raw actual_minutes (56 + 90 = 146)",
+    prog.rows[0]?.must_do_focus_done === 100 && prog.rows[0]?.must_do_focus_required === 50,
+    JSON.stringify(prog.rows[0]),
+  );
+});
+
+// A10 & A12. Reward calculation uses verified credited focus minutes (100m done - 50m required = 50m extra -> +5m extraFocus reward, NOT 146m - 50m = 96m)
+// and two submissions of the same evaluation do not create two ledger entries.
+await asUser(USER_FOCUS, async () => {
+  const taskComp = await db.query(
+    "select public.rpc_complete_plan_task($1) as res",
+    [overtimePlanTask],
+  );
+  check(
+    "A10: rpc_complete_plan_task verifies credited_minutes (100m)",
+    taskComp.rows[0].res.completed === true && taskComp.rows[0].res.focusMinutes === 100,
+    JSON.stringify(taskComp.rows[0].res),
+  );
+
+  await db.query("select public.rpc_complete_plan($1)", [overtimePlan]);
+
+  const eval1 = await db.query(
+    "select public.rpc_evaluate_unlock($1, $2, 'a10-eval-key-0001') as res",
+    [overtimePlan, focusDevice],
+  );
+  const eval2 = await db.query(
+    "select public.rpc_evaluate_unlock($1, $2, 'a10-eval-key-0001') as res",
+    [overtimePlan, focusDevice],
+  );
+
+  // 100m credited - 50m required = 50m extra focus = 1 block of 50m = +5m extraFocus (30 base + 5 extra = 35m).
+  check(
+    "A10: reward calculation uses credited_minutes (30 base + 5 extra = 35m)",
+    eval1.rows[0].res.grantedMinutes === 35 &&
+      eval1.rows[0].res.breakdown.extraFocus === 5,
+    JSON.stringify(eval1.rows[0].res),
+  );
+
+  const ledgerCount = await db.query(
+    "select count(*)::int as n from public.reward_ledger where user_id = $1",
+    [USER_FOCUS],
+  );
+  check(
+    "A12: duplicate reward submission does not create two ledger entries",
+    eval2.rows[0].res.idempotent === true && ledgerCount.rows[0].n === 1,
+    `ledgerCount=${ledgerCount.rows[0].n}`,
+  );
+});
+
+// A11. Historical invalid sessions are NOT retroactively turned valid by migration backfill logic.
+await asSuperuser(async () => {
+  // Check the earlier short/invalid session from USER_A and USER_FOCUS
+  const invalidRows = await db.query(
+    `select count(*)::int as bad
+     from public.focus_sessions
+     where is_valid = false and credited_minutes <> 0`,
+  );
+  check(
+    "A11: invalid sessions always have credited_minutes = 0 and historical invalid rows remain invalid",
+    invalidRows.rows[0].bad === 0 && resA1.isValid === false,
+    `badRows=${invalidRows.rows[0].bad}`,
+  );
+});
 
 await db.close();
 

@@ -91,6 +91,7 @@ export interface FocusSession {
   mode: FocusMode;
   plannedMinutes: number;
   actualMinutes: number;
+  creditedMinutes: number;
   status: "running" | "paused" | "completed" | "cancelled";
   startedAt: string;
   endedAt: string | null;

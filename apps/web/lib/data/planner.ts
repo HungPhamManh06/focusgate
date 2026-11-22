@@ -74,7 +74,7 @@ async function loadPlan(db: Db, planId: string): Promise<Plan | null> {
     `select pt.id, pt.task_id, pt.kind, pt.required_focus_minutes, pt.completed_at,
             t.title, t.description, t.status, t.priority,
             coalesce((
-              select sum(fs.actual_minutes)
+              select sum(fs.credited_minutes)
               from public.focus_sessions fs
               where fs.user_id = $2
                 and fs.task_id = pt.task_id

@@ -26,6 +26,7 @@ interface SessionRow {
   mode: FocusMode;
   planned_minutes: number;
   actual_minutes: number;
+  credited_minutes: number;
   status: FocusSession["status"];
   started_at: string | Date;
   ended_at: string | Date | null;
@@ -41,6 +42,7 @@ function mapSession(row: SessionRow): FocusSession {
     mode: row.mode,
     plannedMinutes: row.planned_minutes,
     actualMinutes: row.actual_minutes,
+    creditedMinutes: row.credited_minutes ?? (row.is_valid ? Math.min(row.actual_minutes, row.planned_minutes * 2) : 0),
     status: row.status,
     startedAt: toIso(row.started_at) ?? new Date().toISOString(),
     endedAt: toIso(row.ended_at),
@@ -50,8 +52,8 @@ function mapSession(row: SessionRow): FocusSession {
 
 const SESSION_SELECT = `
   select fs.id, fs.task_id, t.title as task_title, fs.daily_plan_id, fs.mode,
-         fs.planned_minutes, fs.actual_minutes, fs.status, fs.started_at, fs.ended_at,
-         fs.is_valid
+         fs.planned_minutes, fs.actual_minutes, fs.credited_minutes, fs.status,
+         fs.started_at, fs.ended_at, fs.is_valid
   from public.focus_sessions fs
   left join public.tasks t on t.id = fs.task_id
 `;
@@ -98,7 +100,7 @@ export async function getRecentSessions(limit = 6): Promise<FocusSession[]> {
 export async function getTodayFocusSummary(): Promise<FocusSummary> {
   return withUser(async (db) => {
     const result = await db.query<{ minutes: number; sessions: number; valid: number }>(
-      `select coalesce(sum(actual_minutes) filter (where is_valid), 0)::int as minutes,
+      `select coalesce(sum(credited_minutes) filter (where is_valid), 0)::int as minutes,
               count(*)::int as sessions,
               count(*) filter (where is_valid)::int as valid
        from public.focus_sessions
@@ -208,13 +210,38 @@ export async function cancelFocusSession(sessionId: string): Promise<void> {
 
 export async function completeFocusSession(
   sessionId: string,
-): Promise<{ actualMinutes: number; isValid: boolean }> {
+): Promise<{
+  sessionId: string;
+  actualMinutes: number;
+  creditedMinutes: number;
+  plannedMinutes: number;
+  isValid: boolean;
+  idempotent: boolean;
+}> {
   return withUser(async (db) => {
     const result = await db.query<{
-      result: { actualMinutes: number; isValid: boolean };
+      result: {
+        sessionId: string;
+        actualMinutes: number;
+        creditedMinutes?: number;
+        plannedMinutes?: number;
+        isValid: boolean;
+        idempotent?: boolean;
+      };
     }>("select public.rpc_complete_focus_session($1) as result", [sessionId]);
     const payload = result.rows[0]?.result;
     if (!payload) throw new Error("This session is no longer active.");
-    return { actualMinutes: payload.actualMinutes, isValid: payload.isValid };
+    const plannedMinutes = payload.plannedMinutes ?? payload.actualMinutes;
+    const creditedMinutes =
+      payload.creditedMinutes ??
+      (payload.isValid ? Math.min(payload.actualMinutes, plannedMinutes * 2) : 0);
+    return {
+      sessionId: payload.sessionId,
+      actualMinutes: payload.actualMinutes,
+      creditedMinutes,
+      plannedMinutes,
+      isValid: payload.isValid,
+      idempotent: Boolean(payload.idempotent),
+    };
   });
 }

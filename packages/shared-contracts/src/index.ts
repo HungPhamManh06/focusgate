@@ -88,6 +88,7 @@ export interface FocusSession {
   mode: FocusMode;
   plannedMinutes: number;
   actualMinutes: number;
+  creditedMinutes: number;
   status: FocusSessionStatus;
   startedAt: string;
   endedAt: string | null;

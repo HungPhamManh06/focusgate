@@ -1,13 +1,14 @@
 # FocusGate – Database
 
-PostgreSQL 15+ (Supabase). Three migrations, executed and tested against real
+PostgreSQL 15+ (Supabase). Four migrations, executed and tested against real
 PostgreSQL semantics.
 
 ```
-supabase/migrations/20260101000001_init.sql              schema, RLS, views
-supabase/migrations/20260101000002_plan_and_reward.sql   plan + reward RPCs
-supabase/migrations/20260101000003_backend_hardening.sql server-owned focus, constraints
-supabase/seed.sql                                        development data
+supabase/migrations/20260101000001_init.sql                    schema, RLS, views
+supabase/migrations/20260101000002_plan_and_reward.sql         plan + reward RPCs
+supabase/migrations/20260101000003_backend_hardening.sql       server-owned focus, constraints
+supabase/migrations/20260101000004_focus_session_integrity.sql actual vs credited focus minutes
+supabase/seed.sql                                              development data
 ```
 
 ## 1. Tables
@@ -21,7 +22,7 @@ supabase/seed.sql                                        development data
 | `daily_plans` | One plan per user per date | unique `(user_id, plan_date)`, `status` |
 | `daily_plan_tasks` | Commitment snapshot | `plan_id`, `task_id`, `kind`, `required_focus_minutes`, `completed_at` |
 | `daily_plan_events` | Append-only audit history | `event_type`, `reason`, `payload`; RPC-only insert |
-| `focus_sessions` | Server-owned focus evidence | `device_id`, `client_id`, `planned/actual_minutes`, `is_valid` |
+| `focus_sessions` | Server-owned focus evidence | `device_id`, `client_id`, `planned/actual/credited_minutes`, `is_valid` |
 | `block_rules` | Per-device app policy | `rule_type` block/allow, `identifier`, `category`, `action` |
 | `unlock_grants` | Earned unlock windows | `granted/consumed/remaining`, `status`, `expires_at`, `idempotency_key` |
 | `reward_ledger` | Append-only minute history | `delta_minutes`, `reason`, unique idempotency key |
@@ -89,7 +90,9 @@ revoked; the RPCs below are the only write path.
 - locks the session and checks ownership and an active device;
 - derives `actual_minutes` from `floor((now() - started_at) / 60)`, clamped to
   0–600, so a client cannot claim time that did not elapse;
-- `is_valid` is recomputed by the trigger from server-derived minutes;
+- `is_valid` and `credited_minutes` are recomputed by the trigger from
+  server-derived minutes (`credited_minutes = min(actual_minutes, planned_minutes * 2)`
+  when `is_valid`);
 - replay on an already completed session returns the stored result.
 
 `rpc_cancel_focus_session(session)` records a cancelled session with zero
@@ -102,12 +105,16 @@ Pause/resume is not exposed because the server clock cannot verify paused time.
 - `unlock_grants.remaining_minutes` = generated stored column
   `granted_minutes - consumed_minutes`.
 - `tasks.completed_at` is set/cleared by trigger from `status`.
-- `focus_sessions.is_valid` is recomputed on every insert/update:
+- `focus_sessions.is_valid` and `focus_sessions.credited_minutes` are recomputed
+  on every insert/update:
   - `status = 'completed'` and `ended_at` present and ≥ `started_at`;
-  - `actual_minutes ≥ user_settings.min_valid_focus_minutes`;
-  - `actual_minutes ≤ planned_minutes × 2`;
+  - `actual_minutes ≥ user_settings.min_valid_focus_minutes` and `actual_minutes > 0`;
+  - overtime beyond `planned_minutes × 2` does **not** invalidate the session;
+    instead, `credited_minutes = least(actual_minutes, planned_minutes * 2)` when
+    `is_valid = true` (and `0` when invalid or cancelled);
   - claimed minutes longer than wall-clock are clamped to elapsed minutes.
-- Client-supplied `is_valid = true` is overwritten. Validity is never trusted.
+- Client-supplied `is_valid = true` or `credited_minutes` is overwritten.
+  Validity and focus credit are never trusted from the client.
 
 ## 6. Focus and completion rules
 
@@ -115,8 +122,8 @@ A task can be completed through `rpc_complete_plan_task` only when:
 
 1. the plan is `active`,
 2. the plan task is not already completed,
-3. the sum of `is_valid` focus minutes for this exact `(task, plan)` is at least
-   the plan task's `required_focus_minutes`.
+3. the sum of `credited_minutes` across `is_valid` focus sessions for this exact
+   `(task, plan)` is at least the plan task's `required_focus_minutes`.
 
 Completing a focus session never marks a task done. The timer is evidence, not
 the decision. `rpc_complete_plan` then requires every Must Do task to be complete.

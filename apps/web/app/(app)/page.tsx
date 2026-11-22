@@ -263,7 +263,10 @@ export default async function DashboardPage() {
                           timezone,
                         )}{" "}
                         at {formatTime(session.startedAt, timezone)} ·{" "}
-                        {formatMinutes(session.actualMinutes)}
+                        {formatMinutes(session.isValid ? session.creditedMinutes : session.actualMinutes)}
+                        {session.isValid && session.creditedMinutes < session.actualMinutes
+                          ? ` credited (${formatMinutes(session.actualMinutes)} elapsed)`
+                          : ""}
                       </p>
                     </div>
                     <Badge tone={session.isValid ? "success" : "warning"}>

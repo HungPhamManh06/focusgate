@@ -303,7 +303,7 @@ export function DailyMissionCard({
                             <span className="font-medium text-ink-soft">
                               {latestSession.taskTitle ?? "Free focus"}
                             </span>{" "}
-                            ({formatMinutes(latestSession.actualMinutes)} at{" "}
+                            ({formatMinutes(latestSession.isValid ? latestSession.creditedMinutes : latestSession.actualMinutes)} at{" "}
                             {formatTime(latestSession.startedAt, timezone)})
                           </p>
                         ) : null}

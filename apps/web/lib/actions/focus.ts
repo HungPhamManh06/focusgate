@@ -42,14 +42,37 @@ export async function cancelFocusAction(sessionId: string): Promise<ActionState>
   }
 }
 
-export async function completeFocusAction(sessionId: string): Promise<ActionState> {
+export interface FocusCompletionActionResult extends ActionState {
+  verification?: {
+    sessionId: string;
+    actualMinutes: number;
+    creditedMinutes: number;
+    plannedMinutes: number;
+    isValid: boolean;
+    idempotent: boolean;
+  };
+}
+
+export async function completeFocusAction(
+  sessionId: string,
+): Promise<FocusCompletionActionResult> {
   try {
     const result = await completeFocusSession(sessionId);
     revalidateWorkspace();
+
+    if (!result.isValid) {
+      return {
+        success: `Session ended (${result.actualMinutes}m elapsed) — below the minimum valid focus duration, so 0m were credited.`,
+        verification: result,
+      };
+    }
+
+    const capped = result.creditedMinutes < result.actualMinutes;
     return {
-      success: result.isValid
-        ? `Session logged — ${result.actualMinutes} focused minutes counted.`
-        : `Session saved, but it did not meet the minimum valid focus time.`,
+      success: capped
+        ? `Session verified — ${result.creditedMinutes} focused minutes credited (${result.actualMinutes}m total elapsed, capped at 2× planned duration).`
+        : `Session verified — ${result.creditedMinutes} focused minutes credited.`,
+      verification: result,
     };
   } catch (error) {
     return { error: friendlyDbError(error) };

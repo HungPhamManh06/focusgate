@@ -76,9 +76,15 @@ After activation a Must Do task cannot be removed; downgrading it requires a
 written reason, recorded in immutable plan history.
 
 ### D. Focus mode
-Pomodoro 25/5, 50/10, custom and open-ended sessions. Start, pause, resume,
-complete, cancel. Every session is attached to a device and optionally to a task
-and plan. Server computes validity; statistics come from valid sessions only.
+Pomodoro 25/5, 50/10, custom and open-ended sessions. Start, complete, cancel
+(pause/resume is intentionally deferred until server-side pause accounting is
+introduced; see `docs/MILESTONE_A1_FOCUS_INTEGRITY_REPORT.md`). Every session is
+attached to a device and optionally to a task and plan. Server computes validity
+(`actual_minutes >= min_valid_focus_minutes`) and deterministic focus credit
+(`credited_minutes = min(actual_minutes, planned_minutes * 2)`). Overtime beyond
+2× planned duration never invalidates the session; task progress, plan focus
+coverage, statistics, and extra-focus rewards use `credited_minutes` from valid
+sessions only.
 
 ### E. App lock
 Per-device list of blocked and allowed apps, grouped as social, video, games,
@@ -129,8 +135,10 @@ or `active → revoked` (device revoked). Grants are never edited by clients.
 
 **Focus session**
 
-`running → paused → running`, then `completed` or `cancelled`. Only `completed`
-sessions that satisfy the validity rule count.
+`running → completed` or `running → cancelled` (the schema retains `paused` in
+`focus_session_status` for future server-verified pause intervals). Only
+`completed` sessions that satisfy the minimum validity rule count, crediting
+`min(actual_minutes, planned_minutes * 2)` toward task and plan requirements.
 
 ## 6. Supported platforms
 

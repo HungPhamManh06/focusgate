@@ -83,6 +83,23 @@ async function createDatabase(): Promise<PGlite> {
       await db.exec(await readFile(path.join(migrationsDir, file), "utf8"));
     }
     console.info(`[focusgate/db] applied ${files.length} migrations`);
+  } else {
+    // Incrementally apply migration 0004 if this local workspace was initialized before it existed.
+    const hasCredited = await db.query<{ present: boolean }>(
+      `select exists (
+         select 1 from information_schema.columns
+         where table_schema = 'public'
+           and table_name = 'focus_sessions'
+           and column_name = 'credited_minutes'
+       ) as present`,
+    );
+    if (!hasCredited.rows[0]?.present) {
+      const migrationsDir = await resolveMigrationsDir();
+      await db.exec(
+        await readFile(path.join(migrationsDir, "20260101000004_focus_session_integrity.sql"), "utf8"),
+      );
+      console.info("[focusgate/db] applied incremental migration 20260101000004_focus_session_integrity.sql");
+    }
   }
 
   await db.query(
