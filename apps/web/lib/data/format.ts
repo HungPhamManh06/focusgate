@@ -61,16 +61,22 @@ export function todayIso(timeZone = "Asia/Ho_Chi_Minh"): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-export function greeting(timeZone = "Asia/Ho_Chi_Minh"): string {
+export function greetingForDate(date: Date, timeZone?: string): string {
   const hour = Number(
-    new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone }).format(
-      new Date(),
-    ),
+    new Intl.DateTimeFormat("en-GB", {
+      hour: "numeric",
+      hour12: false,
+      ...(timeZone ? { timeZone } : {}),
+    }).format(date),
   );
   if (hour < 5) return "Still up";
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
+}
+
+export function greeting(timeZone = "Asia/Ho_Chi_Minh"): string {
+  return greetingForDate(new Date(), timeZone);
 }
 
 export function initials(name: string): string {

@@ -4,10 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
 import { KindBadge } from "@/components/domain/labels";
+import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
 import { NextMoveCard } from "@/components/domain/next-move-card";
 import { RewardWalletCard } from "@/components/domain/reward-wallet-card";
 import { getNextMoveCandidate, getUpcomingTasks } from "@/lib/data/dashboard";
@@ -67,10 +67,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1280px] overflow-x-hidden px-4 py-7 sm:px-8 sm:py-9 lg:px-10">
-      {/* 1. Greeting Header — Clean editorial greeting without competing duplicate CTAs */}
-      <PageHeader
-        eyebrow={dateLabel}
-        title={`${greeting(timezone)}, ${firstName}.`}
+      {/* 1. Greeting Header — Live local-time greeting without hydration mismatch */}
+      <LiveGreetingHeader
+        firstName={firstName}
+        initialDateLabel={dateLabel}
+        initialGreeting={greeting(timezone)}
         description="Make today count. Finish what matters, focus deeply, and earn your time."
       />
 
