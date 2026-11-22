@@ -57,28 +57,27 @@ Consequently, if a user clicked **Cancel → Discard session** and `cancelFocusA
 
 ---
 
-## 3. Database Migrations & RPC Changes (`0005` & `0006` — Milestone A1.1.1 Hardening)
+## 3. Database Migrations & RPC Changes (`0005`, `0006`, & `0007` — Milestone A1.1.1 & A1.1.2 Hardening)
 
-Created forward-only migrations [supabase/migrations/20260101000005_focus_validity_snapshot.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000005_focus_validity_snapshot.sql) and [supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql):
+Created forward-only migrations [20260101000005_focus_validity_snapshot.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000005_focus_validity_snapshot.sql), [20260101000006_legacy_snapshot_and_insert_hardening.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql), and [20260101000007_focus_snapshot_backfill_safety.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql):
 
 1. **`focus_sessions.min_valid_minutes` Schema & No-Default INSERT Hardening (Milestone A1.1.1 Issue 2):**
    - `min_valid_minutes integer not null` with `check (min_valid_minutes between 1 and 120)` and **no column default (`DEFAULT` dropped)**.
    - Why no column default? PostgreSQL evaluates column defaults *before* firing `BEFORE INSERT` triggers. When `DEFAULT 1` was present, any direct `INSERT` that omitted `min_valid_minutes` arrived in `fn_validate_focus_session()` with `NEW.min_valid_minutes = 1`, bypassing `if new.min_valid_minutes is null` and silently weakening the threshold to 1 minute.
    - By dropping the column default while keeping `NOT NULL` and `CHECK (min_valid_minutes between 1 and 120)` (which PostgreSQL enforces *after* the `BEFORE INSERT` trigger returns), an omitted `min_valid_minutes` arrives in `fn_validate_focus_session()` as `NULL`, causing the trigger to snapshot `user_settings.min_valid_focus_minutes` automatically.
-2. **Unclamped Legacy Active Session Backfill & Historical Preservation (Milestone A1.1.1 Issue 1):**
-   - Disables user triggers on `public.focus_sessions` during backfill so completed/cancelled rows remain immutable and retain their exact historical `is_valid`, `actual_minutes`, and `credited_minutes`.
-   - For existing active (`running`/`paused`) sessions, backfills `min_valid_minutes` directly from `user_settings.min_valid_focus_minutes` (`between 1 and 120`) **without clamping to `planned_minutes * 2`**.
-   - Consequently, if a legacy active session had `planned_minutes = 25` and `min_valid_focus_minutes = 60` (or `planned_minutes = 50` and `min_valid_focus_minutes = 120`), its backfilled threshold remains `60` (or `120`), keeping it explicitly impossible to validate (`is_valid = false`, `credited_minutes = 0`) and surfacing the impossible-configuration warning in `FocusTimer` rather than silently weakening the requirement to `50` (or `100`).
-   - **Backfill Limitation Note:** Because sessions created prior to migration `0005` did not record `min_valid_focus_minutes` at the moment they started, the exact setting value at original session start is not recoverable if the user changed their settings afterwards. The migration uses the user's current `user_settings.min_valid_focus_minutes` at migration time as the best available historical approximation.
+2. **Timestamp-Guarded Safe Backfill & Protection of Legitimate Active Snapshots (Milestone A1.1.2):**
+   - **Why the original `0006` could overwrite a legitimate snapshot:** Originally, `0006` updated any active (`running`/`paused`) session where `min_valid_minutes = planned_minutes * 2` or `min_valid_minutes = 1` and `min_valid_minutes < user_settings.min_valid_focus_minutes`. If a user started a 25-minute session when `min_valid_focus_minutes = 1` (legitimately snapshotting `1`) and then raised the workspace setting to `60` mid-session, `0006` would overwrite `1 → 60`, violating snapshot immutability.
+   - **How the timestamp-based safe-repair rule works (`0007` and guarded `0006`):**
+     - **Safe to repair (`user_settings.updated_at <= focus_sessions.started_at`):** The user's settings row has not been modified after the session started. Any active session still holding a clamped (`planned_minutes * 2`) or defaulted (`1`) threshold below `user_settings.min_valid_focus_minutes` is repaired to `user_settings.min_valid_focus_minutes` (without clamping to `2 × planned_minutes`).
+     - **Ambiguous / Protected (`user_settings.updated_at > focus_sessions.started_at`):** The setting changed *after* the session started. The migration preserves the existing `min_valid_minutes` snapshot untouched and emits a `RAISE NOTICE` reporting the count of ambiguous rows rather than guessing.
+   - **Irrecoverable Historical Limitation:** Sessions created before migration `0005` did not store `min_valid_focus_minutes` at start time. If `0006` already ran on a database before `0007` and overwrote a snapshot, or if settings changed after a pre-0005 session started, the exact original threshold cannot be reconstructed from the database and the migration preserves the available stored value without guessing.
 3. **`public.fn_validate_focus_session()`:**
-   - On `INSERT`, snapshots `user_settings.min_valid_focus_minutes` whenever `new.min_valid_minutes is null or new.min_valid_minutes < 1`. If an explicit positive value (`1..120`) is supplied (e.g. by `rpc_start_focus_session` or administrative test fixtures), clamps it to `1..120`. (Note: authenticated clients have `INSERT`/`UPDATE`/`DELETE` revoked on `public.focus_sessions` and can only start sessions through `rpc_start_focus_session`, which always reads `user_settings.min_valid_focus_minutes` server-side).
+   - On `INSERT`, snapshots `user_settings.min_valid_focus_minutes` whenever `new.min_valid_minutes is null or new.min_valid_minutes < 1`. If an explicit positive value (`1..120`) is supplied (e.g. by `rpc_start_focus_session` or administrative test fixtures), clamps it to `1..120`. (Authenticated clients have `INSERT`/`UPDATE`/`DELETE` revoked on `public.focus_sessions` and can only start sessions through `rpc_start_focus_session`).
    - On `UPDATE`, strictly preserves `old.min_valid_minutes` so the snapshot is immutable after session start.
    - Evaluates validity against the session's `min_valid_minutes` and requires `(new.planned_minutes * 2) >= v_min_valid`.
-4. **`public.rpc_start_focus_session(...)` & `public.rpc_complete_focus_session(p_session_id)`:**
-   - `rpc_start_focus_session` enforces `p_planned_minutes * 2 >= v_min_valid`, inserts `v_min_valid` into `focus_sessions.min_valid_minutes`, and returns `'minValidMinutes', v_session.min_valid_minutes`.
-   - `rpc_complete_focus_session` returns `'minValidMinutes', v_session.min_valid_minutes` alongside `actualMinutes`, `creditedMinutes`, `plannedMinutes`, `isValid`, `endedAt`, and `idempotent`.
-5. **Incremental Local Upgrade ([apps/web/lib/db/index.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/index.ts)):**
-   - Automatically checks `information_schema.columns` for `min_valid_minutes` and whether `column_default` is still non-null on existing `.data/postgres` instances, applying `0005` and `0006` seamlessly.
+4. **Reliable Local Migration Detection ([apps/web/lib/db/migrations.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/migrations.ts) & [apps/web/lib/db/index.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/index.ts)):**
+   - Tracks applied migrations via `migration:<filename>` markers in `auth.local_meta`.
+   - Fresh workspaces execute `0001..0007` once and record all markers. Existing workspaces at `0005` or `0006` upgrade incrementally without deleting data, and repeated initializations skip already-marked migrations.
 
 ---
 

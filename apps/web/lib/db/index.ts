@@ -1,8 +1,9 @@
 import "server-only";
 
 import { PGlite } from "@electric-sql/pglite";
-import { access, mkdir, readdir, readFile } from "node:fs/promises";
+import { access, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { applyLocalMigrations } from "./migrations";
 
 /**
  * Local development data layer.
@@ -71,71 +72,10 @@ async function createDatabase(): Promise<PGlite> {
 
   await db.exec(await readFile(await resolveLocalFile("bootstrap.sql"), "utf8"));
 
-  const schema = await db.query<{ present: boolean }>(
-    "select to_regclass('public.profiles') is not null as present",
-  );
-  if (!schema.rows[0]?.present) {
-    const migrationsDir = await resolveMigrationsDir();
-    const files = (await readdir(migrationsDir))
-      .filter((file) => file.endsWith(".sql"))
-      .sort();
-    for (const file of files) {
-      await db.exec(await readFile(path.join(migrationsDir, file), "utf8"));
-    }
-    console.info(`[focusgate/db] applied ${files.length} migrations`);
-  } else {
-    // Incrementally apply migrations 0004 and 0005 if this local workspace was initialized before they existed.
-    const hasCredited = await db.query<{ present: boolean }>(
-      `select exists (
-         select 1 from information_schema.columns
-         where table_schema = 'public'
-           and table_name = 'focus_sessions'
-           and column_name = 'credited_minutes'
-       ) as present`,
-    );
-    if (!hasCredited.rows[0]?.present) {
-      const migrationsDir = await resolveMigrationsDir();
-      await db.exec(
-        await readFile(path.join(migrationsDir, "20260101000004_focus_session_integrity.sql"), "utf8"),
-      );
-      console.info("[focusgate/db] applied incremental migration 20260101000004_focus_session_integrity.sql");
-    }
-
-    const hasMinValidSnapshot = await db.query<{ present: boolean }>(
-      `select exists (
-         select 1 from information_schema.columns
-         where table_schema = 'public'
-           and table_name = 'focus_sessions'
-           and column_name = 'min_valid_minutes'
-       ) as present`,
-    );
-    if (!hasMinValidSnapshot.rows[0]?.present) {
-      const migrationsDir = await resolveMigrationsDir();
-      await db.exec(
-        await readFile(path.join(migrationsDir, "20260101000005_focus_validity_snapshot.sql"), "utf8"),
-      );
-      console.info("[focusgate/db] applied incremental migration 20260101000005_focus_validity_snapshot.sql");
-    }
-
-    const hasMinValidDefault = await db.query<{ has_default: boolean }>(
-      `select column_default is not null as has_default
-       from information_schema.columns
-       where table_schema = 'public'
-         and table_name = 'focus_sessions'
-         and column_name = 'min_valid_minutes'`,
-    );
-    if (hasMinValidDefault.rows[0]?.has_default) {
-      const migrationsDir = await resolveMigrationsDir();
-      await db.exec(
-        await readFile(
-          path.join(migrationsDir, "20260101000006_legacy_snapshot_and_insert_hardening.sql"),
-          "utf8",
-        ),
-      );
-      console.info(
-        "[focusgate/db] applied incremental migration 20260101000006_legacy_snapshot_and_insert_hardening.sql",
-      );
-    }
+  const migrationsDir = await resolveMigrationsDir();
+  const { applied } = await applyLocalMigrations(db, migrationsDir);
+  if (applied.length > 0) {
+    console.info(`[focusgate/db] applied ${applied.length} migration(s): ${applied.join(", ")}`);
   }
 
   await db.query(

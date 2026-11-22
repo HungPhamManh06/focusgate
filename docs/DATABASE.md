@@ -1,6 +1,6 @@
 # FocusGate – Database
 
-PostgreSQL 15+ (Supabase). Six migrations, executed and tested against real
+PostgreSQL 15+ (Supabase). Seven migrations, executed and tested against real
 PostgreSQL semantics.
 
 ```
@@ -10,6 +10,7 @@ supabase/migrations/20260101000003_backend_hardening.sql                       s
 supabase/migrations/20260101000004_focus_session_integrity.sql                 actual vs credited focus minutes
 supabase/migrations/20260101000005_focus_validity_snapshot.sql                 session-level min_valid_minutes snapshot
 supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql    unclamped legacy snapshot & no-default insert trigger
+supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql          timestamp-guarded safe backfill for active sessions
 supabase/seed.sql                                                              development data
 ```
 

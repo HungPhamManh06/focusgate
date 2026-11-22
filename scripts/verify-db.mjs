@@ -24,6 +24,7 @@ const MIGRATIONS = [
   "supabase/migrations/20260101000004_focus_session_integrity.sql",
   "supabase/migrations/20260101000005_focus_validity_snapshot.sql",
   "supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql",
+  "supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql",
 ];
 
 const USER_A = "11111111-1111-4111-8111-111111111111";
@@ -1500,6 +1501,159 @@ await asSuperuser(async () => {
     JSON.stringify(colMeta.rows[0]),
   );
 });
+
+// ---------------------------------------------------------------------------
+// Milestone A1.1.2: Snapshot Backfill Safety (Cases A, B, C, D, E, F)
+// ---------------------------------------------------------------------------
+const migration0007Sql = readFileSync(
+  path.join(ROOT, "supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql"),
+  "utf8",
+);
+
+// Case A: Legitimate snapshot (min_valid_minutes = 1) must NOT change when user updates
+// settings to 60 after session started (`user_settings.updated_at > focus_sessions.started_at`).
+await setMinValidSetting(USER_A11, 1);
+let caseASessionId;
+await asUser(USER_A11, async () => {
+  const started = await db.query(
+    "select public.rpc_start_focus_session($1, 'a112-case-a-legit-1', 25, 'pomodoro_25_5'::public.focus_mode, null, null) as res",
+    [deviceA11],
+  );
+  caseASessionId = started.rows[0].res.sessionId;
+  check(
+    "A1.1.2-CaseA: RPC snapshots min_valid_minutes = 1 when setting is 1",
+    started.rows[0].res.minValidMinutes === 1,
+    JSON.stringify(started.rows[0].res),
+  );
+});
+
+// User changes setting to 60 after the session started
+await asSuperuser(async () => {
+  await db.query(
+    `update public.focus_sessions
+     set started_at = now() - interval '10 minutes'
+     where id = $1`,
+    [caseASessionId],
+  );
+  await db.query(
+    `update public.user_settings
+     set min_valid_focus_minutes = 60, updated_at = now()
+     where user_id = $1`,
+    [USER_A11],
+  );
+  await db.exec(migration0007Sql);
+  const afterA = await db.query(
+    "select min_valid_minutes from public.focus_sessions where id = $1",
+    [caseASessionId],
+  );
+  check(
+    "A1.1.2-CaseA: running migration 0007 preserves legitimate snapshot min_valid_minutes = 1 (not overwritten to 60)",
+    afterA.rows[0]?.min_valid_minutes === 1,
+    JSON.stringify(afterA.rows[0]),
+  );
+});
+await asUser(USER_A11, () =>
+  db.query("select public.rpc_cancel_focus_session($1)", [caseASessionId]),
+);
+
+// Case B: Legacy session (planned=25, stored=50, current=60) with settings.updated_at <= started_at
+// CAN be safely repaired to 60.
+let caseBSessionId;
+await asSuperuser(async () => {
+  await db.query(
+    `update public.user_settings
+     set min_valid_focus_minutes = 60, updated_at = now() - interval '2 hours'
+     where user_id = $1`,
+    [USER_A11],
+  );
+  const inserted = await db.query(
+    `insert into public.focus_sessions
+       (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
+     values ($1, $2, 'a112-case-b-safe-repair', 'pomodoro_25_5', 25, 50, 'running', now() - interval '30 minutes')
+     returning id`,
+    [USER_A11, deviceA11],
+  );
+  caseBSessionId = inserted.rows[0].id;
+  await db.exec(migration0007Sql);
+  const afterB = await db.query(
+    "select min_valid_minutes from public.focus_sessions where id = $1",
+    [caseBSessionId],
+  );
+  check(
+    "A1.1.2-CaseB: legacy clamped snapshot (50) is safely repaired to 60 when settings.updated_at <= started_at",
+    afterB.rows[0]?.min_valid_minutes === 60,
+    JSON.stringify(afterB.rows[0]),
+  );
+});
+await asUser(USER_A11, () =>
+  db.query("select public.rpc_cancel_focus_session($1)", [caseBSessionId]),
+);
+
+// Case C: Legacy/ambiguous session (planned=25, stored=50, current=60) with settings.updated_at > started_at
+// MUST NOT be overwritten (remains 50).
+let caseCSessionId;
+await asSuperuser(async () => {
+  await db.query(
+    `update public.user_settings
+     set min_valid_focus_minutes = 60, updated_at = now()
+     where user_id = $1`,
+    [USER_A11],
+  );
+  const inserted = await db.query(
+    `insert into public.focus_sessions
+       (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
+     values ($1, $2, 'a112-case-c-ambiguous', 'pomodoro_25_5', 25, 50, 'running', now() - interval '30 minutes')
+     returning id`,
+    [USER_A11, deviceA11],
+  );
+  caseCSessionId = inserted.rows[0].id;
+  await db.exec(migration0007Sql);
+  const afterC = await db.query(
+    "select min_valid_minutes from public.focus_sessions where id = $1",
+    [caseCSessionId],
+  );
+  check(
+    "A1.1.2-CaseC: ambiguous snapshot (50) is preserved untouched when settings.updated_at > started_at",
+    afterC.rows[0]?.min_valid_minutes === 50,
+    JSON.stringify(afterC.rows[0]),
+  );
+});
+await asUser(USER_A11, () =>
+  db.query("select public.rpc_cancel_focus_session($1)", [caseCSessionId]),
+);
+
+// Case D: Higher threshold boundary (planned=50, stored=100, current=120, updated_at <= started_at)
+// Safely repairs to 120 without clamping to 100.
+let caseDSessionId;
+await asSuperuser(async () => {
+  await db.query(
+    `update public.user_settings
+     set min_valid_focus_minutes = 120, updated_at = now() - interval '3 hours'
+     where user_id = $1`,
+    [USER_A11],
+  );
+  const inserted = await db.query(
+    `insert into public.focus_sessions
+       (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
+     values ($1, $2, 'a112-case-d-50-120', 'pomodoro_50_10', 50, 100, 'running', now() - interval '20 minutes')
+     returning id`,
+    [USER_A11, deviceA11],
+  );
+  caseDSessionId = inserted.rows[0].id;
+  await db.exec(migration0007Sql);
+  const afterD = await db.query(
+    "select min_valid_minutes from public.focus_sessions where id = $1",
+    [caseDSessionId],
+  );
+  check(
+    "A1.1.2-CaseD: planned=50, current=120 safely repairs 100 -> 120 (not clamped to 100)",
+    afterD.rows[0]?.min_valid_minutes === 120,
+    JSON.stringify(afterD.rows[0]),
+  );
+});
+await asUser(USER_A11, () =>
+  db.query("select public.rpc_cancel_focus_session($1)", [caseDSessionId]),
+);
 
 await db.close();
 
