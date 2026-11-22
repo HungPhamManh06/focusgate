@@ -348,4 +348,23 @@ class ProtectionEvaluatorTest {
         assertEquals(1, missingAndExtra.managedMissingCount)
         assertEquals(1, missingAndExtra.managedExtraSuspendedCount)
     }
+
+    @Test
+    fun `personal mode with lost Device Owner and unverified tracked apps sets needsManagedRestore`() {
+        val result = ProtectionEvaluator.evaluate(
+            monitorEnabled = true,
+            restrictedAppCount = 2,
+            usageAccess = true,
+            overlayAccess = true,
+            serviceRunning = true,
+            managedEnforced = false,
+            emergencyActive = false,
+            managedUnknownCount = 1,
+            managedDeviceOwnerLost = true,
+        )
+        assertEquals(ProtectionLevel.DEGRADED, result.level)
+        assertEquals(false, result.personalModeReady)
+        assertTrue(result.needsManagedRestore)
+        assertEquals(1, result.managedUnknownCount)
+    }
 }

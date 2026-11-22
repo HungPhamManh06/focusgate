@@ -6,14 +6,14 @@ FocusGate is a task manager with a gate: you commit to the day's Must Do tasks,
 do verified focus work, and only then earn time in the entertainment apps you
 chose to restrict.
 
-> **Status: Phase 0 stabilized and hardened locally (Milestone 1.2.2).**
+> **Status: Phase 0 stabilized and hardened locally (Milestone 1.2.3).**
 > The database, RLS, plan lifecycle, server-owned focus sessions and reward
 > engine are implemented across three migrations and 74 automated checks on
 > PGlite PostgreSQL. The Next.js dashboard runs locally against the same schema
 > via PGlite (`LOCAL_USER_ID` is local development only, not production auth).
 > The Windows agent PoC builds and passes `--selftest`; the Android module
-> (`personal` and `managed` flavors) compiles and passes **82/82 unit tests per
-> flavor** (164 total). Physical-device testing (Redmi Note 13 / Android 15) and
+> (`personal` and `managed` flavors) compiles and passes **103/103 unit tests per
+> flavor** (206 total). Physical-device testing (Redmi Note 13 / Android 15) and
 > hosted Supabase/Vercel deployment have **not** been performed yet.
 
 ## What exists
@@ -23,7 +23,7 @@ chose to restrict.
 | Windows agent PoC (.NET 10) | Working (PoC) | `dotnet build` 0 warnings / 0 errors; `--selftest` 5 pass / 0 fail / 3 skip (headless) |
 | Database schema + RLS + RPCs | Working locally | 3 migrations; 74/74 automated checks on PGlite PostgreSQL (incl. multi-device) |
 | Web dashboard (Next.js) | Working locally | 6 screens (HTTP 200); `typecheck` + `next build` pass; local PGlite backend |
-| Android module (Kotlin/Compose) | Compiled & unit-tested | `personalDebug` & `managedDebug` APKs built; 82/82 unit tests per flavor; emulator-tested (API 36), **physical device untested** |
+| Android module (Kotlin/Compose) | Compiled & unit-tested | `personalDebug` & `managedDebug` APKs built; 103/103 unit tests per flavor; emulator-tested (API 36), **physical device untested** |
 | Hosted Supabase / Vercel | Not deployed | needs a Supabase project, real Auth and credentials |
 
 ## Repository
@@ -149,6 +149,7 @@ in the repository.
 - [Milestone 1.2 test report](docs/MILESTONE1_2_TEST_REPORT.md)
 - [Milestone 1.2.1 test report](docs/MILESTONE1_2_1_TEST_REPORT.md)
 - [Milestone 1.2.2 test report](docs/MILESTONE1_2_2_TEST_REPORT.md)
+- [Milestone 1.2.3 test report](docs/MILESTONE1_2_3_TEST_REPORT.md)
 
 ## Honest limits
 

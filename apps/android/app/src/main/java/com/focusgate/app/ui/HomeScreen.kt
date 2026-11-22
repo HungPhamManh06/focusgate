@@ -48,6 +48,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.focusgate.app.BuildConfig
 import com.focusgate.app.FocusGateApp
+import com.focusgate.app.admin.EmergencyPresentationState
+import com.focusgate.app.admin.EmergencyStatusEvaluator
 import com.focusgate.app.admin.ManagedDeviceController
 import com.focusgate.app.admin.ManagedPolicyAudit
 import com.focusgate.app.admin.PolicyOperationOutcome
@@ -201,11 +203,18 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
+        var wasEmergency = EmergencyAccess.remainingMillis(context) > 0L
         while (true) {
-            emergencyRemaining = EmergencyAccess.remainingMillis(context)
+            val nextRemaining = EmergencyAccess.remainingMillis(context)
+            emergencyRemaining = nextRemaining
             serviceRunning = AppUsageMonitorService.isRunning
             monitorAppliedBlocked = AppUsageMonitorService.appliedBlockedPackages
             monitorAppliedExempt = AppUsageMonitorService.appliedExemptPackages
+            val nowEmergency = nextRemaining > 0L
+            if (wasEmergency && !nowEmergency) {
+                refreshRuntime()
+            }
+            wasEmergency = nowEmergency
             delay(1_000)
         }
     }
@@ -515,6 +524,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
             }
 
             item {
+                val emergencyPresentation = EmergencyStatusEvaluator.evaluateState(
+                    emergencyActive = emergencyActive,
+                    audit = managedAudit,
+                    deviceOwner = deviceOwner,
+                    managedEnabled = managedEnabled,
+                )
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -524,16 +539,37 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         Text("Emergency access", fontWeight = FontWeight.SemiBold)
                         Text(
                             if (emergencyActive) {
-                                "Active for ${formatRemaining(emergencyRemaining)}. " +
-                                    "Restrictions resume automatically."
+                                "${emergencyPresentation.message} Remaining: ${formatRemaining(emergencyRemaining)}."
                             } else {
                                 "Temporarily pause restrictions for up to 15 minutes. " +
                                     "Use it for urgent access only."
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (emergencyPresentation.state == EmergencyPresentationState.EMERGENCY_ACTIVE_DEGRADED) {
+                                MaterialTheme.colorScheme.tertiary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                             modifier = Modifier.padding(top = 4.dp),
                         )
+                        if (emergencyPresentation.state == EmergencyPresentationState.EMERGENCY_ACTIVE_DEGRADED) {
+                            Text(
+                                "Still suspended: ${emergencyPresentation.suspendedCount} • " +
+                                    "Unknown: ${emergencyPresentation.unknownCount}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            if (deviceOwner) {
+                                OutlinedButton(
+                                    onClick = ::clearManagedSuspensions,
+                                    enabled = !isOperationInProgress,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                ) {
+                                    Text(if (isOperationInProgress) "Working..." else "Restore suspended apps")
+                                }
+                            }
+                        }
                         if (emergencyActive) {
                             OutlinedButton(
                                 onClick = ::endEmergency,
@@ -560,39 +596,66 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Text("Managed Device mode", fontWeight = FontWeight.SemiBold)
-                        Text(
+                            Text(
+                                when {
+                                    deviceOwner ->
+                                        "This device is a Device Owner. Managed mode suspends selected " +
+                                            "apps with Android device policy instead of an overlay. It does " +
+                                            "not require Usage Access or overlay access."
+                                    managedEnabled || managedAudit.trackedPackages.isNotEmpty() -> {
+                                        val pendingCount = maxOf(
+                                            managedAudit.trackedPackages.size,
+                                            managedAudit.unknownPackages.size,
+                                        )
+                                        if (pendingCount > 0) {
+                                            "Device Owner permission was lost. $pendingCount app(s) still " +
+                                                "require verification or recovery. Switch to Personal Mode or " +
+                                                "restore Device Owner to resume them."
+                                        } else {
+                                            "Device Owner permission was lost. Switch to Personal Mode to " +
+                                                "continue using Personal Strict Mode."
+                                        }
+                                    }
+                                    else ->
+                                        "Requires Device Owner provisioning on a fully managed or " +
+                                            "dedicated device (usually a factory-reset device). Personal " +
+                                            "phones use Personal Strict Mode. FocusGate does not attempt " +
+                                            "to become Device Owner by itself."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (!deviceOwner && (managedEnabled || managedAudit.trackedPackages.isNotEmpty())) {
+                                    MaterialTheme.colorScheme.tertiary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
                             if (deviceOwner) {
-                                "This device is a Device Owner. Managed mode suspends selected " +
-                                    "apps with Android device policy instead of an overlay. It does " +
-                                    "not require Usage Access or overlay access."
-                            } else {
-                                "Requires Device Owner provisioning on a fully managed or " +
-                                    "dedicated device (usually a factory-reset device). Personal " +
-                                    "phones use Personal Strict Mode. FocusGate does not attempt " +
-                                    "to become Device Owner by itself."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                        if (deviceOwner) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text("Apply Device Owner policy", modifier = Modifier.weight(1f))
-                                Switch(
-                                    checked = managedEnabled,
-                                    onCheckedChange = ::setManaged,
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("Apply Device Owner policy", modifier = Modifier.weight(1f))
+                                    Switch(
+                                        checked = managedEnabled,
+                                        onCheckedChange = ::setManaged,
+                                        enabled = !isOperationInProgress,
+                                    )
+                                }
+                            } else if (managedEnabled) {
+                                OutlinedButton(
+                                    onClick = { setManaged(false) },
                                     enabled = !isOperationInProgress,
-                                )
+                                    modifier = Modifier.padding(top = 8.dp),
+                                ) {
+                                    Text(if (isOperationInProgress) "Switching..." else "Switch to Personal Mode")
+                                }
                             }
                         }
                     }
                 }
-            }
             }
 
             item {

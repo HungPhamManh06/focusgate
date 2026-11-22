@@ -8,6 +8,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.focusgate.app.R
+import com.focusgate.app.admin.EmergencyPresentationState
+import com.focusgate.app.admin.EmergencyStatusPresentation
 import com.focusgate.app.ui.MainActivity
 
 object NotificationIds {
@@ -16,6 +18,7 @@ object NotificationIds {
     const val MONITOR_NOTIFICATION = 1001
     const val PROTECTION_ALERT = 1002
     const val BLOCK_FAILED_ALERT = 1003
+    const val EMERGENCY_ALERT = 1004
 }
 
 object Notifications {
@@ -26,6 +29,7 @@ object Notifications {
         usageGranted: Boolean,
         overlayGranted: Boolean,
         emergencyActive: Boolean = false,
+        emergencyPresentation: EmergencyStatusPresentation? = null,
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
             context,
@@ -37,7 +41,12 @@ object Notifications {
         val text = when {
             !usageGranted -> context.getString(R.string.notification_usage_missing)
             !overlayGranted -> context.getString(R.string.notification_overlay_missing)
-            emergencyActive -> context.getString(R.string.notification_emergency_active)
+            emergencyPresentation?.state == EmergencyPresentationState.EMERGENCY_FAILED ->
+                emergencyPresentation.message
+            emergencyPresentation?.state == EmergencyPresentationState.EMERGENCY_ACTIVE_DEGRADED ->
+                emergencyPresentation.message
+            emergencyActive || emergencyPresentation?.state == EmergencyPresentationState.EMERGENCY_ACTIVE ->
+                emergencyPresentation?.message ?: context.getString(R.string.notification_emergency_active)
             else -> context.getString(R.string.notification_text)
         }
 
@@ -59,12 +68,48 @@ object Notifications {
         usageGranted: Boolean,
         overlayGranted: Boolean,
         emergencyActive: Boolean = false,
+        emergencyPresentation: EmergencyStatusPresentation? = null,
     ) {
         post(
             context,
             NotificationIds.MONITOR_NOTIFICATION,
-            monitorNotification(context, usageGranted, overlayGranted, emergencyActive),
+            monitorNotification(
+                context = context,
+                usageGranted = usageGranted,
+                overlayGranted = overlayGranted,
+                emergencyActive = emergencyActive,
+                emergencyPresentation = emergencyPresentation,
+            ),
         )
+    }
+
+    fun notifyEmergencyIssue(context: Context, presentation: EmergencyStatusPresentation) {
+        if (presentation.state != EmergencyPresentationState.EMERGENCY_ACTIVE_DEGRADED &&
+            presentation.state != EmergencyPresentationState.EMERGENCY_FAILED
+        ) {
+            return
+        }
+        val title = if (presentation.state == EmergencyPresentationState.EMERGENCY_FAILED) {
+            "Emergency access could not be verified"
+        } else {
+            "Emergency access partial restore"
+        }
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            0,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(context, NotificationIds.CHANNEL_ALERTS)
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setContentTitle(title)
+            .setContentText(presentation.message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(presentation.message))
+            .setContentIntent(contentIntent)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+        post(context, NotificationIds.EMERGENCY_ALERT, notification)
     }
 
     fun notifyProtectionLost(context: Context, reason: String) {

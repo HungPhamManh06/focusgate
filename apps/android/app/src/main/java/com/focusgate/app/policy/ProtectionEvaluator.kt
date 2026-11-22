@@ -130,6 +130,7 @@ object ProtectionEvaluator {
                 managedMissingCount = managedUnsuspendedCount,
                 managedExtraSuspendedCount = managedExtraSuspendedCount,
                 managedUnknownCount = managedUnknownCount,
+                needsManagedRestore = hasLingeringManaged,
             )
         }
 

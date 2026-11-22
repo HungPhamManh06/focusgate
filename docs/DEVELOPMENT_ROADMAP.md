@@ -14,8 +14,9 @@ Delivered:
   minimize, SQLite log, capability probe, live monitor.
 - Android module (`personal` & `managed` flavors): Usage Access + `TYPE_APPLICATION_OVERLAY`
   block screen (no `AccessibilityService`), Device Owner `setPackagesSuspended`,
-  serialized `PolicyOperationCoordinator`, Room policy, boot restore, permission UX,
-  82 unit tests per flavor (Milestone 1.2.2).
+  serialized `PolicyOperationCoordinator`, Device Owner loss recovery, verified
+  Emergency notifications, Room policy, boot restore, permission UX, 103 unit
+  tests per flavor (Milestone 1.2.3).
 - Database: 3 migrations, RLS, server-owned focus sessions, reward RPCs, 74
   automated checks on PGlite.
 - Web dashboard (local dev): 6 screens running against PGlite (`LOCAL_USER_ID`,
@@ -31,7 +32,7 @@ Acceptance evidence:
 | Windows capability probe | 5 passed, 0 failed, 3 skipped (headless); 6 passed / 0 failed / 2 skipped (interactive) |
 | Windows live monitor | event captured and persisted in interactive session (~1 ms decision/apply) |
 | Database verification | 74 passed, 0 failed (PGlite, 3 migrations, incl. multi-device checks) |
-| Android build & unit tests | `personalDebug` & `managedDebug` built (JDK 17 + SDK 36); 82/82 unit tests per flavor; **physical device (Redmi Note 13 / Android 15) pending** |
+| Android build & unit tests | `personalDebug` & `managedDebug` built (JDK 17 + SDK 36); 103/103 unit tests per flavor; **physical device (Redmi Note 13 / Android 15) pending** |
 | Web dashboard | `typecheck` + `next build` pass; 6/6 routes HTTP 200 locally (PGlite) |
 | Hosted Supabase | not run: no project credentials |
 

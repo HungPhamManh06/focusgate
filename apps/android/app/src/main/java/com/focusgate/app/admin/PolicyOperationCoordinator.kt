@@ -147,7 +147,7 @@ class PolicyOperationCoordinator(
 
     suspend fun setManagedMode(enabled: Boolean): PolicyOperationOutcome = mutex.withLock {
         val before = store.readRuntimeState()
-        if (!before.deviceOwner) {
+        if (enabled && !before.deviceOwner) {
             return@withLock PolicyOperationOutcome(
                 state = before,
                 audit = computeAudit(before),
@@ -160,8 +160,18 @@ class PolicyOperationCoordinator(
             store.setMonitorEnabled(true)
         }
         val outcome = reconcileLocked(if (enabled) "enable_managed" else "disable_managed")
-        if (!enabled && outcome.applyResult != null) {
-            outcome.copy(bannerMessage = outcome.applyResult.message)
+        if (!enabled) {
+            val banner = when {
+                !outcome.state.deviceOwner && outcome.audit.unknownPackages.isNotEmpty() ->
+                    "Switched to Personal Mode, but ${outcome.audit.unknownPackages.size} app(s) cannot be verified or resumed without Device Owner."
+                !outcome.state.deviceOwner ->
+                    "Switched to Personal Mode."
+                outcome.applyResult != null ->
+                    outcome.applyResult.message
+                else ->
+                    "Switched to Personal Mode."
+            }
+            outcome.copy(bannerMessage = banner)
         } else {
             outcome
         }
@@ -170,10 +180,8 @@ class PolicyOperationCoordinator(
     suspend fun startEmergency(minutes: Int): PolicyOperationOutcome = mutex.withLock {
         store.startEmergency(minutes)
         val outcome = reconcileLocked("start_emergency")
-        outcome.copy(
-            bannerMessage = outcome.applyResult?.takeIf { !it.applied }?.message
-                ?: "Emergency access is active. Restrictions resume automatically.",
-        )
+        val presentation = EmergencyStatusEvaluator.evaluate(outcome)
+        outcome.copy(bannerMessage = presentation.message)
     }
 
     suspend fun endEmergency(): PolicyOperationOutcome = mutex.withLock {
@@ -253,7 +261,9 @@ class PolicyOperationCoordinator(
         if (!store.isManagedFlavor()) {
             return ManagedPolicyAudit(deviceOwnerValid = false)
         }
-        val required = if (state.managedEnabled) {
+        // During Emergency Access, Managed DPM target is empty so any apps
+        // remaining suspended are reported as extra/lingering rather than required.
+        val required = if (state.managedEnabled && !state.emergencyActive) {
             PolicyEvaluator.effectiveBlocked(
                 blockedPackages = state.savedBlocked,
                 exemptPackages = state.savedExempt,

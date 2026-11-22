@@ -11,6 +11,9 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import com.focusgate.app.FocusGateApp
+import com.focusgate.app.admin.EmergencyPresentationState
+import com.focusgate.app.admin.EmergencyStatusEvaluator
+import com.focusgate.app.admin.EmergencyStatusPresentation
 import com.focusgate.app.data.BlockedApp
 import com.focusgate.app.data.FocusGateDatabase
 import com.focusgate.app.data.UsageEvent
@@ -73,6 +76,9 @@ class AppUsageMonitorService : Service() {
     private var suppressedPackage: String? = null
     @Volatile
     private var suppressedUntil = 0L
+
+    @Volatile
+    private var lastEmergencyPresentation: EmergencyStatusPresentation? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -156,8 +162,17 @@ class AppUsageMonitorService : Service() {
         val usageGranted = PermissionChecks.hasUsageAccess(this)
         val overlayGranted = PermissionChecks.hasOverlayAccess(this)
         val emergencyActive = EmergencyAccess.isActive(this)
+        if (!emergencyActive) {
+            lastEmergencyPresentation = null
+        }
 
-        Notifications.updateMonitorNotification(this, usageGranted, overlayGranted, emergencyActive)
+        Notifications.updateMonitorNotification(
+            context = this,
+            usageGranted = usageGranted,
+            overlayGranted = overlayGranted,
+            emergencyActive = emergencyActive,
+            emergencyPresentation = lastEmergencyPresentation,
+        )
         reportPermissionTransitions(usageGranted, overlayGranted)
 
         if (!usageGranted || !overlayGranted) {
@@ -379,10 +394,36 @@ class AppUsageMonitorService : Service() {
         hideOverlayNow()
         lastShownBlockFor = null
         scope.launch {
-            FocusGateApp.coordinator(this@AppUsageMonitorService)
-                .startEmergency(EmergencyAccess.DEFAULT_MINUTES)
+            val presentation = try {
+                val outcome = withContext(Dispatchers.IO) {
+                    FocusGateApp.coordinator(this@AppUsageMonitorService)
+                        .startEmergency(EmergencyAccess.DEFAULT_MINUTES)
+                }
+                EmergencyStatusEvaluator.evaluate(outcome)
+            } catch (throwable: Throwable) {
+                Log.w(TAG, "Emergency start failed", throwable)
+                EmergencyStatusEvaluator.failed(throwable.message)
+            }
+
+            lastEmergencyPresentation = presentation
+            val usageGranted = PermissionChecks.hasUsageAccess(this@AppUsageMonitorService)
+            val overlayGranted = PermissionChecks.hasOverlayAccess(this@AppUsageMonitorService)
+            val isEmergencyActive = presentation.state == EmergencyPresentationState.EMERGENCY_ACTIVE ||
+                presentation.state == EmergencyPresentationState.EMERGENCY_ACTIVE_DEGRADED
+
+            Notifications.updateMonitorNotification(
+                context = this@AppUsageMonitorService,
+                usageGranted = usageGranted,
+                overlayGranted = overlayGranted,
+                emergencyActive = isEmergencyActive,
+                emergencyPresentation = presentation,
+            )
+            if (presentation.state == EmergencyPresentationState.EMERGENCY_ACTIVE_DEGRADED ||
+                presentation.state == EmergencyPresentationState.EMERGENCY_FAILED
+            ) {
+                Notifications.notifyEmergencyIssue(this@AppUsageMonitorService, presentation)
+            }
         }
-        Notifications.updateMonitorNotification(this, true, true, true)
     }
 
     private fun isForegroundEvent(type: Int): Boolean =

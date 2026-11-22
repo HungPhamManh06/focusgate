@@ -135,21 +135,23 @@ object ManagedSuspensionReconciler {
         deviceEssential: Set<String>,
         backend: ManagedSuspensionBackend,
     ): ManagedApplyResult {
-        if (!backend.isDeviceOwner()) {
-            return ManagedApplyResult(
-                applied = false,
-                suspendedPackages = 0,
-                failures = emptyList(),
-                message = "Device Owner provisioning is required for managed enforcement.",
-            )
-        }
-
         val target = PolicyEvaluator.effectiveBlocked(
             blockedPackages = blockedPackages,
             exemptPackages = exemptPackages,
             ownPackage = ownPackage,
             deviceEssential = deviceEssential,
         )
+
+        if (!backend.isDeviceOwner()) {
+            val tracked = backend.loadTrackedSuspended()
+            return ManagedApplyResult(
+                applied = false,
+                suspendedPackages = 0,
+                failures = emptyList(),
+                message = "Device Owner provisioning is required for managed enforcement.",
+                unknownPackages = (tracked + target).toList().sorted(),
+            )
+        }
 
         val tracked = backend.loadTrackedSuspended()
         val before = reconcile(tracked, target, backend)
