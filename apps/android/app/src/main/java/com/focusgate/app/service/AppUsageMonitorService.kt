@@ -1,6 +1,8 @@
 package com.focusgate.app.service
 
+import android.app.AlarmManager
 import android.app.KeyguardManager
+import android.app.PendingIntent
 import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
@@ -9,6 +11,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import com.focusgate.app.FocusGateApp
 import com.focusgate.app.admin.EmergencyPresentationState
@@ -24,6 +27,7 @@ import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.NotificationIds
 import com.focusgate.app.util.Notifications
 import com.focusgate.app.util.PermissionChecks
+import com.focusgate.app.util.ProtectionWatchdog
 import com.focusgate.app.util.SystemPackages
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -117,6 +121,11 @@ class AppUsageMonitorService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        scheduleRestartIfNeeded()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         isRunning = false
         appliedBlockedPackages = emptySet()
@@ -124,7 +133,30 @@ class AppUsageMonitorService : Service() {
         hideOverlayNow()
         scope.cancel()
         started = false
+        scheduleRestartIfNeeded()
         super.onDestroy()
+    }
+
+    private fun scheduleRestartIfNeeded() {
+        if (!AgentPreferences.isMonitorEnabled(this) ||
+            AgentPreferences.isManagedEnforcementEnabled(this)
+        ) {
+            return
+        }
+        val serviceIntent = Intent(applicationContext, AppUsageMonitorService::class.java)
+        val pendingIntent = PendingIntent.getForegroundService(
+            applicationContext,
+            RESTART_REQUEST_CODE,
+            serviceIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val alarmManager = getSystemService(AlarmManager::class.java)
+        alarmManager?.set(
+            AlarmManager.ELAPSED_REALTIME,
+            SystemClock.elapsedRealtime() + RESTART_DELAY_MS,
+            pendingIntent,
+        )
+        ProtectionWatchdog.enqueueImmediateCheck(applicationContext)
     }
 
     private fun applyRules(rules: List<BlockedApp>) {
@@ -439,7 +471,9 @@ class AppUsageMonitorService : Service() {
 
     companion object {
         private const val TAG = "FocusGateMonitor"
-        private const val POLL_INTERVAL_MS = 1_000L
+        private const val POLL_INTERVAL_MS = 500L
+        private const val RESTART_DELAY_MS = 600L
+        private const val RESTART_REQUEST_CODE = 1001
         private const val INITIAL_LOOKBACK_MS = 10_000L
         private const val FAILURE_NOTIFY_INTERVAL_MS = 30_000L
         private const val ESSENTIAL_REFRESH_MS = 60_000L

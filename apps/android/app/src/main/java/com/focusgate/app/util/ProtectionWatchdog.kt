@@ -1,8 +1,12 @@
 package com.focusgate.app.util
 
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -28,6 +32,17 @@ object ProtectionWatchdog {
     fun cancel(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
     }
+
+    fun enqueueImmediateCheck(context: Context) {
+        val request = OneTimeWorkRequestBuilder<ProtectionWatchdogWorker>()
+            .setInitialDelay(2, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "${WORK_NAME}_restart",
+            ExistingWorkPolicy.REPLACE,
+            request,
+        )
+    }
 }
 
 class ProtectionWatchdogWorker(
@@ -51,10 +66,18 @@ class ProtectionWatchdogWorker(
         }
 
         if (!AppUsageMonitorService.isRunning) {
-            Notifications.notifyProtectionLost(
-                context,
-                context.getString(R.string.notification_watchdog_body),
-            )
+            val restarted = runCatching {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, AppUsageMonitorService::class.java),
+                )
+            }.isSuccess
+            if (!restarted || !AppUsageMonitorService.isRunning) {
+                Notifications.notifyProtectionLost(
+                    context,
+                    context.getString(R.string.notification_watchdog_body),
+                )
+            }
         }
         return Result.success()
     }

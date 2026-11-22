@@ -63,6 +63,7 @@ fun BlockOverlayContent(
                 text = stringResource(R.string.blocked_title),
                 color = Color(0xFFEDEFF4),
                 fontSize = 34.sp,
+                lineHeight = 40.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 18.dp, bottom = 14.dp),
             )
