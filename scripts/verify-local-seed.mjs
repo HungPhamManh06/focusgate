@@ -83,8 +83,24 @@ await dbUpgrade.query(
 );
 await dbUpgrade.exec(await readFile(path.join(ROOT, "apps/web/lib/db/local/seed.sql"), "utf8"));
 
+async function setUserSettingsHistory(targetDb, userId, minValid, updatedAtExpr) {
+  await targetDb.exec("alter table public.user_settings disable trigger trg_user_settings_touch");
+  try {
+    await targetDb.query(
+      `update public.user_settings
+       set min_valid_focus_minutes = $2,
+           updated_at = ${updatedAtExpr}
+       where user_id = $1`,
+      [userId, minValid],
+    );
+  } finally {
+    await targetDb.exec("alter table public.user_settings enable trigger trg_user_settings_touch");
+  }
+}
+
 // Create two additional users in the pre-0005 database with active running sessions whose user_settings
 // threshold (60 and 120) exceeds 2x their planned duration (25 and 50), plus a historical invalid session.
+// Set user_settings.updated_at to 5 hours ago (before the sessions started) using the trigger-safe helper.
 const LEGACY_U1 = "77777777-7777-4777-8777-777777777777";
 const LEGACY_U2 = "88888888-8888-4888-8888-888888888888";
 await dbUpgrade.query(
@@ -93,14 +109,8 @@ await dbUpgrade.query(
           ($2, 'legacy2@focusgate.local', '{"display_name":"Legacy Two"}'::jsonb)`,
   [LEGACY_U1, LEGACY_U2],
 );
-await dbUpgrade.query(
-  "update public.user_settings set min_valid_focus_minutes = 60 where user_id = $1",
-  [LEGACY_U1],
-);
-await dbUpgrade.query(
-  "update public.user_settings set min_valid_focus_minutes = 120 where user_id = $1",
-  [LEGACY_U2],
-);
+await setUserSettingsHistory(dbUpgrade, LEGACY_U1, 60, "now() - interval '5 hours'");
+await setUserSettingsHistory(dbUpgrade, LEGACY_U2, 120, "now() - interval '5 hours'");
 const dev1 = (
   await dbUpgrade.query(
     "insert into public.devices (user_id, name, platform) values ($1, 'L1 PC', 'web') returning id",
@@ -148,13 +158,13 @@ const active50_120 = (
   )
 ).rows[0].id;
 
-// Now apply 0005 and 0006
+// Now apply 0005 and 0007 (skipping unguarded 0006, matching applyLocalMigrations safe upgrade path)
 await dbUpgrade.exec(
   await readFile(path.join(migrationsDir, "20260101000005_focus_validity_snapshot.sql"), "utf8"),
 );
 await dbUpgrade.exec(
   await readFile(
-    path.join(migrationsDir, "20260101000006_legacy_snapshot_and_insert_hardening.sql"),
+    path.join(migrationsDir, "20260101000007_focus_snapshot_backfill_safety.sql"),
     "utf8",
   ),
 );
@@ -225,7 +235,7 @@ check(
   JSON.stringify(comp25_60),
 );
 
-// Also test upgrade from the old 0005 (where 25/60 was clamped to 50 and DEFAULT 1 was present) -> 0006 fixes both!
+// Also test upgrade from the old 0005/0006 (where 50/120 was clamped to 100) -> 0007 repairs it cleanly!
 await dbUpgrade.exec("alter table public.focus_sessions disable trigger user");
 await dbUpgrade.query(
   "update public.focus_sessions set min_valid_minutes = 100 where id = $1",
@@ -234,7 +244,7 @@ await dbUpgrade.query(
 await dbUpgrade.exec("alter table public.focus_sessions enable trigger user");
 await dbUpgrade.exec(
   await readFile(
-    path.join(migrationsDir, "20260101000006_legacy_snapshot_and_insert_hardening.sql"),
+    path.join(migrationsDir, "20260101000007_focus_snapshot_backfill_safety.sql"),
     "utf8",
   ),
 );
@@ -244,7 +254,7 @@ const repaired50_120 = (
   ])
 ).rows[0];
 check(
-  "migration 0006 repairs an active session previously clamped to 2x planned (100 -> 120)",
+  "migration 0007 repairs an active session previously clamped to 2x planned (100 -> 120) when settings.updated_at <= started_at",
   repaired50_120.min_valid_minutes === 120,
   JSON.stringify(repaired50_120),
 );

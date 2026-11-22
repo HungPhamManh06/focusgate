@@ -5,7 +5,7 @@ Next.js 15 (App Router) + React 19 + TypeScript + Tailwind CSS v4.
 ## 1. Architecture & Data Layer
 
 - **Server-First Data Access (`apps/web/lib/data/*`):** All reads run in Server Components via `withUser()` (`apps/web/lib/db/index.ts`), which executes queries inside a transaction with `role = authenticated` and `request.jwt.claim.sub` bound to the active user so RLS policies and `SECURITY DEFINER` RPCs behave identically to Supabase PostgREST.
-- **Local PGlite Persistence:** In local development, `.data/postgres` runs embedded PostgreSQL (PGlite) initialized from `supabase/migrations/20260101000001_init.sql` through `20260101000007_focus_snapshot_backfill_safety.sql`. `applyLocalMigrations()` (`apps/web/lib/db/migrations.ts`) tracks applied migrations in `auth.local_meta` (`migration:<filename>`) so existing workspaces upgrade cleanly without deleting data and repeated boots never re-run applied migrations.
+- **Local PGlite Persistence:** In local development, `.data/postgres` runs embedded PostgreSQL (PGlite) initialized from `supabase/migrations/20260101000001_init.sql` through `20260101000007_focus_snapshot_backfill_safety.sql`. `applyLocalMigrations()` (`apps/web/lib/db/migrations.ts`) tracks applied migrations in `auth.local_meta` (`migration:<filename>`) so existing `0005` workspaces mark the unguarded historical `0006` as `superseded_by_0007` and upgrade directly via `0007`, existing `0006` workspaces apply `0007`, and repeated boots never re-run applied migrations. Failed migrations throw before any marker is written, and `0007` is idempotent for crash recovery.
 - **Server Actions (`apps/web/lib/actions/*`):** Mutations validate inputs with Zod (`apps/web/lib/validation.ts`), call PostgreSQL RPCs, and revalidate affected routes.
 
 ## 2. Focus Mode Reliability & Invariants (`/focus`)
@@ -30,8 +30,8 @@ Next.js 15 (App Router) + React 19 + TypeScript + Tailwind CSS v4.
 ## 3. Verification Commands
 
 ```bash
-npm run db:verify                 # Runs migrations 0001..0005 + 100 PGlite security/integrity checks
+npm run db:verify                 # Runs migrations 0001..0007 + 115 PGlite security/integrity checks
 npm run test                      # Runs Node.js unit test suites in apps/web/tests/*.test.ts
 npm run typecheck                 # Runs tsc --noEmit across all workspaces
-npm run build -w @focusgate/web   # Builds production Next.js bundle
+npm run web:build                 # Builds production Next.js bundle
 ```

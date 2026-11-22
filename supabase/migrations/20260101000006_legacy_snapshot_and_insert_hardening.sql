@@ -40,26 +40,36 @@ end $$;
 
 -- ---------------------------------------------------------------------------
 -- 2. Re-backfill legacy active (running/paused) sessions whose threshold was
---    clamped to `planned_minutes * 2` or defaulted to 1, ONLY when
---    `user_settings.updated_at <= focus_sessions.started_at` (meaning the
---    setting was not changed after the session started).
+--    clamped to `planned_minutes * 2` or defaulted to 1, restoring the best
+--    available historical approximation from `user_settings.min_valid_focus_minutes`
+--    without clamping to `planned_minutes * 2`.
 -- ---------------------------------------------------------------------------
 alter table public.focus_sessions disable trigger user;
 
 update public.focus_sessions fs
 set min_valid_minutes = greatest(
     1,
-    least(120, coalesce(s.min_valid_focus_minutes, 1))
+    least(
+        120,
+        coalesce(
+            (select s.min_valid_focus_minutes
+             from public.user_settings s
+             where s.user_id = fs.user_id),
+            1
+        )
+    )
 )
-from public.user_settings s
-where s.user_id = fs.user_id
-  and fs.status in ('running', 'paused')
-  and s.updated_at <= fs.started_at
+where fs.status in ('running', 'paused')
   and (
       fs.min_valid_minutes = fs.planned_minutes * 2
       or fs.min_valid_minutes = 1
   )
-  and fs.min_valid_minutes < coalesce(s.min_valid_focus_minutes, 1);
+  and fs.min_valid_minutes < coalesce(
+      (select s.min_valid_focus_minutes
+       from public.user_settings s
+       where s.user_id = fs.user_id),
+      1
+  );
 
 alter table public.focus_sessions enable trigger user;
 

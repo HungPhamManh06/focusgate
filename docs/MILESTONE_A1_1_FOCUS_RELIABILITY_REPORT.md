@@ -70,14 +70,19 @@ Created forward-only migrations [20260101000005_focus_validity_snapshot.sql](fil
    - **How the timestamp-based safe-repair rule works (`0007` and guarded `0006`):**
      - **Safe to repair (`user_settings.updated_at <= focus_sessions.started_at`):** The user's settings row has not been modified after the session started. Any active session still holding a clamped (`planned_minutes * 2`) or defaulted (`1`) threshold below `user_settings.min_valid_focus_minutes` is repaired to `user_settings.min_valid_focus_minutes` (without clamping to `2 × planned_minutes`).
      - **Ambiguous / Protected (`user_settings.updated_at > focus_sessions.started_at`):** The setting changed *after* the session started. The migration preserves the existing `min_valid_minutes` snapshot untouched and emits a `RAISE NOTICE` reporting the count of ambiguous rows rather than guessing.
-   - **Irrecoverable Historical Limitation:** Sessions created before migration `0005` did not store `min_valid_focus_minutes` at start time. If `0006` already ran on a database before `0007` and overwrote a snapshot, or if settings changed after a pre-0005 session started, the exact original threshold cannot be reconstructed from the database and the migration preserves the available stored value without guessing.
+   - **Conservative Timestamp Assumption & Irrecoverable Historical Limitation:**
+     - `user_settings.updated_at` is updated whenever *any* field in `user_settings` changes (not only `min_valid_focus_minutes`). An unrelated settings edit after a session starts makes `updated_at > started_at`, causing `0007` to skip repairing that row — an intentional conservative false-negative because preserving an uncertain snapshot is safer than guessing.
+     - Sessions created before migration `0005` did not store `min_valid_focus_minutes` at start time. If `0006` already ran on a database before `0007` and overwrote a snapshot, or if settings changed after a pre-0005 session started, the exact original threshold cannot be reconstructed from the database and the migration preserves the available stored value.
 3. **`public.fn_validate_focus_session()`:**
    - On `INSERT`, snapshots `user_settings.min_valid_focus_minutes` whenever `new.min_valid_minutes is null or new.min_valid_minutes < 1`. If an explicit positive value (`1..120`) is supplied (e.g. by `rpc_start_focus_session` or administrative test fixtures), clamps it to `1..120`. (Authenticated clients have `INSERT`/`UPDATE`/`DELETE` revoked on `public.focus_sessions` and can only start sessions through `rpc_start_focus_session`).
    - On `UPDATE`, strictly preserves `old.min_valid_minutes` so the snapshot is immutable after session start.
    - Evaluates validity against the session's `min_valid_minutes` and requires `(new.planned_minutes * 2) >= v_min_valid`.
 4. **Reliable Local Migration Detection ([apps/web/lib/db/migrations.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/migrations.ts) & [apps/web/lib/db/index.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/index.ts)):**
    - Tracks applied migrations via `migration:<filename>` markers in `auth.local_meta`.
-   - Fresh workspaces execute `0001..0007` once and record all markers. Existing workspaces at `0005` or `0006` upgrade incrementally without deleting data, and repeated initializations skip already-marked migrations.
+   - Fresh workspaces execute `0001..0007` once and record all markers.
+   - Existing `0005` workspaces mark the unguarded historical `0006` as `superseded_by_0007` (without executing `0006`'s unsafe backfill) and upgrade directly via `0007`. Existing `0006` workspaces apply `0007`, and repeated initializations are no-ops.
+   - If a migration SQL statement fails, `rollback` runs and no marker is written; `0007` is idempotent so crash recovery between SQL commit and marker insertion is safe.
+   - Note: Migrations `0001..0006` remain immutable historical deployment artifacts (`0006` matches commit `e9a1589815c08f33bb40968b398eafe70a8ece07` exactly).
 
 ---
 
@@ -101,7 +106,7 @@ Created forward-only migrations [20260101000005_focus_validity_snapshot.sql](fil
 ## 5. Regression Test Cases & Results
 
 ### 5.1. PostgreSQL / PGlite Verification (`npm run db:verify` — [scripts/verify-db.mjs](file:///c:/Users/hungv/Downloads/focusgate/scripts/verify-db.mjs))
-All **100 / 100 checks passed**, including 10 new Milestone A1.1 database checks:
+All **115 / 115 checks passed**, including Milestone A1.1 and A1.1.2.1 database checks (`setUserSettingsHistory` fixture helper disabling/re-enabling `trg_user_settings_touch` safely so historical `updated_at` timestamps are genuine):
 1. `A1.1-B1`: `plannedMinutes = 25`, `minValidMinutes = 5` → accepted, snapshots `minValidMinutes = 5`.
 2. `A1.1-B2`: `plannedMinutes = 25`, `minValidMinutes = 50` → accepted (boundary `25 * 2 == 50`), snapshots `minValidMinutes = 50`.
 3. `A1.1-B3`: `plannedMinutes = 25`, `minValidMinutes = 51` → rejected with `invalid_input`.
@@ -112,8 +117,8 @@ All **100 / 100 checks passed**, including 10 new Milestone A1.1 database checks
 8. `A1.1-B8` (via `A6/A7`): Overtime session retains actual elapsed time (`56m`) and applies 2× credit cap (`50m`).
 9. `A1.1-B10`: Legacy session with `min_valid_minutes = 60` and `planned_minutes = 25` is safely marked `isValid = false` with `creditedMinutes = 0` upon completion.
 
-### 5.2. Frontend Unit Tests (`npm run test` — [apps/web/tests/focus-integrity.test.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/tests/focus-integrity.test.ts))
-All **17 / 17 unit tests passed** (`4` in `dashboard-state.test.ts` + `13` in `focus-integrity.test.ts`), covering:
+### 5.2. Frontend & Local Migration Unit Tests (`npm run test` — [apps/web/tests/focus-integrity.test.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/tests/focus-integrity.test.ts), [apps/web/tests/local-migrations.test.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/tests/local-migrations.test.ts))
+All **20 / 20 unit tests passed** (`4` in `dashboard-state.test.ts`, `13` in `focus-integrity.test.ts`, and `3` in `local-migrations.test.ts`), covering:
 - **Complete vs. Cancel Retry Flows (`A1.1-A`):**
   - Complete failure → `complete_error`, label `"Retry end & log session"`, retry calls Complete and never calls Cancel.
   - Cancel failure → `cancel_error`, Cancel dialog stays open, label `"Retry cancel session"`, retry calls Cancel and never calls Complete.
@@ -128,5 +133,5 @@ All **17 / 17 unit tests passed** (`4` in `dashboard-state.test.ts` + `13` in `f
 
 ## 6. Remaining Limitations & Verification Scope
 
-- **Verified in this environment:** Fresh database migration sequence (`0001..0005`) via `npm run db:verify`, seeded workspace verification via `node scripts/verify-local-seed.mjs`, incremental upgrade on existing `.data/postgres` PGlite database, TypeScript typecheck across `packages/shared-contracts` and `apps/web`, unit test suite (`17/17`), and Next.js production build (`npm run build -w @focusgate/web`).
+- **Verified in this environment:** Fresh database migration sequence (`0001..0007`) via `npm run db:verify` (`115/115`), seeded workspace & incremental upgrade verification via `node scripts/verify-local-seed.mjs` (`14/14`), `applyLocalMigrations` fresh/0005/0006/failure-recovery tests (`3/3`), TypeScript typecheck across `packages/shared-contracts` and `apps/web`, unit test suite (`20/20`), and Next.js production build (`npm run web:build`).
 - **Not verified in this environment:** Hosted/remote Supabase deployment (`supabase db reset` against a Docker/cloud Supabase instance) and physical Android/Windows device sync, as no remote Supabase credentials or Docker daemon are configured in this workspace.

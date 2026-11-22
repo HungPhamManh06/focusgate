@@ -1556,24 +1556,58 @@ await asUser(USER_A11, () =>
   db.query("select public.rpc_cancel_focus_session($1)", [caseASessionId]),
 );
 
+async function setUserSettingsHistory(userId, minValid, updatedAtExpr) {
+  return asSuperuser(async () => {
+    await db.exec("alter table public.user_settings disable trigger trg_user_settings_touch");
+    try {
+      await db.query(
+        `update public.user_settings
+         set min_valid_focus_minutes = $2,
+             updated_at = ${updatedAtExpr}
+         where user_id = $1`,
+        [userId, minValid],
+      );
+      const verify = await db.query(
+        `select min_valid_focus_minutes, updated_at,
+                updated_at <= now() - interval '1 minute' as is_historical
+         from public.user_settings
+         where user_id = $1`,
+        [userId],
+      );
+      return verify.rows[0];
+    } finally {
+      await db.exec("alter table public.user_settings enable trigger trg_user_settings_touch");
+    }
+  });
+}
+
 // Case B: Legacy session (planned=25, stored=50, current=60) with settings.updated_at <= started_at
 // CAN be safely repaired to 60.
 let caseBSessionId;
 await asSuperuser(async () => {
-  await db.query(
-    `update public.user_settings
-     set min_valid_focus_minutes = 60, updated_at = now() - interval '2 hours'
-     where user_id = $1`,
-    [USER_A11],
+  const histSettings = await setUserSettingsHistory(
+    USER_A11,
+    60,
+    "now() - interval '2 hours'",
+  );
+  check(
+    "A1.1.2-CaseB fixture: user_settings.updated_at preserved in the past (2h ago)",
+    histSettings.min_valid_focus_minutes === 60 && histSettings.is_historical === true,
+    JSON.stringify(histSettings),
   );
   const inserted = await db.query(
     `insert into public.focus_sessions
        (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
      values ($1, $2, 'a112-case-b-safe-repair', 'pomodoro_25_5', 25, 50, 'running', now() - interval '30 minutes')
-     returning id`,
+     returning id, (select updated_at <= started_at from public.user_settings where user_id = $1) as settings_before_start`,
     [USER_A11, deviceA11],
   );
   caseBSessionId = inserted.rows[0].id;
+  check(
+    "A1.1.2-CaseB fixture: verified settings.updated_at <= started_at before migration",
+    inserted.rows[0].settings_before_start === true,
+    JSON.stringify(inserted.rows[0]),
+  );
   await db.exec(migration0007Sql);
   const afterB = await db.query(
     "select min_valid_minutes from public.focus_sessions where id = $1",
@@ -1595,7 +1629,7 @@ let caseCSessionId;
 await asSuperuser(async () => {
   await db.query(
     `update public.user_settings
-     set min_valid_focus_minutes = 60, updated_at = now()
+     set min_valid_focus_minutes = 60
      where user_id = $1`,
     [USER_A11],
   );
@@ -1603,10 +1637,15 @@ await asSuperuser(async () => {
     `insert into public.focus_sessions
        (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
      values ($1, $2, 'a112-case-c-ambiguous', 'pomodoro_25_5', 25, 50, 'running', now() - interval '30 minutes')
-     returning id`,
+     returning id, (select updated_at > started_at from public.user_settings where user_id = $1) as settings_after_start`,
     [USER_A11, deviceA11],
   );
   caseCSessionId = inserted.rows[0].id;
+  check(
+    "A1.1.2-CaseC fixture: verified settings.updated_at > started_at before migration",
+    inserted.rows[0].settings_after_start === true,
+    JSON.stringify(inserted.rows[0]),
+  );
   await db.exec(migration0007Sql);
   const afterC = await db.query(
     "select min_valid_minutes from public.focus_sessions where id = $1",
@@ -1626,20 +1665,29 @@ await asUser(USER_A11, () =>
 // Safely repairs to 120 without clamping to 100.
 let caseDSessionId;
 await asSuperuser(async () => {
-  await db.query(
-    `update public.user_settings
-     set min_valid_focus_minutes = 120, updated_at = now() - interval '3 hours'
-     where user_id = $1`,
-    [USER_A11],
+  const histSettingsD = await setUserSettingsHistory(
+    USER_A11,
+    120,
+    "now() - interval '3 hours'",
+  );
+  check(
+    "A1.1.2-CaseD fixture: user_settings.updated_at preserved in the past (3h ago)",
+    histSettingsD.min_valid_focus_minutes === 120 && histSettingsD.is_historical === true,
+    JSON.stringify(histSettingsD),
   );
   const inserted = await db.query(
     `insert into public.focus_sessions
        (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
      values ($1, $2, 'a112-case-d-50-120', 'pomodoro_50_10', 50, 100, 'running', now() - interval '20 minutes')
-     returning id`,
+     returning id, (select updated_at <= started_at from public.user_settings where user_id = $1) as settings_before_start`,
     [USER_A11, deviceA11],
   );
   caseDSessionId = inserted.rows[0].id;
+  check(
+    "A1.1.2-CaseD fixture: verified settings.updated_at <= started_at before migration",
+    inserted.rows[0].settings_before_start === true,
+    JSON.stringify(inserted.rows[0]),
+  );
   await db.exec(migration0007Sql);
   const afterD = await db.query(
     "select min_valid_minutes from public.focus_sessions where id = $1",
