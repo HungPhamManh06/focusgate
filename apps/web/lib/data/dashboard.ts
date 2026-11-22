@@ -5,6 +5,7 @@ import {
   selectNextMoveFromTasks,
   type NextMoveCandidateResult,
 } from "@/lib/domain/dashboard-state";
+import { getSupabaseContext, unwrapSupabase } from "@/lib/supabase/data-client";
 import { toIso } from "./format";
 import type { Plan, Task } from "./types";
 
@@ -43,6 +44,23 @@ function mapTaskRow(row: TaskSelectRow): Task {
 }
 
 export async function getUpcomingTasks(limit = 4): Promise<Task[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("tasks")
+        .select(
+          "id, title, description, category, kind, priority, estimated_minutes, required_focus_minutes, due_date, status, completed_at, created_at",
+        )
+        .eq("user_id", ctx.userId)
+        .in("status", ["todo", "in_progress"])
+        .not("due_date", "is", null)
+        .order("due_date", { ascending: true })
+        .limit(limit),
+    ) as TaskSelectRow[];
+    return rows.map(mapTaskRow);
+  }
+
   return withUser(async (db) => {
     const result = await db.query<TaskSelectRow>(
       `select id, title, description, category, kind, priority,
@@ -59,7 +77,49 @@ export async function getUpcomingTasks(limit = 4): Promise<Task[]> {
   });
 }
 
+const KIND_ORDER: Record<Task["kind"], number> = { must_do: 0, should_do: 1, bonus: 2 };
+const PRIORITY_ORDER: Record<Task["priority"], number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
 export async function getNextMoveCandidate(plan: Plan | null): Promise<NextMoveSuggestion | null> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("tasks")
+        .select(
+          "id, title, description, category, kind, priority, estimated_minutes, required_focus_minutes, due_date, status, completed_at, created_at",
+        )
+        .eq("user_id", ctx.userId)
+        .in("status", ["todo", "in_progress"]),
+    ) as TaskSelectRow[];
+
+    const openTasks = rows
+      .map(mapTaskRow)
+      .sort((a, b) => {
+        const kindDiff = (KIND_ORDER[a.kind] ?? 2) - (KIND_ORDER[b.kind] ?? 2);
+        if (kindDiff !== 0) return kindDiff;
+        if (a.dueDate && b.dueDate) {
+          const dueDiff = a.dueDate.localeCompare(b.dueDate);
+          if (dueDiff !== 0) return dueDiff;
+        } else if (a.dueDate) {
+          return -1;
+        } else if (b.dueDate) {
+          return 1;
+        }
+        const priorityDiff = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
+        if (priorityDiff !== 0) return priorityDiff;
+        return a.createdAt.localeCompare(b.createdAt);
+      })
+      .slice(0, 30);
+
+    return selectNextMoveFromTasks(openTasks, plan);
+  }
+
   return withUser(async (db) => {
     const openResult = await db.query<TaskSelectRow>(
       `select id, title, description, category, kind, priority,

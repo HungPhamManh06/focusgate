@@ -1,6 +1,12 @@
 import "server-only";
 
 import { LOCAL_USER_ID, withUser } from "@/lib/db";
+import {
+  getSupabaseContext,
+  getSupabaseUserTimezone,
+  localDateInTimezone,
+  unwrapSupabase,
+} from "@/lib/supabase/data-client";
 import type { DayPoint, Statistics } from "./types";
 
 interface DayRow {
@@ -10,8 +16,140 @@ interface DayRow {
   entertainment_seconds: number;
 }
 
+function buildDayKeys(timezone: string, period: number): string[] {
+  const todayStr = localDateInTimezone(timezone);
+  const anchor = new Date(`${todayStr}T12:00:00Z`).getTime();
+  const keys: string[] = [];
+  for (let i = period - 1; i >= 0; i -= 1) {
+    keys.push(new Date(anchor - i * 86_400_000).toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
 export async function getStatistics(periodDays: number): Promise<Statistics> {
   const period = [7, 30, 90].includes(periodDays) ? periodDays : 7;
+
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+    const dayKeys = buildDayKeys(timezone, period);
+    const startDayKey = dayKeys[0]!;
+    // Fetch slightly wider window (-1 day) in UTC so timezone offsets are covered cleanly.
+    const cutoffIso = new Date(
+      new Date(`${startDayKey}T00:00:00Z`).getTime() - 86_400_000,
+    ).toISOString();
+
+    const [focusRes, taskRes, usageRes] = await Promise.all([
+      ctx.supabase
+        .from("focus_sessions")
+        .select("started_at, credited_minutes, is_valid")
+        .eq("user_id", ctx.userId)
+        .eq("status", "completed")
+        .gte("started_at", cutoffIso),
+      ctx.supabase
+        .from("tasks")
+        .select("status, completed_at")
+        .eq("user_id", ctx.userId)
+        .in("status", ["todo", "in_progress", "completed"]),
+      ctx.supabase
+        .from("usage_events")
+        .select("started_at, duration_seconds")
+        .eq("user_id", ctx.userId)
+        .gte("started_at", cutoffIso),
+    ]);
+
+    const focusRows = unwrapSupabase(focusRes) as Array<{
+      started_at: string;
+      credited_minutes: number;
+      is_valid: boolean;
+    }>;
+    const taskRows = unwrapSupabase(taskRes) as Array<{
+      status: string;
+      completed_at: string | null;
+    }>;
+    const usageRows = unwrapSupabase(usageRes) as Array<{
+      started_at: string;
+      duration_seconds: number;
+    }>;
+
+    const dayMap = new Map<string, { focus: number; tasks: number; usageSeconds: number }>();
+    for (const key of dayKeys) {
+      dayMap.set(key, { focus: 0, tasks: 0, usageSeconds: 0 });
+    }
+
+    let focusMinutes = 0;
+    let sessionCount = 0;
+    let validCount = 0;
+    for (const row of focusRows) {
+      const day = localDateInTimezone(timezone, new Date(row.started_at));
+      if (day < startDayKey) continue;
+      sessionCount += 1;
+      if (row.is_valid) {
+        validCount += 1;
+        focusMinutes += row.credited_minutes;
+        const bucket = dayMap.get(day);
+        if (bucket) bucket.focus += row.credited_minutes;
+      }
+    }
+
+    let completedTasks = 0;
+    let openTasks = 0;
+    for (const row of taskRows) {
+      if (row.status === "todo" || row.status === "in_progress") {
+        openTasks += 1;
+      } else if (row.status === "completed" && row.completed_at) {
+        const day = localDateInTimezone(timezone, new Date(row.completed_at));
+        if (day >= startDayKey) {
+          completedTasks += 1;
+          const bucket = dayMap.get(day);
+          if (bucket) bucket.tasks += 1;
+        }
+      }
+    }
+
+    let entertainmentSeconds = 0;
+    for (const row of usageRows) {
+      const day = localDateInTimezone(timezone, new Date(row.started_at));
+      if (day < startDayKey) continue;
+      entertainmentSeconds += row.duration_seconds;
+      const bucket = dayMap.get(day);
+      if (bucket) bucket.usageSeconds += row.duration_seconds;
+    }
+
+    const days: DayPoint[] = dayKeys.map((key) => {
+      const bucket = dayMap.get(key) ?? { focus: 0, tasks: 0, usageSeconds: 0 };
+      return {
+        date: key,
+        label: new Intl.DateTimeFormat("en-GB", {
+          day: "numeric",
+          month: "short",
+          timeZone: "UTC",
+        }).format(new Date(`${key}T12:00:00Z`)),
+        focusMinutes: bucket.focus,
+        tasksCompleted: bucket.tasks,
+        entertainmentMinutes: Math.round(bucket.usageSeconds / 60),
+      };
+    });
+
+    const totalDecided = completedTasks + openTasks;
+    const bestDay = days.reduce<DayPoint | null>((best, day) => {
+      if (!best || day.focusMinutes > best.focusMinutes) return day;
+      return best;
+    }, null);
+
+    return {
+      days,
+      periodDays: period,
+      focusMinutes,
+      sessionCount,
+      tasksCompleted: completedTasks,
+      openTasks,
+      completionRate: totalDecided > 0 ? Math.round((completedTasks / totalDecided) * 100) : 0,
+      entertainmentMinutes: Math.round(entertainmentSeconds / 60),
+      validRate: sessionCount > 0 ? Math.round((validCount / sessionCount) * 100) : 0,
+      bestDay: bestDay && bestDay.focusMinutes > 0 ? bestDay : null,
+    };
+  }
 
   return withUser(async (db) => {
     const timezoneResult = await db.query<{ timezone: string }>(

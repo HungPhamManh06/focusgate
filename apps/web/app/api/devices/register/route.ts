@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const device = await upsertDeviceRegistration(parsed.data);
+    const device = await upsertDeviceRegistration(parsed.data, request);
     return NextResponse.json({
       deviceId: device.id,
       name: device.name,

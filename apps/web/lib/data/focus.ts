@@ -1,6 +1,13 @@
 import "server-only";
 
 import { LOCAL_USER_ID, withUser } from "@/lib/db";
+import {
+  assertSupabaseOk,
+  getSupabaseContext,
+  getSupabaseUserTimezone,
+  localDateInTimezone,
+  unwrapSupabase,
+} from "@/lib/supabase/data-client";
 import { toIso } from "./format";
 import type { FocusMode, FocusSession } from "./types";
 
@@ -67,7 +74,35 @@ const SESSION_SELECT = `
   left join public.tasks t on t.id = fs.task_id
 `;
 
+const SUPABASE_SESSION_SELECT =
+  "id, task_id, daily_plan_id, mode, planned_minutes, min_valid_minutes, actual_minutes, credited_minutes, status, started_at, ended_at, paused_at, paused_seconds, interruption_count, is_valid, tasks(title)";
+
+type SupabaseSessionRow = Omit<SessionRow, "task_title"> & {
+  tasks?: { title: string } | Array<{ title: string }> | null;
+};
+
+function mapSupabaseSession(row: SupabaseSessionRow): FocusSession {
+  const taskTitle = Array.isArray(row.tasks)
+    ? (row.tasks[0]?.title ?? null)
+    : (row.tasks?.title ?? null);
+  return mapSession({ ...row, task_title: taskTitle });
+}
+
 export async function getActiveSession(): Promise<FocusSession | null> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("focus_sessions")
+        .select(SUPABASE_SESSION_SELECT)
+        .eq("user_id", ctx.userId)
+        .in("status", ["running", "paused"])
+        .order("started_at", { ascending: false })
+        .limit(1),
+    ) as SupabaseSessionRow[];
+    return rows[0] ? mapSupabaseSession(rows[0]) : null;
+  }
+
   return withUser(async (db) => {
     const result = await db.query<SessionRow>(
       `${SESSION_SELECT}
@@ -80,6 +115,26 @@ export async function getActiveSession(): Promise<FocusSession | null> {
 }
 
 export async function getTodaySessions(limit = 12): Promise<FocusSession[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+    const today = localDateInTimezone(timezone);
+    const cutoffIso = new Date(Date.now() - 48 * 3600_000).toISOString();
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("focus_sessions")
+        .select(SUPABASE_SESSION_SELECT)
+        .eq("user_id", ctx.userId)
+        .gte("started_at", cutoffIso)
+        .order("started_at", { ascending: false }),
+    ) as SupabaseSessionRow[];
+
+    return rows
+      .filter((row) => localDateInTimezone(timezone, new Date(row.started_at)) === today)
+      .slice(0, limit)
+      .map(mapSupabaseSession);
+  }
+
   return withUser(async (db) => {
     const result = await db.query<SessionRow>(
       `${SESSION_SELECT}
@@ -95,6 +150,20 @@ export async function getTodaySessions(limit = 12): Promise<FocusSession[]> {
 }
 
 export async function getRecentSessions(limit = 6): Promise<FocusSession[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("focus_sessions")
+        .select(SUPABASE_SESSION_SELECT)
+        .eq("user_id", ctx.userId)
+        .eq("status", "completed")
+        .order("started_at", { ascending: false })
+        .limit(limit),
+    ) as SupabaseSessionRow[];
+    return rows.map(mapSupabaseSession);
+  }
+
   return withUser(async (db) => {
     const result = await db.query<SessionRow>(
       `${SESSION_SELECT}
@@ -107,6 +176,34 @@ export async function getRecentSessions(limit = 6): Promise<FocusSession[]> {
 }
 
 export async function getTodayFocusSummary(): Promise<FocusSummary> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+    const today = localDateInTimezone(timezone);
+    const cutoffIso = new Date(Date.now() - 48 * 3600_000).toISOString();
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("focus_sessions")
+        .select("started_at, credited_minutes, is_valid")
+        .eq("user_id", ctx.userId)
+        .eq("status", "completed")
+        .gte("started_at", cutoffIso),
+    ) as Array<{ started_at: string; credited_minutes: number; is_valid: boolean }>;
+
+    let minutes = 0;
+    let sessions = 0;
+    let validSessions = 0;
+    for (const row of rows) {
+      if (localDateInTimezone(timezone, new Date(row.started_at)) !== today) continue;
+      sessions += 1;
+      if (row.is_valid) {
+        validSessions += 1;
+        minutes += row.credited_minutes;
+      }
+    }
+    return { minutes, sessions, validSessions };
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{ minutes: number; sessions: number; valid: number }>(
       `select coalesce(sum(credited_minutes) filter (where is_valid), 0)::int as minutes,
@@ -123,7 +220,66 @@ export async function getTodayFocusSummary(): Promise<FocusSummary> {
   });
 }
 
+const PRIORITY_ORDER: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
 export async function getFocusCandidates(): Promise<FocusCandidate[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+    const today = localDateInTimezone(timezone);
+    const [taskRes, todayPlanRes] = await Promise.all([
+      ctx.supabase
+        .from("tasks")
+        .select("id, title, kind, priority, required_focus_minutes, created_at")
+        .eq("user_id", ctx.userId)
+        .in("status", ["todo", "in_progress"]),
+      ctx.supabase
+        .from("daily_plan_tasks")
+        .select("task_id, daily_plans!inner(plan_date)")
+        .eq("user_id", ctx.userId)
+        .eq("daily_plans.plan_date", today),
+    ]);
+    const taskRows = unwrapSupabase(taskRes) as Array<{
+      id: string;
+      title: string;
+      kind: FocusCandidate["kind"];
+      priority: string;
+      required_focus_minutes: number;
+      created_at: string;
+    }>;
+    const todayPlanRows = unwrapSupabase(todayPlanRes) as Array<{ task_id: string }>;
+
+    const todayTaskIds = new Set(todayPlanRows.map((row) => row.task_id));
+    return taskRows
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        kind: row.kind,
+        requiredFocusMinutes: row.required_focus_minutes,
+        inTodayPlan: todayTaskIds.has(row.id),
+        _priority: PRIORITY_ORDER[row.priority] ?? 3,
+        _createdAt: row.created_at,
+      }))
+      .sort((a, b) => {
+        if (a.inTodayPlan !== b.inTodayPlan) return a.inTodayPlan ? -1 : 1;
+        if (a._priority !== b._priority) return a._priority - b._priority;
+        return b._createdAt.localeCompare(a._createdAt);
+      })
+      .slice(0, 30)
+      .map(({ id, title, kind, requiredFocusMinutes, inTodayPlan }) => ({
+        id,
+        title,
+        kind,
+        requiredFocusMinutes,
+        inTodayPlan,
+      }));
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{
       id: string;
@@ -165,6 +321,54 @@ export async function startFocusSession(input: {
   mode: FocusMode;
   plannedMinutes: number;
 }): Promise<{ id: string }> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const devices = unwrapSupabase(
+      await ctx.supabase
+        .from("devices")
+        .select("id")
+        .eq("user_id", ctx.userId)
+        .eq("status", "active")
+        .order("created_at", { ascending: true })
+        .limit(1),
+    ) as Array<{ id: string }>;
+
+    if (!devices[0]) {
+      throw new Error("Register an active device before starting a focus session.");
+    }
+
+    let planId: string | null = null;
+    if (input.taskId) {
+      const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+      const today = localDateInTimezone(timezone);
+      const planTasks = unwrapSupabase(
+        await ctx.supabase
+          .from("daily_plan_tasks")
+          .select("plan_id, daily_plans!inner(status, plan_date)")
+          .eq("user_id", ctx.userId)
+          .eq("task_id", input.taskId)
+          .in("daily_plans.status", ["draft", "confirmed", "active"])
+          .eq("daily_plans.plan_date", today)
+          .limit(1),
+      ) as Array<{ plan_id: string }>;
+      planId = planTasks[0]?.plan_id ?? null;
+    }
+
+    const payload = unwrapSupabase(
+      await ctx.supabase.rpc("rpc_start_focus_session", {
+        p_device_id: devices[0].id,
+        p_client_id: `web-${crypto.randomUUID()}`,
+        p_planned_minutes: input.plannedMinutes,
+        p_mode: input.mode,
+        p_task_id: input.taskId,
+        p_daily_plan_id: planId,
+      }),
+      "Could not start the focus session.",
+    ) as { sessionId: string };
+
+    return { id: payload.sessionId };
+  }
+
   return withUser(async (db) => {
     const device = await db.query<{ id: string }>(
       `select id from public.devices
@@ -212,6 +416,14 @@ export async function startFocusSession(input: {
 }
 
 export async function cancelFocusSession(sessionId: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(
+      await ctx.supabase.rpc("rpc_cancel_focus_session", { p_session_id: sessionId }),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query("select public.rpc_cancel_focus_session($1)", [sessionId]);
   });
@@ -221,6 +433,19 @@ export async function pauseFocusSession(sessionId: string): Promise<{
   pausedAt: string;
   pausedSeconds: number;
 }> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const payload = (
+      await ctx.supabase.rpc("rpc_pause_focus_session", { p_session_id: sessionId })
+    );
+    assertSupabaseOk(payload);
+    const data = payload.data as { pausedAt?: string; pausedSeconds?: number } | null;
+    return {
+      pausedAt: data?.pausedAt ?? new Date().toISOString(),
+      pausedSeconds: Math.max(0, data?.pausedSeconds ?? 0),
+    };
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{
       result: { pausedAt?: string; pausedSeconds?: number };
@@ -236,6 +461,16 @@ export async function pauseFocusSession(sessionId: string): Promise<{
 export async function resumeFocusSession(sessionId: string): Promise<{
   pausedSeconds: number;
 }> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const payload = await ctx.supabase.rpc("rpc_resume_focus_session", {
+      p_session_id: sessionId,
+    });
+    assertSupabaseOk(payload);
+    const data = payload.data as { pausedSeconds?: number } | null;
+    return { pausedSeconds: Math.max(0, data?.pausedSeconds ?? 0) };
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{
       result: { pausedSeconds?: number };
@@ -258,6 +493,36 @@ export async function completeFocusSession(
   isValid: boolean;
   idempotent: boolean;
 }> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const payload = unwrapSupabase(
+      await ctx.supabase.rpc("rpc_complete_focus_session", { p_session_id: sessionId }),
+      "This session is no longer active.",
+    ) as {
+      sessionId: string;
+      actualMinutes: number;
+      creditedMinutes?: number;
+      plannedMinutes?: number;
+      minValidMinutes?: number;
+      isValid: boolean;
+      idempotent?: boolean;
+    };
+    const plannedMinutes = payload.plannedMinutes ?? payload.actualMinutes;
+    const minValidMinutes = Math.max(1, payload.minValidMinutes ?? 1);
+    const creditedMinutes =
+      payload.creditedMinutes ??
+      (payload.isValid ? Math.min(payload.actualMinutes, plannedMinutes * 2) : 0);
+    return {
+      sessionId: payload.sessionId,
+      actualMinutes: payload.actualMinutes,
+      creditedMinutes,
+      plannedMinutes,
+      minValidMinutes,
+      isValid: payload.isValid,
+      idempotent: Boolean(payload.idempotent),
+    };
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{
       result: {

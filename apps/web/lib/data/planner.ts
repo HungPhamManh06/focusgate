@@ -1,6 +1,14 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { LOCAL_USER_ID, withUser, type Db } from "@/lib/db";
+import {
+  assertSupabaseOk,
+  getSupabaseContext,
+  getSupabaseUserTimezone,
+  localDateInTimezone,
+  unwrapSupabase,
+} from "@/lib/supabase/data-client";
 import { toIso } from "./format";
 import type {
   Plan,
@@ -137,7 +145,160 @@ async function loadPlan(db: Db, planId: string): Promise<Plan | null> {
   };
 }
 
+const KIND_ORDER: Record<TaskKind, number> = { must_do: 0, should_do: 1, bonus: 2 };
+const PRIORITY_ORDER: Record<Task["priority"], number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+async function loadPlanSupabase(
+  supabase: SupabaseClient,
+  userId: string,
+  planId: string,
+): Promise<Plan | null> {
+  const { data: planRow, error: planErr } = await supabase
+    .from("daily_plans")
+    .select("id, plan_date, status, confirmed_at, activated_at, completed_at")
+    .eq("id", planId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (planErr) throw new Error(planErr.message);
+  if (!planRow) return null;
+
+  const [tasksRes, focusRes, progressRes, eventsRes] = await Promise.all([
+    supabase
+      .from("daily_plan_tasks")
+      .select(
+        "id, task_id, kind, required_focus_minutes, completed_at, sort_order, created_at, tasks!inner(title, description, status, priority)",
+      )
+      .eq("plan_id", planId)
+      .eq("user_id", userId),
+    supabase
+      .from("focus_sessions")
+      .select("task_id, credited_minutes")
+      .eq("user_id", userId)
+      .eq("daily_plan_id", planId)
+      .eq("is_valid", true),
+    supabase
+      .from("v_plan_progress")
+      .select(
+        "must_do_total, must_do_completed, must_do_focus_required, must_do_focus_done, bonus_completed",
+      )
+      .eq("plan_id", planId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("daily_plan_events")
+      .select("id, event_type, reason, created_at")
+      .eq("plan_id", planId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(12),
+  ]);
+
+  const rawTasks = unwrapSupabase(tasksRes) as Array<{
+    id: string;
+    task_id: string;
+    kind: TaskKind;
+    required_focus_minutes: number;
+    completed_at: string | null;
+    sort_order: number;
+    created_at: string;
+    tasks:
+      | { title: string; description: string | null; status: PlanTask["status"]; priority: PlanTask["priority"] }
+      | Array<{ title: string; description: string | null; status: PlanTask["status"]; priority: PlanTask["priority"] }>;
+  }>;
+  const focusRows = unwrapSupabase(focusRes) as Array<{
+    task_id: string | null;
+    credited_minutes: number;
+  }>;
+  if (progressRes.error) throw new Error(progressRes.error.message);
+  const eventRows = unwrapSupabase(eventsRes) as EventRow[];
+
+  const focusByTask = new Map<string, number>();
+  for (const row of focusRows) {
+    if (!row.task_id) continue;
+    focusByTask.set(row.task_id, (focusByTask.get(row.task_id) ?? 0) + row.credited_minutes);
+  }
+
+  const tasks: PlanTask[] = rawTasks
+    .sort((a, b) => {
+      const kindDiff = (KIND_ORDER[a.kind] ?? 2) - (KIND_ORDER[b.kind] ?? 2);
+      if (kindDiff !== 0) return kindDiff;
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+      return a.created_at.localeCompare(b.created_at);
+    })
+    .map((item) => {
+      const task = Array.isArray(item.tasks) ? item.tasks[0]! : item.tasks;
+      return {
+        id: item.id,
+        taskId: item.task_id,
+        kind: item.kind,
+        requiredFocusMinutes: item.required_focus_minutes,
+        completedAt: toIso(item.completed_at),
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        priority: task.priority,
+        focusDone: focusByTask.get(item.task_id) ?? 0,
+      };
+    });
+
+  const events: PlanEvent[] = eventRows.map((event) => ({
+    id: event.id,
+    eventType: event.event_type,
+    reason: event.reason,
+    createdAt: toIso(event.created_at) ?? new Date().toISOString(),
+  }));
+
+  const p = progressRes.data as {
+    must_do_total: number;
+    must_do_completed: number;
+    must_do_focus_required: number;
+    must_do_focus_done: number;
+    bonus_completed: number;
+  } | null;
+
+  return {
+    id: planRow.id as string,
+    planDate: String(planRow.plan_date).slice(0, 10),
+    status: planRow.status as PlanStatus,
+    confirmedAt: toIso(planRow.confirmed_at as string | null),
+    activatedAt: toIso(planRow.activated_at as string | null),
+    completedAt: toIso(planRow.completed_at as string | null),
+    tasks,
+    events,
+    progress: mapProgress(
+      p
+        ? {
+            must_do_total: p.must_do_total,
+            must_do_completed: p.must_do_completed,
+            focus_required: p.must_do_focus_required,
+            focus_done: p.must_do_focus_done,
+            bonus_completed: p.bonus_completed,
+          }
+        : undefined,
+    ),
+  };
+}
+
 export async function getTodayPlan(): Promise<Plan | null> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+    const today = localDateInTimezone(timezone);
+    const { data, error } = await ctx.supabase
+      .from("daily_plans")
+      .select("id")
+      .eq("user_id", ctx.userId)
+      .eq("plan_date", today)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data?.id ? loadPlanSupabase(ctx.supabase, ctx.userId, data.id as string) : null;
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{ id: string }>(
       `select p.id
@@ -154,10 +315,81 @@ export async function getTodayPlan(): Promise<Plan | null> {
 }
 
 export async function getPlanById(planId: string): Promise<Plan | null> {
+  const ctx = await getSupabaseContext();
+  if (ctx) return loadPlanSupabase(ctx.supabase, ctx.userId, planId);
   return withUser((db) => loadPlan(db, planId));
 }
 
 export async function getPlannerBacklog(planId: string | null): Promise<Task[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    let excludedIds = new Set<string>();
+    if (planId) {
+      const existing = unwrapSupabase(
+        await ctx.supabase
+          .from("daily_plan_tasks")
+          .select("task_id")
+          .eq("plan_id", planId)
+          .eq("user_id", ctx.userId),
+      ) as Array<{ task_id: string }>;
+      excludedIds = new Set(existing.map((row) => row.task_id));
+    }
+
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("tasks")
+        .select(
+          "id, title, description, category, kind, priority, estimated_minutes, required_focus_minutes, due_date, status, completed_at, created_at",
+        )
+        .eq("user_id", ctx.userId)
+        .in("status", ["todo", "in_progress"]),
+    ) as Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      category: Task["category"];
+      kind: TaskKind;
+      priority: Task["priority"];
+      estimated_minutes: number;
+      required_focus_minutes: number;
+      due_date: string | null;
+      status: Task["status"];
+      completed_at: string | null;
+      created_at: string;
+    }>;
+
+    return rows
+      .filter((row) => !excludedIds.has(row.id))
+      .map((task) => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        category: task.category,
+        kind: task.kind,
+        priority: task.priority,
+        estimatedMinutes: task.estimated_minutes,
+        requiredFocusMinutes: task.required_focus_minutes,
+        dueDate: toIso(task.due_date),
+        status: task.status,
+        completedAt: toIso(task.completed_at),
+        createdAt: toIso(task.created_at) ?? new Date().toISOString(),
+      }))
+      .sort((a, b) => {
+        const priorityDiff = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
+        if (priorityDiff !== 0) return priorityDiff;
+        if (a.dueDate && b.dueDate) {
+          const dueDiff = a.dueDate.localeCompare(b.dueDate);
+          if (dueDiff !== 0) return dueDiff;
+        } else if (a.dueDate) {
+          return -1;
+        } else if (b.dueDate) {
+          return 1;
+        }
+        return b.createdAt.localeCompare(a.createdAt);
+      })
+      .slice(0, 20);
+  }
+
   return withUser(async (db) => {
     const params: unknown[] = [LOCAL_USER_ID];
     let exclude = "";
@@ -213,6 +445,16 @@ export async function getPlannerBacklog(planId: string | null): Promise<Task[]> 
 }
 
 export async function ensureTodayPlan(): Promise<string> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const payload = unwrapSupabase(
+      await ctx.supabase.rpc("rpc_create_daily_plan", { p_plan_date: null }),
+      "Could not create the daily plan.",
+    ) as { planId?: string };
+    if (!payload.planId) throw new Error("Could not create the daily plan.");
+    return payload.planId;
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{ result: { planId: string } }>(
       "select public.rpc_create_daily_plan(null) as result",
@@ -228,6 +470,20 @@ export async function addPlanTask(
   taskId: string,
   kind: TaskKind,
 ): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(
+      await ctx.supabase.rpc("rpc_add_plan_task", {
+        p_plan_id: planId,
+        p_task_id: taskId,
+        p_kind: kind,
+        p_planned_start: null,
+        p_planned_minutes: null,
+      }),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query(
       "select public.rpc_add_plan_task($1, $2, $3::public.task_kind, null, null)",
@@ -237,6 +493,14 @@ export async function addPlanTask(
 }
 
 export async function removePlanTask(planTaskId: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(
+      await ctx.supabase.rpc("rpc_remove_plan_task", { p_plan_task_id: planTaskId }),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query("select public.rpc_remove_plan_task($1)", [planTaskId]);
   });
@@ -247,6 +511,20 @@ export async function amendPlanTask(
   newKind: TaskKind,
   reason: string | null = null,
 ): Promise<{ changed: boolean; exception: boolean }> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const res = await ctx.supabase.rpc("rpc_amend_plan_task", {
+      p_plan_task_id: planTaskId,
+      p_new_kind: newKind,
+      p_reason: reason,
+    });
+    assertSupabaseOk(res);
+    return (res.data as { changed: boolean; exception: boolean } | null) ?? {
+      changed: false,
+      exception: false,
+    };
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{ result: { changed: boolean; exception: boolean } }>(
       "select public.rpc_amend_plan_task($1, $2::public.task_kind, $3) as result",
@@ -257,24 +535,50 @@ export async function amendPlanTask(
 }
 
 export async function confirmPlan(planId: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(await ctx.supabase.rpc("rpc_confirm_plan", { p_plan_id: planId }));
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query("select public.rpc_confirm_plan($1)", [planId]);
   });
 }
 
 export async function activatePlan(planId: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(await ctx.supabase.rpc("rpc_activate_plan", { p_plan_id: planId }));
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query("select public.rpc_activate_plan($1)", [planId]);
   });
 }
 
 export async function completePlan(planId: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(await ctx.supabase.rpc("rpc_complete_plan", { p_plan_id: planId }));
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query("select public.rpc_complete_plan($1)", [planId]);
   });
 }
 
 export async function completePlanTask(planTaskId: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(
+      await ctx.supabase.rpc("rpc_complete_plan_task", { p_plan_task_id: planTaskId }),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query("select public.rpc_complete_plan_task($1)", [planTaskId]);
   });

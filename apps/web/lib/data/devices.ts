@@ -2,6 +2,11 @@ import "server-only";
 
 import { LOCAL_USER_ID, withUser } from "@/lib/db";
 import { computeAgentPolicySnapshot, type AgentPolicyPayload } from "@/lib/domain/agent-policy";
+import {
+  assertSupabaseOk,
+  getSupabaseContext,
+  unwrapSupabase,
+} from "@/lib/supabase/data-client";
 import { toIso } from "./format";
 
 export type DevicePlatform = "windows" | "android" | "web";
@@ -43,6 +48,30 @@ function mapDevice(row: DeviceTableRow): DeviceRecord {
 }
 
 export async function listDevices(): Promise<DeviceRecord[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("devices")
+        .select("id, name, platform, os_version, app_version, status, last_seen_at, created_at")
+        .eq("user_id", ctx.userId)
+        .order("created_at", { ascending: true }),
+    ) as DeviceTableRow[];
+
+    return rows.map(mapDevice).sort((a, b) => {
+      if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+      if (a.lastSeenAt && b.lastSeenAt) {
+        const seenDiff = b.lastSeenAt.localeCompare(a.lastSeenAt);
+        if (seenDiff !== 0) return seenDiff;
+      } else if (a.lastSeenAt) {
+        return -1;
+      } else if (b.lastSeenAt) {
+        return 1;
+      }
+      return a.createdAt.localeCompare(b.createdAt);
+    });
+  }
+
   return withUser(async (db) => {
     const result = await db.query<DeviceTableRow>(
       `select id, name, platform, os_version, app_version, status, last_seen_at, created_at
@@ -62,6 +91,24 @@ export async function registerDevice(input: {
   name: string;
   platform: DevicePlatform;
 }): Promise<DeviceRecord> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const row = unwrapSupabase(
+      await ctx.supabase
+        .from("devices")
+        .insert({
+          user_id: ctx.userId,
+          name: input.name,
+          platform: input.platform,
+          app_version: "0.1.0",
+        })
+        .select("id, name, platform, os_version, app_version, status, last_seen_at, created_at")
+        .single(),
+      "Could not register device.",
+    ) as DeviceTableRow;
+    return mapDevice(row);
+  }
+
   return withUser(async (db) => {
     const result = await db.query<DeviceTableRow>(
       `insert into public.devices (user_id, name, platform, app_version)
@@ -76,6 +123,20 @@ export async function registerDevice(input: {
 }
 
 export async function renameDevice(deviceId: string, name: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("devices")
+        .update({ name })
+        .eq("id", deviceId)
+        .eq("user_id", ctx.userId)
+        .select("id"),
+    ) as Array<{ id: string }>;
+    if (rows.length === 0) throw new Error("Device not found.");
+    return;
+  }
+
   await withUser(async (db) => {
     const result = await db.query<{ id: string }>(
       `update public.devices
@@ -91,6 +152,14 @@ export async function renameDevice(deviceId: string, name: string): Promise<void
 }
 
 export async function revokeDevice(deviceId: string): Promise<{ revokedGrants: number }> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const res = await ctx.supabase.rpc("rpc_revoke_device", { p_device_id: deviceId });
+    assertSupabaseOk(res);
+    const data = res.data as { revokedGrants?: number } | null;
+    return { revokedGrants: data?.revokedGrants ?? 0 };
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{ result: { revoked: boolean; revokedGrants: number } }>(
       "select public.rpc_revoke_device($1) as result",
@@ -100,12 +169,65 @@ export async function revokeDevice(deviceId: string): Promise<{ revokedGrants: n
   });
 }
 
-export async function upsertDeviceRegistration(input: {
-  name: string;
-  platform: DevicePlatform;
-  osVersion?: string | null;
-  appVersion?: string | null;
-}): Promise<DeviceRecord> {
+export async function upsertDeviceRegistration(
+  input: {
+    name: string;
+    platform: DevicePlatform;
+    osVersion?: string | null;
+    appVersion?: string | null;
+  },
+  request?: Request,
+): Promise<DeviceRecord> {
+  const ctx = await getSupabaseContext(request);
+  if (ctx) {
+    const { data: found, error: findErr } = await ctx.supabase
+      .from("devices")
+      .select("id, name, platform, os_version, app_version, status, last_seen_at, created_at")
+      .eq("user_id", ctx.userId)
+      .eq("name", input.name)
+      .maybeSingle();
+    if (findErr) throw new Error(findErr.message);
+
+    if (found) {
+      const existingRow = found as DeviceTableRow;
+      if (existingRow.status === "revoked") {
+        throw new Error("forbidden: this device name was revoked; register a new device name.");
+      }
+      const updated = unwrapSupabase(
+        await ctx.supabase
+          .from("devices")
+          .update({
+            platform: input.platform,
+            os_version: input.osVersion ?? existingRow.os_version,
+            app_version: input.appVersion ?? existingRow.app_version,
+            last_seen_at: new Date().toISOString(),
+          })
+          .eq("id", existingRow.id)
+          .eq("user_id", ctx.userId)
+          .select("id, name, platform, os_version, app_version, status, last_seen_at, created_at")
+          .single(),
+      ) as DeviceTableRow;
+      return mapDevice(updated);
+    }
+
+    const created = unwrapSupabase(
+      await ctx.supabase
+        .from("devices")
+        .insert({
+          user_id: ctx.userId,
+          name: input.name,
+          platform: input.platform,
+          os_version: input.osVersion ?? null,
+          app_version: input.appVersion ?? "0.1.0",
+          last_seen_at: new Date().toISOString(),
+        })
+        .select("id, name, platform, os_version, app_version, status, last_seen_at, created_at")
+        .single(),
+      "Could not register device.",
+    ) as DeviceTableRow;
+    return mapDevice(created);
+  }
+
   return withUser(async (db) => {
     const existing = await db.query<DeviceTableRow>(
       `select id, name, platform, os_version, app_version, status, last_seen_at, created_at
@@ -152,7 +274,62 @@ export async function upsertDeviceRegistration(input: {
 
 export async function getAgentPolicyForDevice(
   deviceId: string,
+  request?: Request,
 ): Promise<{ status: "ok"; policy: AgentPolicyPayload } | { status: "forbidden" }> {
+  const ctx = await getSupabaseContext(request);
+  if (ctx) {
+    const { data: device, error: devErr } = await ctx.supabase
+      .from("devices")
+      .select("id, status")
+      .eq("id", deviceId)
+      .eq("user_id", ctx.userId)
+      .maybeSingle();
+    if (devErr) throw new Error(devErr.message);
+    if (!device || device.status !== "active") {
+      return { status: "forbidden" };
+    }
+
+    const [, grantsRes, rulesRes] = await Promise.all([
+      ctx.supabase
+        .from("devices")
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq("id", deviceId)
+        .eq("user_id", ctx.userId),
+      ctx.supabase
+        .from("unlock_grants")
+        .select("remaining_minutes")
+        .eq("user_id", ctx.userId)
+        .eq("status", "active")
+        .gt("expires_at", new Date().toISOString())
+        .gt("remaining_minutes", 0),
+      ctx.supabase
+        .from("block_rules")
+        .select("rule_type, identifier, is_enabled")
+        .eq("user_id", ctx.userId)
+        .eq("device_id", deviceId)
+        .order("identifier", { ascending: true }),
+    ]);
+
+    const grantRows = unwrapSupabase(grantsRes) as Array<{ remaining_minutes: number }>;
+    const ruleRows = unwrapSupabase(rulesRes) as Array<{
+      rule_type: "block" | "allow";
+      identifier: string;
+      is_enabled: boolean;
+    }>;
+
+    const activeGrantMinutes = grantRows.reduce((sum, row) => sum + row.remaining_minutes, 0);
+    const policy = computeAgentPolicySnapshot({
+      activeGrantMinutes,
+      rules: ruleRows.map((row) => ({
+        ruleType: row.rule_type,
+        identifier: row.identifier,
+        isEnabled: row.is_enabled,
+      })),
+    });
+
+    return { status: "ok", policy };
+  }
+
   return withUser(async (db) => {
     const devRes = await db.query<{ id: string; status: DeviceStatus }>(
       `select id, status
@@ -218,6 +395,52 @@ export interface BlockRuleRecord {
 }
 
 export async function listBlockRules(): Promise<BlockRuleRecord[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("block_rules")
+        .select(
+          "id, device_id, platform, rule_type, identifier, display_name, category, action, is_enabled, devices!inner(name)",
+        )
+        .eq("user_id", ctx.userId),
+    ) as Array<{
+      id: string;
+      device_id: string;
+      platform: DevicePlatform;
+      rule_type: "block" | "allow";
+      identifier: string;
+      display_name: string;
+      category: BlockRuleRecord["category"];
+      action: BlockRuleRecord["action"];
+      is_enabled: boolean;
+      devices: { name: string } | Array<{ name: string }>;
+    }>;
+
+    return rows
+      .map((row) => {
+        const dev = Array.isArray(row.devices) ? row.devices[0]! : row.devices;
+        return {
+          id: row.id,
+          deviceId: row.device_id,
+          deviceName: dev.name,
+          platform: row.platform,
+          ruleType: row.rule_type,
+          identifier: row.identifier,
+          displayName: row.display_name,
+          category: row.category,
+          action: row.action,
+          isEnabled: row.is_enabled,
+        };
+      })
+      .sort((a, b) => {
+        if (a.isEnabled !== b.isEnabled) return a.isEnabled ? -1 : 1;
+        const devDiff = a.deviceName.localeCompare(b.deviceName);
+        if (devDiff !== 0) return devDiff;
+        return a.displayName.localeCompare(b.displayName);
+      });
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{
       id: string;
@@ -263,6 +486,32 @@ export async function createBlockRule(input: {
   category: BlockRuleRecord["category"];
   action: BlockRuleRecord["action"];
 }): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const { data: device, error } = await ctx.supabase
+      .from("devices")
+      .select("platform")
+      .eq("id", input.deviceId)
+      .eq("user_id", ctx.userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!device) throw new Error("Device not found.");
+
+    assertSupabaseOk(
+      await ctx.supabase.from("block_rules").insert({
+        user_id: ctx.userId,
+        device_id: input.deviceId,
+        platform: device.platform,
+        rule_type: input.ruleType,
+        identifier: input.identifier,
+        display_name: input.displayName,
+        category: input.category,
+        action: input.action,
+      }),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     const dev = await db.query<{ platform: DevicePlatform }>(
       "select platform from public.devices where id = $1 and user_id = $2",
@@ -292,6 +541,18 @@ export async function createBlockRule(input: {
 }
 
 export async function toggleBlockRule(ruleId: string, isEnabled: boolean): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(
+      await ctx.supabase
+        .from("block_rules")
+        .update({ is_enabled: isEnabled })
+        .eq("id", ruleId)
+        .eq("user_id", ctx.userId),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query(
       "update public.block_rules set is_enabled = $1 where id = $2 and user_id = $3",
@@ -301,6 +562,18 @@ export async function toggleBlockRule(ruleId: string, isEnabled: boolean): Promi
 }
 
 export async function deleteBlockRule(ruleId: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(
+      await ctx.supabase
+        .from("block_rules")
+        .delete()
+        .eq("id", ruleId)
+        .eq("user_id", ctx.userId),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query("delete from public.block_rules where id = $1 and user_id = $2", [
       ruleId,
@@ -321,6 +594,43 @@ export interface UsageEventRecord {
 }
 
 export async function listRecentUsageEvents(limit = 15): Promise<UsageEventRecord[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("usage_events")
+        .select(
+          "id, device_id, identifier, display_name, started_at, duration_seconds, was_blocked, devices!inner(name)",
+        )
+        .eq("user_id", ctx.userId)
+        .order("started_at", { ascending: false })
+        .limit(limit),
+    ) as Array<{
+      id: string;
+      device_id: string;
+      identifier: string;
+      display_name: string | null;
+      started_at: string;
+      duration_seconds: number;
+      was_blocked: boolean;
+      devices: { name: string } | Array<{ name: string }>;
+    }>;
+
+    return rows.map((row) => {
+      const dev = Array.isArray(row.devices) ? row.devices[0]! : row.devices;
+      return {
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: dev.name,
+        identifier: row.identifier,
+        displayName: row.display_name,
+        startedAt: toIso(row.started_at) ?? new Date().toISOString(),
+        durationSeconds: row.duration_seconds,
+        wasBlocked: row.was_blocked,
+      };
+    });
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{
       id: string;
@@ -355,18 +665,71 @@ export async function listRecentUsageEvents(limit = 15): Promise<UsageEventRecor
   });
 }
 
-export async function ingestUsageEvents(input: {
-  deviceId: string;
-  events: ReadonlyArray<{
-    clientEventId: string;
-    identifier: string;
-    displayName?: string | null;
-    startedAt: string;
-    endedAt?: string | null;
-    durationSeconds: number;
-    wasBlocked: boolean;
-  }>;
-}): Promise<{ status: "ok"; accepted: number; duplicates: number } | { status: "forbidden" }> {
+export async function ingestUsageEvents(
+  input: {
+    deviceId: string;
+    events: ReadonlyArray<{
+      clientEventId: string;
+      identifier: string;
+      displayName?: string | null;
+      startedAt: string;
+      endedAt?: string | null;
+      durationSeconds: number;
+      wasBlocked: boolean;
+    }>;
+  },
+  request?: Request,
+): Promise<{ status: "ok"; accepted: number; duplicates: number } | { status: "forbidden" }> {
+  const ctx = await getSupabaseContext(request);
+  if (ctx) {
+    const { data: device, error: devErr } = await ctx.supabase
+      .from("devices")
+      .select("status")
+      .eq("id", input.deviceId)
+      .eq("user_id", ctx.userId)
+      .maybeSingle();
+    if (devErr) throw new Error(devErr.message);
+    if (!device || device.status !== "active") {
+      return { status: "forbidden" };
+    }
+
+    let accepted = 0;
+    if (input.events.length > 0) {
+      const payload = input.events.map((evt) => ({
+        user_id: ctx.userId,
+        device_id: input.deviceId,
+        client_event_id: evt.clientEventId,
+        identifier: evt.identifier,
+        display_name: evt.displayName ?? null,
+        started_at: evt.startedAt,
+        ended_at: evt.endedAt ?? null,
+        duration_seconds: evt.durationSeconds,
+        was_blocked: evt.wasBlocked,
+      }));
+      const inserted = unwrapSupabase(
+        await ctx.supabase
+          .from("usage_events")
+          .upsert(payload, { onConflict: "device_id,client_event_id", ignoreDuplicates: true })
+          .select("id"),
+      ) as Array<{ id: string }>;
+      accepted = inserted.length;
+    }
+
+    assertSupabaseOk(
+      await ctx.supabase
+        .from("devices")
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq("id", input.deviceId)
+        .eq("user_id", ctx.userId),
+    );
+
+    return {
+      status: "ok",
+      accepted,
+      duplicates: input.events.length - accepted,
+    };
+  }
+
   return withUser(async (db) => {
     const devRes = await db.query<{ status: DeviceStatus }>(
       "select status from public.devices where id = $1 and user_id = $2 limit 1",

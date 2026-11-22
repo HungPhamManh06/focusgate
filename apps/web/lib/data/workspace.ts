@@ -1,7 +1,9 @@
 import "server-only";
 
 import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { LOCAL_USER_ID, withUser, type Db } from "@/lib/db";
+import { getSupabaseContext, unwrapSupabase } from "@/lib/supabase/data-client";
 import type { Device, Profile, RewardSettings } from "./types";
 
 export interface Workspace {
@@ -52,7 +54,83 @@ export async function ensureDevice(db: Db): Promise<Device> {
   return { id: device.id, name: device.name, platform: device.platform };
 }
 
+export async function ensureDeviceSupabase(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<Device> {
+  const existing = unwrapSupabase(
+    await supabase
+      .from("devices")
+      .select("id, name, platform")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("created_at", { ascending: true })
+      .limit(1),
+  ) as DeviceRow[];
+
+  if (existing[0]) {
+    return { id: existing[0].id, name: existing[0].name, platform: existing[0].platform };
+  }
+
+  const created = unwrapSupabase(
+    await supabase
+      .from("devices")
+      .insert({ user_id: userId, name: "Local workspace", platform: "web", app_version: "0.1.0" })
+      .select("id, name, platform")
+      .single(),
+    "Could not register a workspace device.",
+  ) as DeviceRow;
+
+  return { id: created.id, name: created.name, platform: created.platform };
+}
+
 export const getWorkspace = cache(async (): Promise<Workspace> => {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const [profileRes, settingsRes, device] = await Promise.all([
+      ctx.supabase
+        .from("profiles")
+        .select("id, display_name, timezone")
+        .eq("id", ctx.userId)
+        .maybeSingle(),
+      ctx.supabase
+        .from("user_settings")
+        .select(
+          "base_minutes, bonus_minutes_per_task, extra_focus_block_minutes, extra_focus_reward_minutes, max_bonus_minutes, daily_cap_minutes, min_valid_focus_minutes",
+        )
+        .eq("user_id", ctx.userId)
+        .maybeSingle(),
+      ensureDeviceSupabase(ctx.supabase, ctx.userId),
+    ]);
+
+    if (profileRes.error) throw new Error(profileRes.error.message);
+    if (settingsRes.error) throw new Error(settingsRes.error.message);
+
+    const profileRow = profileRes.data as ProfileRow | null;
+    const settingsRow = settingsRes.data as SettingsRow | null;
+    if (!profileRow || !settingsRow) {
+      throw new Error("Workspace profile is missing. Please sign out and sign up again.");
+    }
+
+    return {
+      profile: {
+        id: profileRow.id,
+        displayName: profileRow.display_name,
+        timezone: profileRow.timezone,
+      },
+      settings: {
+        baseMinutes: settingsRow.base_minutes,
+        bonusMinutesPerTask: settingsRow.bonus_minutes_per_task,
+        extraFocusBlockMinutes: settingsRow.extra_focus_block_minutes,
+        extraFocusRewardMinutes: settingsRow.extra_focus_reward_minutes,
+        maxBonusMinutes: settingsRow.max_bonus_minutes,
+        dailyCapMinutes: settingsRow.daily_cap_minutes,
+        minValidFocusMinutes: settingsRow.min_valid_focus_minutes,
+      },
+      device,
+    };
+  }
+
   return withUser(async (db) => {
     const profileResult = await db.query<ProfileRow>(
       "select id, display_name, timezone from public.profiles where id = $1",

@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Valid deviceId UUID is required" }, { status: 400 });
   }
 
-  const outcome = await getAgentPolicyForDevice(parsed.data);
+  const outcome = await getAgentPolicyForDevice(parsed.data, request);
   if (outcome.status === "forbidden") {
     return NextResponse.json({ error: "Unknown or revoked device" }, { status: 403 });
   }

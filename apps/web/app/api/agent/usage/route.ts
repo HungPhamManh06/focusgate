@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const outcome = await ingestUsageEvents(parsed.data);
+  const outcome = await ingestUsageEvents(parsed.data, request);
   if (outcome.status === "forbidden") {
     return NextResponse.json({ error: "Unknown or revoked device" }, { status: 403 });
   }

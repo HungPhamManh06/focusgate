@@ -1,6 +1,11 @@
 import "server-only";
 
 import { LOCAL_USER_ID, withUser } from "@/lib/db";
+import {
+  assertSupabaseOk,
+  getSupabaseContext,
+  unwrapSupabase,
+} from "@/lib/supabase/data-client";
 import { toIso } from "./format";
 import type { Task, TaskCategory, TaskKind, TaskPriority, TaskStatus } from "./types";
 
@@ -65,7 +70,63 @@ function mapTask(row: TaskRow): Task {
 const TASK_COLUMNS = `id, title, description, category, kind, priority,
   estimated_minutes, required_focus_minutes, due_date, status, completed_at, created_at`;
 
+const STATUS_ORDER: Record<string, number> = {
+  in_progress: 0,
+  todo: 1,
+  completed: 3,
+};
+
+const PRIORITY_ORDER: Record<TaskPriority, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+function compareTasks(a: Task, b: Task): number {
+  const statusDiff = (STATUS_ORDER[a.status] ?? 2) - (STATUS_ORDER[b.status] ?? 2);
+  if (statusDiff !== 0) return statusDiff;
+  const priorityDiff = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
+  if (priorityDiff !== 0) return priorityDiff;
+  if (a.dueDate && b.dueDate) {
+    const dueDiff = a.dueDate.localeCompare(b.dueDate);
+    if (dueDiff !== 0) return dueDiff;
+  } else if (a.dueDate) {
+    return -1;
+  } else if (b.dueDate) {
+    return 1;
+  }
+  return b.createdAt.localeCompare(a.createdAt);
+}
+
 export async function listTasks(filters: TaskFilters = {}): Promise<Task[]> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    let query = ctx.supabase
+      .from("tasks")
+      .select(TASK_COLUMNS)
+      .eq("user_id", ctx.userId);
+
+    if (filters.view === "open") {
+      query = query.in("status", ["todo", "in_progress"]);
+    } else if (filters.view === "done") {
+      query = query.eq("status", "completed");
+    }
+
+    if (filters.kind) {
+      query = query.eq("kind", filters.kind);
+    }
+
+    const search = filters.search?.trim();
+    if (search) {
+      const escaped = search.replace(/[%_]/g, "\\$&");
+      query = query.or(`title.ilike.%${escaped}%,description.ilike.%${escaped}%`);
+    }
+
+    const rows = unwrapSupabase(await query) as TaskRow[];
+    return rows.map(mapTask).sort(compareTasks);
+  }
+
   return withUser(async (db) => {
     const params: unknown[] = [LOCAL_USER_ID];
     let sql = `select ${TASK_COLUMNS} from public.tasks where user_id = $1`;
@@ -97,6 +158,35 @@ export async function listTasks(filters: TaskFilters = {}): Promise<Task[]> {
 }
 
 export async function getTaskCounts(): Promise<TaskCounts> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const rows = unwrapSupabase(
+      await ctx.supabase
+        .from("tasks")
+        .select("status, kind")
+        .eq("user_id", ctx.userId),
+    ) as Array<{ status: TaskStatus; kind: TaskKind }>;
+
+    let open = 0;
+    let completed = 0;
+    let mustDoOpen = 0;
+    let shouldDoOpen = 0;
+    let bonusOpen = 0;
+
+    for (const row of rows) {
+      if (row.status === "todo" || row.status === "in_progress") {
+        open += 1;
+        if (row.kind === "must_do") mustDoOpen += 1;
+        else if (row.kind === "should_do") shouldDoOpen += 1;
+        else if (row.kind === "bonus") bonusOpen += 1;
+      } else if (row.status === "completed") {
+        completed += 1;
+      }
+    }
+
+    return { total: rows.length, open, completed, mustDoOpen, shouldDoOpen, bonusOpen };
+  }
+
   return withUser(async (db) => {
     const result = await db.query<{
       total: number;
@@ -129,6 +219,29 @@ export async function getTaskCounts(): Promise<TaskCounts> {
 }
 
 export async function createTask(input: TaskInput): Promise<Task> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const row = unwrapSupabase(
+      await ctx.supabase
+        .from("tasks")
+        .insert({
+          user_id: ctx.userId,
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          kind: input.kind,
+          priority: input.priority,
+          estimated_minutes: input.estimatedMinutes,
+          required_focus_minutes: input.requiredFocusMinutes,
+          due_date: input.dueDate,
+        })
+        .select(TASK_COLUMNS)
+        .single(),
+      "Task was not created.",
+    ) as TaskRow;
+    return mapTask(row);
+  }
+
   return withUser(async (db) => {
     const result = await db.query<TaskRow>(
       `insert into public.tasks
@@ -156,6 +269,30 @@ export async function createTask(input: TaskInput): Promise<Task> {
 }
 
 export async function updateTask(id: string, input: TaskInput): Promise<Task> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const row = unwrapSupabase(
+      await ctx.supabase
+        .from("tasks")
+        .update({
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          kind: input.kind,
+          priority: input.priority,
+          estimated_minutes: input.estimatedMinutes,
+          required_focus_minutes: input.requiredFocusMinutes,
+          due_date: input.dueDate,
+        })
+        .eq("id", id)
+        .eq("user_id", ctx.userId)
+        .select(TASK_COLUMNS)
+        .single(),
+      "Task not found.",
+    ) as TaskRow;
+    return mapTask(row);
+  }
+
   return withUser(async (db) => {
     const result = await db.query<TaskRow>(
       `update public.tasks set
@@ -184,6 +321,14 @@ export async function updateTask(id: string, input: TaskInput): Promise<Task> {
 }
 
 export async function deleteTask(id: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(
+      await ctx.supabase.from("tasks").delete().eq("id", id).eq("user_id", ctx.userId),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query("delete from public.tasks where id = $1 and user_id = $2", [
       id,
@@ -197,6 +342,39 @@ export async function deleteTask(id: string): Promise<void> {
  * backend RPC so focus coverage is verified. Other tasks are simple toggles.
  */
 export async function completeTask(id: string): Promise<{ viaPlan: boolean }> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const planTasks = unwrapSupabase(
+      await ctx.supabase
+        .from("daily_plan_tasks")
+        .select("id, daily_plans!inner(status)")
+        .eq("user_id", ctx.userId)
+        .eq("task_id", id)
+        .eq("daily_plans.status", "active")
+        .limit(1),
+    ) as Array<{ id: string }>;
+
+    const activePlanTask = planTasks[0];
+    if (activePlanTask) {
+      assertSupabaseOk(
+        await ctx.supabase.rpc("rpc_complete_plan_task", {
+          p_plan_task_id: activePlanTask.id,
+        }),
+      );
+      return { viaPlan: true };
+    }
+
+    assertSupabaseOk(
+      await ctx.supabase
+        .from("tasks")
+        .update({ status: "completed" })
+        .eq("id", id)
+        .eq("user_id", ctx.userId)
+        .neq("status", "completed"),
+    );
+    return { viaPlan: false };
+  }
+
   return withUser(async (db) => {
     const planTask = await db.query<{ id: string }>(
       `select pt.id
@@ -223,6 +401,19 @@ export async function completeTask(id: string): Promise<{ viaPlan: boolean }> {
 }
 
 export async function reopenTask(id: string): Promise<void> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    assertSupabaseOk(
+      await ctx.supabase
+        .from("tasks")
+        .update({ status: "todo" })
+        .eq("id", id)
+        .eq("user_id", ctx.userId)
+        .eq("status", "completed"),
+    );
+    return;
+  }
+
   await withUser(async (db) => {
     await db.query(
       `update public.tasks set status = 'todo'
