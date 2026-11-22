@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { getSupabasePublicEnv, isSupabaseConfigured } from "@/lib/env";
 import { createSupabaseServerClient } from "./server";
@@ -26,6 +27,22 @@ function createBearerClient(bearer: string): SupabaseClient {
   });
 }
 
+const getCookieSupabaseContext = cache(async (): Promise<SupabaseSessionContext | null> => {
+  if (!isSupabaseConfigured()) return null;
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    throw new Error("Unauthorized: please sign in.");
+  }
+
+  return { supabase, userId: user.id, user };
+});
+
 /**
  * Returns an authenticated Supabase client and user ID when Supabase is configured,
  * or `null` when running in local PGlite fallback mode.
@@ -37,12 +54,15 @@ export async function getSupabaseContext(
 
   const authHeader = request?.headers.get("authorization");
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+  if (!bearer) {
+    return getCookieSupabaseContext();
+  }
 
-  const supabase = bearer ? createBearerClient(bearer) : await createSupabaseServerClient();
+  const supabase = createBearerClient(bearer);
   const {
     data: { user },
     error,
-  } = bearer ? await supabase.auth.getUser(bearer) : await supabase.auth.getUser();
+  } = await supabase.auth.getUser(bearer);
 
   if (error || !user) {
     throw new Error("Unauthorized: please sign in.");
@@ -77,15 +97,14 @@ export function localDateInTimezone(timezone: string, date: Date = new Date()): 
   }
 }
 
-export async function getSupabaseUserTimezone(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<string> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("timezone")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return (data?.timezone as string | undefined) ?? "UTC";
-}
+export const getSupabaseUserTimezone = cache(
+  async (supabase: SupabaseClient, userId: string): Promise<string> => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("timezone")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data?.timezone as string | undefined) ?? "UTC";
+  },
+);

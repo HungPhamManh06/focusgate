@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabasePublicEnv, isSupabaseConfigured } from "@/lib/env";
@@ -27,11 +28,11 @@ export async function createSupabaseServerClient() {
   });
 }
 
-export async function getAuthenticatedUser() {
+export const getAuthenticatedUser = cache(async () => {
   if (!isSupabaseConfigured()) return null;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user;
-}
+});
