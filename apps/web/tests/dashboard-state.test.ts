@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildMissionViewModel,
   filterDueSoonTasks,
+  formatOpenTasksStat,
   formatPlanProgressStat,
   isSidebarWalletActive,
   resolveMissionPhase,
@@ -208,7 +209,7 @@ test("Mission stepper and empty state mapping across all plan states", () => {
   assert.equal(claimedVm.stages[4]?.state, "completed");
 });
 
-test("Your Next Move selection and Due Soon de-duplication prevent a task from appearing twice", () => {
+test("Your Next Move clearly distinguishes Backlog vs Today's Plan and adapts CTA by plan lock state", () => {
   const completedMustDo = makeTask({
     id: "t-done",
     title: "Completed Must-do",
@@ -239,18 +240,81 @@ test("Your Next Move selection and Due Soon de-duplication prevent a task from a
   });
 
   const allUpcoming = [completedMustDo, landingPageMustDo, secondMustDo, thirdShouldDo];
-  const nextMove = selectNextMoveFromTasks(allUpcoming, null);
-  assert.ok(nextMove);
-  assert.equal(nextMove.task.id, "t-landing");
 
-  // Due Soon must exclude "t-landing" (already shown in Your Next Move) and "t-done" (completed)
-  const dueSoon = filterDueSoonTasks(allUpcoming, nextMove.task.id, 4);
+  // Case B1: Draft empty plan -> task is in Backlog, labeled "Backlog · Suggested" (neutral), CTA = "add_to_plan"
+  const draftEmpty = makePlan({ id: "plan-draft-1", status: "draft", tasks: [] });
+  const backlogInDraft = selectNextMoveFromTasks(allUpcoming, draftEmpty);
+  assert.ok(backlogInDraft);
+  assert.equal(backlogInDraft.task.id, "t-landing");
+  assert.equal(backlogInDraft.inTodayPlan, false);
+  assert.equal(backlogInDraft.origin, "backlog");
+  assert.equal(backlogInDraft.badgeLabel, "Backlog · Suggested");
+  assert.equal(backlogInDraft.badgeTone, "neutral");
+  assert.equal(backlogInDraft.ctaKind, "add_to_plan");
+  assert.equal(backlogInDraft.planId, "plan-draft-1");
+
+  // Case B2: Locked (confirmed) plan with no open Must-dos in plan -> backlog suggestion does NOT allow silent add_to_plan
+  const confirmedEmpty = makePlan({ id: "plan-conf-1", status: "confirmed", tasks: [] });
+  const backlogInConfirmed = selectNextMoveFromTasks(allUpcoming, confirmedEmpty);
+  assert.ok(backlogInConfirmed);
+  assert.equal(backlogInConfirmed.origin, "backlog");
+  assert.equal(backlogInConfirmed.ctaKind, "view_plan");
+
+  // Case A: Task is committed inside Today's Plan -> labeled "Today's plan · Must-do" (accent), CTA = "view_task"
+  const activePlanWithTask = makePlan({
+    id: "plan-active-1",
+    status: "active",
+    tasks: [
+      {
+        id: "pt-second",
+        taskId: "t-second",
+        kind: "must_do",
+        requiredFocusMinutes: 25,
+        completedAt: null,
+        title: secondMustDo.title,
+        description: null,
+        status: "todo",
+        priority: "high",
+        focusDone: 10,
+      },
+    ],
+  });
+  const committedMove = selectNextMoveFromTasks(allUpcoming, activePlanWithTask);
+  assert.ok(committedMove);
+  assert.equal(committedMove.task.id, "t-second");
+  assert.equal(committedMove.inTodayPlan, true);
+  assert.equal(committedMove.origin, "today_plan");
+  assert.equal(committedMove.badgeLabel, "Today's plan · Must-do");
+  assert.equal(committedMove.badgeTone, "accent");
+  assert.equal(committedMove.ctaKind, "view_task");
+
+  // Due Soon must exclude the task promoted to Your Next Move and any completed tasks
+  const dueSoon = filterDueSoonTasks(allUpcoming, backlogInDraft.task.id, 4);
   assert.equal(dueSoon.length, 2);
   assert.deepEqual(
     dueSoon.map((t) => t.id),
     ["t-second", "t-third"],
   );
-  assert.ok(!dueSoon.some((t) => t.id === nextMove.task.id));
+});
+
+test("Open Tasks stat formatting explicitly separates Must-do, Should-do, and Bonus counts", () => {
+  const populated = formatOpenTasksStat({
+    open: 4,
+    mustDoOpen: 2,
+    shouldDoOpen: 1,
+    bonusOpen: 1,
+  });
+  assert.equal(populated.value, "4");
+  assert.equal(populated.hint, "2 Must-do · 1 Should-do · 1 Bonus →");
+
+  const empty = formatOpenTasksStat({
+    open: 0,
+    mustDoOpen: 0,
+    shouldDoOpen: 0,
+    bonusOpen: 0,
+  });
+  assert.equal(empty.value, "No open tasks");
+  assert.equal(empty.hint, "Your task queue is empty · add a task →");
 });
 
 test("Reward wallet summary handles both active grants and expired-only grants cleanly", () => {

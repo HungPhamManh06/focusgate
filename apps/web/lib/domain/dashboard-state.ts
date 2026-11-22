@@ -315,13 +315,69 @@ export function formatPlanProgressStat(plan: Plan | null): PlanProgressCardDispl
   };
 }
 
+export interface OpenTasksCountsInput {
+  open: number;
+  mustDoOpen: number;
+  shouldDoOpen: number;
+  bonusOpen: number;
+}
+
+export interface OpenTasksStatDisplay {
+  value: string;
+  hint: string;
+}
+
+/**
+ * Formats the "Open Tasks" stat card with explicit per-tier counts
+ * (`Must-do`, `Should-do`, `Bonus`) derived from the authoritative open task
+ * counts query so the breakdown always sums to `counts.open`.
+ */
+export function formatOpenTasksStat(counts: OpenTasksCountsInput): OpenTasksStatDisplay {
+  if (counts.open <= 0) {
+    return {
+      value: "No open tasks",
+      hint: "Your task queue is empty · add a task →",
+    };
+  }
+  return {
+    value: String(counts.open),
+    hint: `${counts.mustDoOpen} Must-do · ${counts.shouldDoOpen} Should-do · ${counts.bonusOpen} Bonus →`,
+  };
+}
+
+export type NextMoveOrigin = "today_plan" | "backlog";
+export type NextMoveCtaKind = "add_to_plan" | "view_plan" | "view_task";
+
 export interface NextMoveCandidateResult {
   task: Task;
   inTodayPlan: boolean;
+  origin: NextMoveOrigin;
+  badgeLabel: string;
+  badgeTone: "accent" | "neutral" | "warning";
+  ctaKind: NextMoveCtaKind;
+  planId: string | null;
   planTaskId: string | null;
   focusDone: number;
   focusRequired: number;
   reason: string;
+}
+
+function resolveBacklogCtaKind(plan: Plan | null): NextMoveCtaKind {
+  if (!plan || plan.status === "draft") return "add_to_plan";
+  if (plan.status === "confirmed" || plan.status === "active") return "view_plan";
+  return "view_task";
+}
+
+function planTierBadgeLabel(kind: Task["kind"]): string {
+  if (kind === "must_do") return "Today's plan · Must-do";
+  if (kind === "should_do") return "Today's plan · Should-do";
+  return "Today's plan · Bonus";
+}
+
+function planTierBadgeTone(kind: Task["kind"]): "accent" | "neutral" | "warning" {
+  if (kind === "must_do") return "accent";
+  if (kind === "bonus") return "warning";
+  return "neutral";
 }
 
 /**
@@ -331,7 +387,11 @@ export interface NextMoveCandidateResult {
  * 3. Remaining unfinished Must-do tasks.
  * 4. Unfinished Should-do when no Must-do remains open.
  * 5. Bonus only when no unfinished Must-do exists.
- * Never selects completed or cancelled tasks.
+ *
+ * Explicitly distinguishes committed tasks in today's plan (`origin: "today_plan"`)
+ * from unscheduled backlog candidates (`origin: "backlog"`, labeled
+ * `"Backlog · Suggested"` with a neutral badge so a backlog task never appears
+ * as an already-committed Must-do).
  */
 export function selectNextMoveFromTasks(
   openTasksInput: Task[],
@@ -340,16 +400,20 @@ export function selectNextMoveFromTasks(
   const openTasks = openTasksInput.filter(
     (task) => task.status === "todo" || task.status === "in_progress",
   );
-  if (openTasks.length === 0) return null;
 
   const openPlanTasks =
     plan && plan.status !== "completed" && plan.status !== "skipped"
       ? plan.tasks.filter((pt) => !pt.completedAt && pt.status !== "completed")
       : [];
 
+  if (openTasks.length === 0 && openPlanTasks.length === 0) return null;
+
+  const planTaskIds = new Set(plan?.tasks.map((pt) => pt.taskId) ?? []);
+  const unscheduledBacklogTasks = openTasks.filter((t) => !planTaskIds.has(t.id));
+
   const hasOpenMustDo =
     openPlanTasks.some((pt) => pt.kind === "must_do") ||
-    openTasks.some((t) => t.kind === "must_do");
+    unscheduledBacklogTasks.some((t) => t.kind === "must_do");
 
   const kindRank = (k: Task["kind"]) => (k === "must_do" ? 0 : k === "should_do" ? 1 : 2);
   const prioRank = (p: Task["priority"]) =>
@@ -385,11 +449,16 @@ export function selectNextMoveFromTasks(
     const remainingFocus = Math.max(0, chosen.requiredFocusMinutes - chosen.focusDone);
     const reason =
       remainingFocus > 0
-        ? `Suggested because this is an unfinished Must-do task in today's plan (${formatMinutes(remainingFocus)} focus remaining).`
-        : "Suggested because this is an unfinished Must-do task in today's plan.";
+        ? `Suggested because this is your highest-priority unfinished commitment (${formatMinutes(remainingFocus)} focus remaining).`
+        : "Suggested because this is your highest-priority unfinished commitment.";
     return {
       task: matchingTask,
       inTodayPlan: true,
+      origin: "today_plan",
+      badgeLabel: planTierBadgeLabel("must_do"),
+      badgeTone: "accent",
+      ctaKind: "view_task",
+      planId: plan?.id ?? null,
       planTaskId: chosen.id,
       focusDone: chosen.focusDone,
       focusRequired: chosen.requiredFocusMinutes,
@@ -397,8 +466,58 @@ export function selectNextMoveFromTasks(
     };
   }
 
+  // If the plan is already confirmed or active, prioritize any other unfinished committed plan tasks
+  // before suggesting unscheduled backlog items.
+  const isCommittedPlan = plan?.status === "confirmed" || plan?.status === "active";
+  if (isCommittedPlan && openPlanTasks.length > 0) {
+    const eligibleCommitted = hasOpenMustDo
+      ? openPlanTasks.filter((pt) => pt.kind !== "bonus")
+      : openPlanTasks;
+    const sorted = [...eligibleCommitted].sort((a, b) => {
+      if (kindRank(a.kind) !== kindRank(b.kind)) return kindRank(a.kind) - kindRank(b.kind);
+      const taskA = openTasks.find((t) => t.id === a.taskId);
+      const taskB = openTasks.find((t) => t.id === b.taskId);
+      const dDiff = dueTime(taskA?.dueDate ?? null) - dueTime(taskB?.dueDate ?? null);
+      if (dDiff !== 0) return dDiff;
+      return prioRank(a.priority) - prioRank(b.priority);
+    });
+    const chosen = sorted[0];
+    if (chosen) {
+      const matchingTask = openTasks.find((t) => t.id === chosen.taskId) ?? {
+        id: chosen.taskId,
+        title: chosen.title,
+        description: chosen.description,
+        category: "work",
+        kind: chosen.kind,
+        priority: chosen.priority,
+        estimatedMinutes: Math.max(25, chosen.requiredFocusMinutes),
+        requiredFocusMinutes: chosen.requiredFocusMinutes,
+        dueDate: null,
+        status: chosen.status,
+        completedAt: chosen.completedAt,
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        task: matchingTask,
+        inTodayPlan: true,
+        origin: "today_plan",
+        badgeLabel: planTierBadgeLabel(chosen.kind),
+        badgeTone: planTierBadgeTone(chosen.kind),
+        ctaKind: "view_task",
+        planId: plan?.id ?? null,
+        planTaskId: chosen.id,
+        focusDone: chosen.focusDone,
+        focusRequired: chosen.requiredFocusMinutes,
+        reason:
+          chosen.kind === "should_do"
+            ? "Suggested because all Must-dos are clear and this Should-do is in today's plan."
+            : "Suggested because your core commitments are complete and this Bonus task earns extra time.",
+      };
+    }
+  }
+
   // 2 & 3. Check unfinished Must-do in backlog (ordered by nearest deadline/overdue, then priority)
-  const backlogMustDos = openTasks.filter((t) => t.kind === "must_do");
+  const backlogMustDos = unscheduledBacklogTasks.filter((t) => t.kind === "must_do");
   if (backlogMustDos.length > 0) {
     const sorted = [...backlogMustDos].sort((a, b) => {
       const dDiff = dueTime(a.dueDate) - dueTime(b.dueDate);
@@ -406,19 +525,26 @@ export function selectNextMoveFromTasks(
       return prioRank(a.priority) - prioRank(b.priority);
     });
     const chosen = sorted[0]!;
+    const ctaKind = resolveBacklogCtaKind(plan);
     return {
       task: chosen,
       inTodayPlan: false,
+      origin: "backlog",
+      badgeLabel: "Backlog · Suggested",
+      badgeTone: "neutral",
+      ctaKind,
+      planId: plan?.id ?? null,
       planTaskId: null,
       focusDone: 0,
       focusRequired: chosen.requiredFocusMinutes,
-      reason: chosen.dueDate
-        ? "Suggested because this is your highest-priority unfinished Must-do with the nearest deadline."
-        : "Suggested because this is your highest-priority unfinished Must-do task.",
+      reason:
+        ctaKind === "add_to_plan"
+          ? "This task is a strong candidate for today's Must-do commitment."
+          : "Unscheduled backlog task — today's plan is already locked.",
     };
   }
 
-  // 4. Check Should-do / Bonus in today's plan (suppressing Bonus if any Must-do is open)
+  // 4. Check Should-do / Bonus in today's draft plan (suppressing Bonus if any Must-do is open)
   if (openPlanTasks.length > 0) {
     const eligiblePlan = hasOpenMustDo
       ? openPlanTasks.filter((pt) => pt.kind !== "bonus")
@@ -450,6 +576,11 @@ export function selectNextMoveFromTasks(
       return {
         task: matchingTask,
         inTodayPlan: true,
+        origin: "today_plan",
+        badgeLabel: planTierBadgeLabel(chosen.kind),
+        badgeTone: planTierBadgeTone(chosen.kind),
+        ctaKind: "view_task",
+        planId: plan?.id ?? null,
         planTaskId: chosen.id,
         focusDone: chosen.focusDone,
         focusRequired: chosen.requiredFocusMinutes,
@@ -463,8 +594,8 @@ export function selectNextMoveFromTasks(
 
   // 5. Fall back to open backlog (Should-do first, then Bonus only if no Must-do is open)
   const eligibleBacklog = hasOpenMustDo
-    ? openTasks.filter((t) => t.kind !== "bonus")
-    : openTasks;
+    ? unscheduledBacklogTasks.filter((t) => t.kind !== "bonus")
+    : unscheduledBacklogTasks;
   const sortedBacklog = [...eligibleBacklog].sort((a, b) => {
     if (kindRank(a.kind) !== kindRank(b.kind)) return kindRank(a.kind) - kindRank(b.kind);
     const dDiff = dueTime(a.dueDate) - dueTime(b.dueDate);
@@ -474,16 +605,22 @@ export function selectNextMoveFromTasks(
   const chosen = sortedBacklog[0];
   if (!chosen) return null;
 
+  const ctaKind = resolveBacklogCtaKind(plan);
   return {
     task: chosen,
     inTodayPlan: false,
+    origin: "backlog",
+    badgeLabel: "Backlog · Suggested",
+    badgeTone: "neutral",
+    ctaKind,
+    planId: plan?.id ?? null,
     planTaskId: null,
     focusDone: 0,
     focusRequired: chosen.requiredFocusMinutes,
     reason:
       chosen.kind === "should_do"
-        ? "Suggested as the highest-priority Should-do in your open work queue."
-        : "Suggested because no Must-do or Should-do tasks remain open.",
+        ? "Suggested from your backlog as the next highest-priority task."
+        : "Suggested from your backlog because no Must-do or Should-do tasks remain open.",
   };
 }
 

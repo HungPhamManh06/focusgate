@@ -41,6 +41,23 @@ export async function addPlanTaskAction(input: {
   }
 }
 
+export async function addSuggestedTaskToTodayPlanAction(input: {
+  planId: string | null;
+  taskId: string;
+  kind: TaskKind;
+}): Promise<ActionState> {
+  if (!taskKinds.includes(input.kind)) return { error: "Choose a valid task type." };
+  if (!input.taskId) return { error: "Task id is required." };
+  try {
+    const targetPlanId = input.planId ?? (await ensureTodayPlan());
+    await addPlanTask(targetPlanId, input.taskId, input.kind);
+    revalidateWorkspace();
+    return { success: "Task added to today's plan." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
 export async function removePlanTaskAction(planTaskId: string): Promise<ActionState> {
   try {
     await removePlanTask(planTaskId);

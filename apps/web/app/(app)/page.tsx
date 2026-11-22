@@ -25,6 +25,7 @@ import { getTaskCounts } from "@/lib/data/tasks";
 import { getWorkspace } from "@/lib/data/workspace";
 import {
   filterDueSoonTasks,
+  formatOpenTasksStat,
   formatPlanProgressStat,
 } from "@/lib/domain/dashboard-state";
 
@@ -62,7 +63,7 @@ export default async function DashboardPage() {
     : undefined;
 
   const planStat = formatPlanProgressStat(plan);
-  const otherOpenCount = Math.max(0, counts.open - counts.mustDoOpen);
+  const openTasksStat = formatOpenTasksStat(counts);
 
   return (
     <div className="mx-auto w-full max-w-[1280px] overflow-x-hidden px-4 py-7 sm:px-8 sm:py-9 lg:px-10">
@@ -99,12 +100,8 @@ export default async function DashboardPage() {
         >
           <StatCard
             label="Open tasks"
-            value={counts.open > 0 ? String(counts.open) : "No open tasks"}
-            hint={
-              counts.open > 0
-                ? `${counts.mustDoOpen} must-do · ${otherOpenCount} should-do & bonus →`
-                : "Your task queue is empty · add a task →"
-            }
+            value={openTasksStat.value}
+            hint={openTasksStat.hint}
             icon={ListTodo}
             className="flex h-full flex-col justify-between transition-colors group-hover:border-ink/25"
           />
@@ -136,12 +133,12 @@ export default async function DashboardPage() {
         <RewardWalletCard wallet={wallet} timezone={timezone} />
       </section>
 
-      {/* 4. Supporting Information — Your Next Move + Due Soon | Recent Focus */}
+      {/* 4. Supporting Information — Left: Your Next Move + Due Soon | Right: Recent Focus (stretches on desktop) */}
       <section
-        className="mt-6 grid items-start gap-5 lg:grid-cols-2"
+        className="mt-6 grid gap-5 lg:grid-cols-2 lg:items-stretch"
         aria-label="Next move, upcoming deadlines, and recent focus"
       >
-        <div className="space-y-5">
+        <div className="flex flex-col gap-5">
           <NextMoveCard
             suggestion={nextMove}
             hasPlan={Boolean(plan)}
@@ -150,7 +147,7 @@ export default async function DashboardPage() {
             timezone={timezone}
           />
 
-          <Card>
+          <Card className="flex-1">
             <CardHeader>
               <div>
                 <CardTitle>Due soon</CardTitle>
@@ -207,79 +204,78 @@ export default async function DashboardPage() {
           </Card>
         </div>
 
-        <Card className="flex flex-col justify-between">
-          <div>
-            <CardHeader>
-              <div>
-                <CardTitle>Recent focus</CardTitle>
-                <p className="mt-1 text-[13px] text-ink-soft">
-                  Your last verified and logged focus blocks.
-                </p>
-              </div>
-              <Link
-                href="/statistics"
-                className="inline-flex items-center gap-1 text-[12.5px] font-medium text-accent hover:underline"
-              >
-                Statistics <ArrowRight className="size-3.5" />
-              </Link>
-            </CardHeader>
-            <CardContent className="pt-4">
-              {sessions.length === 0 ? (
-                <EmptyState
-                  icon={Timer}
-                  title="No focus sessions yet"
-                  description="Start your first timed block on the Focus screen to build verified progress."
-                  action={
-                    <Link
-                      href="/focus"
-                      className={buttonVariants({ variant: "outline", size: "sm" })}
-                    >
-                      Open focus timer
-                    </Link>
-                  }
-                  className="px-5 py-8"
-                />
-              ) : (
-                <ul className="divide-y divide-line">
-                  {sessions.map((session) => (
-                    <li
-                      key={session.id}
-                      className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0"
-                    >
-                      <span
-                        className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
-                          session.isValid
-                            ? "bg-success-soft text-success"
-                            : "bg-warning-soft text-warning"
-                        }`}
-                      >
-                        <Timer className="size-3.5" strokeWidth={1.9} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-medium text-ink">
-                          {session.taskTitle ?? "Free focus"}
-                        </p>
-                        <p className="mt-0.5 text-[12.5px] text-ink-soft tabular-nums">
-                          {formatDate(
-                            session.startedAt,
-                            { month: "short", day: "numeric" },
-                            timezone,
-                          )}{" "}
-                          at {formatTime(session.startedAt, timezone)} ·{" "}
-                          {formatMinutes(session.actualMinutes)}
-                        </p>
-                      </div>
-                      <Badge tone={session.isValid ? "success" : "warning"}>
-                        {session.isValid ? "Valid" : "Below min"}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </div>
+        <Card className="flex flex-col lg:h-full">
+          <CardHeader>
+            <div>
+              <CardTitle>Recent focus</CardTitle>
+              <p className="mt-1 text-[13px] text-ink-soft">
+                Your last verified and logged focus blocks.
+              </p>
+            </div>
+            <Link
+              href="/statistics"
+              className="inline-flex items-center gap-1 text-[12.5px] font-medium text-accent hover:underline"
+            >
+              Statistics <ArrowRight className="size-3.5" />
+            </Link>
+          </CardHeader>
 
-          <div className="border-t border-line bg-surface-2/40 px-5 py-3.5 text-[12px] text-ink-soft sm:px-6">
+          <CardContent className="flex-1 pt-4">
+            {sessions.length === 0 ? (
+              <EmptyState
+                icon={Timer}
+                title="No focus sessions yet"
+                description="Start your first timed block on the Focus screen to build verified progress."
+                action={
+                  <Link
+                    href="/focus"
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    Open focus timer
+                  </Link>
+                }
+                className="px-5 py-8"
+              />
+            ) : (
+              <ul className="divide-y divide-line">
+                {sessions.map((session) => (
+                  <li
+                    key={session.id}
+                    className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0"
+                  >
+                    <span
+                      className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                        session.isValid
+                          ? "bg-success-soft text-success"
+                          : "bg-warning-soft text-warning"
+                      }`}
+                    >
+                      <Timer className="size-3.5" strokeWidth={1.9} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-medium text-ink">
+                        {session.taskTitle ?? "Free focus"}
+                      </p>
+                      <p className="mt-0.5 text-[12.5px] text-ink-soft tabular-nums">
+                        {formatDate(
+                          session.startedAt,
+                          { month: "short", day: "numeric" },
+                          timezone,
+                        )}{" "}
+                        at {formatTime(session.startedAt, timezone)} ·{" "}
+                        {formatMinutes(session.actualMinutes)}
+                      </p>
+                    </div>
+                    <Badge tone={session.isValid ? "success" : "warning"}>
+                      {session.isValid ? "Valid" : "Below min"}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+
+          <div className="mt-auto border-t border-line bg-surface-2/40 px-5 py-3.5 text-[12px] text-ink-soft sm:px-6">
             Sessions require at least{" "}
             <span className="font-semibold text-ink">
               {formatMinutes(workspace.settings.minValidFocusMinutes)}
