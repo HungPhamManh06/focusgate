@@ -25,6 +25,7 @@ interface SessionRow {
   daily_plan_id: string | null;
   mode: FocusMode;
   planned_minutes: number;
+  min_valid_minutes: number;
   actual_minutes: number;
   credited_minutes: number;
   status: FocusSession["status"];
@@ -41,6 +42,7 @@ function mapSession(row: SessionRow): FocusSession {
     planId: row.daily_plan_id,
     mode: row.mode,
     plannedMinutes: row.planned_minutes,
+    minValidMinutes: Math.max(1, row.min_valid_minutes ?? 1),
     actualMinutes: row.actual_minutes,
     creditedMinutes: row.credited_minutes ?? (row.is_valid ? Math.min(row.actual_minutes, row.planned_minutes * 2) : 0),
     status: row.status,
@@ -52,8 +54,8 @@ function mapSession(row: SessionRow): FocusSession {
 
 const SESSION_SELECT = `
   select fs.id, fs.task_id, t.title as task_title, fs.daily_plan_id, fs.mode,
-         fs.planned_minutes, fs.actual_minutes, fs.credited_minutes, fs.status,
-         fs.started_at, fs.ended_at, fs.is_valid
+         fs.planned_minutes, fs.min_valid_minutes, fs.actual_minutes, fs.credited_minutes,
+         fs.status, fs.started_at, fs.ended_at, fs.is_valid
   from public.focus_sessions fs
   left join public.tasks t on t.id = fs.task_id
 `;
@@ -215,6 +217,7 @@ export async function completeFocusSession(
   actualMinutes: number;
   creditedMinutes: number;
   plannedMinutes: number;
+  minValidMinutes: number;
   isValid: boolean;
   idempotent: boolean;
 }> {
@@ -225,6 +228,7 @@ export async function completeFocusSession(
         actualMinutes: number;
         creditedMinutes?: number;
         plannedMinutes?: number;
+        minValidMinutes?: number;
         isValid: boolean;
         idempotent?: boolean;
       };
@@ -232,6 +236,7 @@ export async function completeFocusSession(
     const payload = result.rows[0]?.result;
     if (!payload) throw new Error("This session is no longer active.");
     const plannedMinutes = payload.plannedMinutes ?? payload.actualMinutes;
+    const minValidMinutes = Math.max(1, payload.minValidMinutes ?? 1);
     const creditedMinutes =
       payload.creditedMinutes ??
       (payload.isValid ? Math.min(payload.actualMinutes, plannedMinutes * 2) : 0);
@@ -240,6 +245,7 @@ export async function completeFocusSession(
       actualMinutes: payload.actualMinutes,
       creditedMinutes,
       plannedMinutes,
+      minValidMinutes,
       isValid: payload.isValid,
       idempotent: Boolean(payload.idempotent),
     };

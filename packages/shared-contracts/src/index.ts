@@ -87,6 +87,7 @@ export interface FocusSession {
   deviceId: string;
   mode: FocusMode;
   plannedMinutes: number;
+  minValidMinutes: number;
   actualMinutes: number;
   creditedMinutes: number;
   status: FocusSessionStatus;

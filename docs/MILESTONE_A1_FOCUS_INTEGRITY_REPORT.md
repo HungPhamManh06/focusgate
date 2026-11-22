@@ -181,6 +181,9 @@ All **12 / 12 unit tests passed** (`tests/dashboard-state.test.ts` + `tests/focu
 
 ---
 
-## 12. Remaining Scope Outside Milestone A1
+## 12. Follow-Up Hotfix (Milestone A1.1) & Remaining Scope
+- **Milestone A1.1 Hotfix (`docs/MILESTONE_A1_1_FOCUS_RELIABILITY_REPORT.md`):**
+  - **P1.1:** Separated Complete vs. Cancel error and retry states in `FocusTimer` so retrying a failed cancellation never calls `completeFocusAction`.
+  - **P1.2:** Added migration `20260101000005_focus_validity_snapshot.sql` to snapshot `min_valid_minutes` on `public.focus_sessions` at session start and enforce `planned_minutes * 2 >= min_valid_minutes` on both backend and `FocusStarter`.
 - Cross-screen deep-linking (`/focus?taskId=...` from Planner/Dashboard) and post-session one-click task completion prompt are scheduled for **Milestone B**.
 - `/tasks` completed-task overdue badge cleanup and `/planner` interactive backlog picker are scheduled for **Milestone A2 / B**.

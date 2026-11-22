@@ -3,27 +3,25 @@
 import {
   AlertTriangle,
   Check,
-  CheckCircle2,
   Clock3,
   Loader2,
   Play,
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
-  Square,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
-import {
-  cancelFocusAction,
-  completeFocusAction,
-  type FocusCompletionActionResult,
-} from "@/lib/actions/focus";
+import { cancelFocusAction, completeFocusAction } from "@/lib/actions/focus";
 import { formatMinutes } from "@/lib/data/format";
 import type { FocusSession } from "@/lib/data/types";
 import {
   computeFocusTimerState,
+  executeFocusCancelFlow,
+  executeFocusCompleteFlow,
   formatFocusModeLabel,
+  getFocusSubmissionUiLabels,
+  type FocusSubmissionState,
 } from "@/lib/domain/focus-timer-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,16 +29,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ProgressRing } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-
-type SubmissionState =
-  | { status: "idle" }
-  | { status: "verifying" }
-  | { status: "error"; message: string }
-  | {
-      status: "verified";
-      verification: NonNullable<FocusCompletionActionResult["verification"]>;
-      message: string;
-    };
 
 export function FocusTimer({
   session,
@@ -51,16 +39,22 @@ export function FocusTimer({
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [keepFocusingOvertime, setKeepFocusingOvertime] = useState(false);
-  const [submission, setSubmission] = useState<SubmissionState>({ status: "idle" });
+  const [submission, setSubmission] = useState<FocusSubmissionState>({ status: "idle" });
   const [pending, startTransition] = useTransition();
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const inFlightRef = useRef(false);
   const toast = useToast();
 
+  // Always use the session's snapshotted minValidMinutes (falling back to workspace setting
+  // only if an older unmigrated object lacked the field). This guarantees a settings change
+  // during an active session never silently shifts the active session's validity threshold.
+  const effectiveMinValidMinutes = Math.max(
+    1,
+    session.minValidMinutes ?? minValidMinutes,
+  );
+
   // Always derive elapsed time from the authoritative server `startedAt` timestamp.
-  // Refreshing the clock on `visibilitychange` and `focus` ensures instant recovery
-  // after tab backgrounding, browser throttling, or system sleep.
   useEffect(() => {
     const syncClock = () => setNow(Date.now());
     syncClock();
@@ -83,59 +77,29 @@ export function FocusTimer({
     startedAtIso: session.startedAt,
     nowMs: now,
     plannedMinutes: session.plannedMinutes,
-    minValidMinutes,
+    minValidMinutes: effectiveMinValidMinutes,
     keepFocusingOvertime,
   });
 
-  const isBusy = pending || submission.status === "verifying";
+  const uiLabels = getFocusSubmissionUiLabels(submission, pending);
 
   function performComplete() {
     if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    setSubmission({ status: "verifying" });
-
     startTransition(async () => {
-      try {
-        const result = await completeFocusAction(session.id);
-        if (result.error) {
-          setSubmission({ status: "error", message: result.error });
-          toast.push("error", result.error);
-          setConfirmEndOpen(false);
-          return;
-        }
-
-        if (result.verification) {
-          const message =
-            result.success ??
-            (result.verification.isValid
-              ? `Session verified — ${result.verification.creditedMinutes}m credited.`
-              : "Session ended below minimum valid duration.");
-          setSubmission({
-            status: "verified",
-            verification: result.verification,
-            message,
-          });
-          toast.push(result.verification.isValid ? "success" : "info", message);
-        } else if (result.success) {
-          toast.push("success", result.success);
-        }
-        setConfirmEndOpen(false);
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : "Network error while verifying session. Your session is safe — please retry.";
-        setSubmission({ status: "error", message });
-        toast.push("error", message);
-      } finally {
-        inFlightRef.current = false;
-      }
+      await executeFocusCompleteFlow({
+        sessionId: session.id,
+        inFlightRef,
+        setSubmission,
+        setConfirmEndOpen,
+        completeAction: completeFocusAction,
+        onToast: (tone, msg) => toast.push(tone, msg),
+      });
     });
   }
 
   function endSession() {
-    if (isBusy) return;
-    if (!timerState.meetsMinimumThreshold) {
+    if (uiLabels.isBusy) return;
+    if (!timerState.meetsMinimumThreshold && submission.status !== "complete_error") {
       setConfirmEndOpen(true);
       return;
     }
@@ -144,33 +108,20 @@ export function FocusTimer({
 
   function performCancel() {
     if (inFlightRef.current) return;
-    inFlightRef.current = true;
-
     startTransition(async () => {
-      try {
-        const result = await cancelFocusAction(session.id);
-        if (result.error) {
-          setSubmission({ status: "error", message: result.error });
-          toast.push("error", result.error);
-        } else if (result.success) {
-          toast.push("info", result.success);
-        }
-        setConfirmCancelOpen(false);
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : "Could not cancel session due to a network error. Please try again.";
-        setSubmission({ status: "error", message });
-        toast.push("error", message);
-      } finally {
-        inFlightRef.current = false;
-      }
+      await executeFocusCancelFlow({
+        sessionId: session.id,
+        inFlightRef,
+        setSubmission,
+        setConfirmCancelOpen,
+        cancelAction: cancelFocusAction,
+        onToast: (tone, msg) => toast.push(tone, msg),
+      });
     });
   }
 
   const headerDotTone =
-    timerState.phase === "credit_limit_reached"
+    timerState.phase === "credit_limit_reached" || timerState.isImpossibleConfiguration
       ? "bg-warning"
       : timerState.phase === "target_reached" || timerState.phase === "overtime"
         ? "bg-success"
@@ -198,11 +149,14 @@ export function FocusTimer({
           ) : timerState.phase === "overtime" ? (
             <Badge tone="accent">Overtime</Badge>
           ) : timerState.phase === "credit_limit_reached" ? (
-            <Badge tone="warning">Max credit cap ({formatMinutes(timerState.maxCreditedMinutes)})</Badge>
+            <Badge tone="warning">
+              Max credit cap ({formatMinutes(timerState.maxCreditedMinutes)})
+            </Badge>
           ) : null}
         </div>
         <p className="text-[11.5px] text-muted tabular-nums">
-          {formatFocusModeLabel(session.mode)} · {session.plannedMinutes} min planned (max{" "}
+          {formatFocusModeLabel(session.mode)} · {session.plannedMinutes} min planned ·{" "}
+          {formatMinutes(effectiveMinValidMinutes)} min threshold (max{" "}
           {timerState.maxCreditedMinutes}m credit)
         </p>
       </div>
@@ -230,7 +184,7 @@ export function FocusTimer({
             {session.taskTitle ?? "Free focus"}
           </p>
 
-          {submission.status === "verifying" ? (
+          {submission.status === "completing" ? (
             <div
               role="status"
               aria-live="polite"
@@ -238,9 +192,23 @@ export function FocusTimer({
             >
               <Loader2 className="size-4 shrink-0 animate-spin text-accent" />
               <div>
-                <p className="font-semibold text-accent">Verifying focus session with server…</p>
+                <p className="font-semibold text-accent">Verifying session…</p>
                 <p className="mt-0.5 text-[11.5px] text-ink-soft">
                   Calculating authoritative elapsed time and credited minutes.
+                </p>
+              </div>
+            </div>
+          ) : submission.status === "cancelling" ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-3 flex items-center justify-center gap-2.5 rounded-xl border border-line bg-surface-2 px-4 py-3 text-left text-[12px] text-ink"
+            >
+              <Loader2 className="size-4 shrink-0 animate-spin text-ink-soft" />
+              <div>
+                <p className="font-semibold text-ink">Cancelling session…</p>
+                <p className="mt-0.5 text-[11.5px] text-ink-soft">
+                  Discarding active focus block without crediting minutes.
                 </p>
               </div>
             </div>
@@ -269,14 +237,25 @@ export function FocusTimer({
                 <p className="mt-0.5 text-[11.5px] leading-relaxed">{submission.message}</p>
               </div>
             </div>
-          ) : submission.status === "error" ? (
+          ) : submission.status === "complete_error" ? (
             <div
               role="alert"
               className="mt-3 flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-left text-[12px] text-danger"
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">Verification could not complete</p>
+                <p className="font-semibold">Could not verify &amp; complete session</p>
+                <p className="mt-0.5 text-[11.5px] leading-relaxed">{submission.message}</p>
+              </div>
+            </div>
+          ) : submission.status === "cancel_error" ? (
+            <div
+              role="alert"
+              className="mt-3 flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-left text-[12px] text-danger"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">Could not cancel session</p>
                 <p className="mt-0.5 text-[11.5px] leading-relaxed">{submission.message}</p>
               </div>
             </div>
@@ -308,74 +287,130 @@ export function FocusTimer({
           )}
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls — Independent retry paths for Complete vs Cancel */}
         <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
-          <Button onClick={endSession} disabled={isBusy} variant="accent" size="lg">
-            {isBusy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-            {submission.status === "error"
-              ? "Retry end & log session"
-              : submission.status === "verifying"
-                ? "Verifying…"
-                : "End & log session"}
-          </Button>
+          {submission.status === "cancel_error" ? (
+            <>
+              <Button
+                onClick={performCancel}
+                disabled={uiLabels.isBusy}
+                variant="danger"
+                size="lg"
+              >
+                {uiLabels.isCancelling ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <X className="size-4" />
+                )}
+                Retry cancel session
+              </Button>
+              <Button
+                onClick={() => setSubmission({ status: "idle" })}
+                disabled={uiLabels.isBusy}
+                variant="outline"
+                size="lg"
+              >
+                <RotateCcw className="size-3.5" />
+                Dismiss error
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={endSession}
+                disabled={uiLabels.isBusy}
+                variant="accent"
+                size="lg"
+              >
+                {uiLabels.isCompleting ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Check className="size-4" />
+                )}
+                {uiLabels.primaryCompleteLabel}
+              </Button>
 
-          {timerState.phase === "target_reached" && !keepFocusingOvertime ? (
-            <Button
-              onClick={() => setKeepFocusingOvertime(true)}
-              disabled={isBusy}
-              variant="outline"
-              size="lg"
-            >
-              <Play className="size-3.5" />
-              Keep focusing
-            </Button>
-          ) : null}
+              {timerState.phase === "target_reached" && !keepFocusingOvertime ? (
+                <Button
+                  onClick={() => setKeepFocusingOvertime(true)}
+                  disabled={uiLabels.isBusy}
+                  variant="outline"
+                  size="lg"
+                >
+                  <Play className="size-3.5" />
+                  Keep focusing
+                </Button>
+              ) : null}
 
-          {submission.status === "error" ? (
-            <Button
-              onClick={() => setSubmission({ status: "idle" })}
-              disabled={isBusy}
-              variant="outline"
-              size="lg"
-            >
-              <RotateCcw className="size-3.5" />
-              Dismiss error
-            </Button>
-          ) : null}
+              {submission.status === "complete_error" ? (
+                <Button
+                  onClick={() => setSubmission({ status: "idle" })}
+                  disabled={uiLabels.isBusy}
+                  variant="outline"
+                  size="lg"
+                >
+                  <RotateCcw className="size-3.5" />
+                  Dismiss error
+                </Button>
+              ) : null}
 
-          <Button
-            onClick={() => setConfirmCancelOpen(true)}
-            disabled={isBusy}
-            variant="ghost"
-            size="lg"
-          >
-            <X className="size-4" />
-            Cancel
-          </Button>
+              <Button
+                onClick={() => setConfirmCancelOpen(true)}
+                disabled={uiLabels.isBusy}
+                variant="ghost"
+                size="lg"
+              >
+                {uiLabels.isCancelling ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <X className="size-4" />
+                )}
+                {uiLabels.isCancelling ? "Cancelling session…" : "Cancel"}
+              </Button>
+            </>
+          )}
         </div>
 
         <p className="mt-5 flex items-center gap-1.5 text-[11px] text-muted">
           <Clock3 className="size-3" />
           <span>
-            Elapsed time is anchored to the server start timestamp. Refreshing or switching tabs
-            will not lose progress.
+            Elapsed time is anchored to the server start timestamp. Minimum valid threshold is
+            locked at {formatMinutes(effectiveMinValidMinutes)} for this session.
           </span>
         </p>
       </div>
 
+      {/* Short-Session End Confirmation Dialog */}
       <ConfirmDialog
         open={confirmEndOpen}
         onClose={() => setConfirmEndOpen(false)}
         onConfirm={performComplete}
         eyebrow="Short session"
         title="End before minimum threshold?"
-        description={`You have focused for ${formatMinutes(Math.max(0, timerState.elapsedMinutes))}. Sessions under ${formatMinutes(minValidMinutes)} are saved to your history, but earn 0 credited minutes toward today's plan requirements.`}
-        confirmLabel="End anyway (0m credit)"
+        description={`You have focused for ${formatMinutes(Math.max(0, timerState.elapsedMinutes))}. Sessions under ${formatMinutes(effectiveMinValidMinutes)} are saved to your history, but earn 0 credited minutes toward today's plan requirements.`}
+        confirmLabel={
+          uiLabels.isCompleting
+            ? "Verifying session…"
+            : submission.status === "complete_error"
+              ? "Retry end & log session"
+              : "End anyway (0m credit)"
+        }
         cancelLabel="Keep focusing"
         confirmVariant="primary"
-        pending={isBusy}
-      />
+        pending={uiLabels.isCompleting}
+      >
+        {submission.status === "complete_error" ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-[12px] text-danger"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>{submission.message}</span>
+          </div>
+        ) : null}
+      </ConfirmDialog>
 
+      {/* Cancel Session Confirmation Dialog (stays open on cancel_error so user can retry Cancel directly) */}
       <ConfirmDialog
         open={confirmCancelOpen}
         onClose={() => setConfirmCancelOpen(false)}
@@ -383,11 +418,21 @@ export function FocusTimer({
         eyebrow="Cancel session"
         title="Discard this focus block?"
         description="Cancelling stops the clock immediately and logs 0 minutes toward your tasks or daily focus total."
-        confirmLabel="Discard session"
+        confirmLabel={uiLabels.cancelDialogConfirmLabel}
         cancelLabel="Keep focusing"
         confirmVariant="danger"
-        pending={isBusy}
-      />
+        pending={uiLabels.isCancelling}
+      >
+        {submission.status === "cancel_error" ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-[12px] text-danger"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>{submission.message}</span>
+          </div>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

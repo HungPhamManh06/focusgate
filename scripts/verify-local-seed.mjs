@@ -49,11 +49,56 @@ const plan = await db.query(
 check("today's draft plan has 4 tasks", plan.rows[0]?.status === "draft" && plan.rows[0]?.tasks === 4, JSON.stringify(plan.rows[0]));
 
 const sessions = await db.query(
-  `select count(*)::int as n, coalesce(sum(actual_minutes) filter (where is_valid), 0)::int as minutes
+  `select count(*)::int as n,
+          coalesce(sum(credited_minutes) filter (where is_valid), 0)::int as minutes,
+          count(*) filter (where min_valid_minutes < 1)::int as invalid_snapshots
    from public.focus_sessions where user_id = $1`,
   [USER],
 );
-check("focus sessions valid", sessions.rows[0].n === 6 && sessions.rows[0].minutes > 100, JSON.stringify(sessions.rows[0]));
+check(
+  "focus sessions valid with credited_minutes and min_valid_minutes snapshots",
+  sessions.rows[0].n === 6 &&
+    sessions.rows[0].minutes > 100 &&
+    sessions.rows[0].invalid_snapshots === 0,
+  JSON.stringify(sessions.rows[0]),
+);
+
+// Also verify incremental upgrade path (simulating an existing workspace at 0003/0004 upgraded to 0005)
+const dbUpgrade = new PGlite();
+await dbUpgrade.exec(await readFile(path.join(ROOT, "apps/web/lib/db/local/bootstrap.sql"), "utf8"));
+const pre0005Files = [
+  "20260101000001_init.sql",
+  "20260101000002_plan_and_reward.sql",
+  "20260101000003_backend_hardening.sql",
+  "20260101000004_focus_session_integrity.sql",
+];
+for (const file of pre0005Files) {
+  await dbUpgrade.exec(await readFile(path.join(migrationsDir, file), "utf8"));
+}
+await dbUpgrade.query(
+  `insert into auth.users (id, email, raw_user_meta_data)
+   values ($1, $2, '{"display_name":"Alex Morgan"}'::jsonb)`,
+  [USER, "alex@focusgate.local"],
+);
+await dbUpgrade.exec(await readFile(path.join(ROOT, "apps/web/lib/db/local/seed.sql"), "utf8"));
+await dbUpgrade.exec(
+  await readFile(path.join(migrationsDir, "20260101000005_focus_validity_snapshot.sql"), "utf8"),
+);
+const upgradedRows = await dbUpgrade.query(
+  `select count(*)::int as n,
+          coalesce(sum(credited_minutes) filter (where is_valid), 0)::int as minutes,
+          min(min_valid_minutes)::int as min_snap
+   from public.focus_sessions where user_id = $1`,
+  [USER],
+);
+check(
+  "incremental migration 0005 upgrade preserves historical validity & credits",
+  upgradedRows.rows[0].n === 6 &&
+    upgradedRows.rows[0].minutes === sessions.rows[0].minutes &&
+    upgradedRows.rows[0].min_snap >= 1,
+  JSON.stringify(upgradedRows.rows[0]),
+);
+await dbUpgrade.close();
 
 const wallet = await db.query(
   `select coalesce(sum(remaining_minutes) filter (where status = 'active' and expires_at > now()), 0)::int as remaining,

@@ -22,6 +22,7 @@ const MIGRATIONS = [
   "supabase/migrations/20260101000002_plan_and_reward.sql",
   "supabase/migrations/20260101000003_backend_hardening.sql",
   "supabase/migrations/20260101000004_focus_session_integrity.sql",
+  "supabase/migrations/20260101000005_focus_validity_snapshot.sql",
 ];
 
 const USER_A = "11111111-1111-4111-8111-111111111111";
@@ -1210,6 +1211,213 @@ await asSuperuser(async () => {
     "A11: invalid sessions always have credited_minutes = 0 and historical invalid rows remain invalid",
     invalidRows.rows[0].bad === 0 && resA1.isValid === false,
     `badRows=${invalidRows.rows[0].bad}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Milestone A1.1: Minimum-Valid-Duration Snapshot & Credit-Cap Guard Suite
+// (Tests B.1 - B.10 in PostgreSQL/PGlite)
+// ---------------------------------------------------------------------------
+const USER_A11 = "66666666-6666-4666-8666-666666666666";
+let deviceA11;
+
+await asSuperuser(async () => {
+  await db.query(
+    "insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3::jsonb)",
+    [USER_A11, "focus-a1-1@example.com", '{"display_name":"Snapshot Tester"}'],
+  );
+});
+
+await asUser(USER_A11, async () => {
+  const dev = await db.query(
+    "insert into public.devices (user_id, name, platform) values ($1, 'Snapshot PC', 'web') returning id",
+    [USER_A11],
+  );
+  deviceA11 = dev.rows[0].id;
+});
+
+async function setMinValidSetting(userId, minValid) {
+  await asSuperuser(() =>
+    db.query("update public.user_settings set min_valid_focus_minutes = $2 where user_id = $1", [
+      userId,
+      minValid,
+    ]),
+  );
+}
+
+// 1. plannedMinutes = 25, minValidMinutes = 5 -> accepted (max credit 50 >= 5)
+await setMinValidSetting(USER_A11, 5);
+await asUser(USER_A11, async () => {
+  const started = await db.query(
+    "select public.rpc_start_focus_session($1, 'a11-case-1-25-5', 25, 'pomodoro_25_5'::public.focus_mode, null, null) as res",
+    [deviceA11],
+  );
+  const res = started.rows[0].res;
+  check(
+    "A1.1-B1: plannedMinutes=25, minValidMinutes=5 is accepted and snapshots minValidMinutes=5",
+    res.status === "running" && res.plannedMinutes === 25 && res.minValidMinutes === 5,
+    JSON.stringify(res),
+  );
+  await db.query("select public.rpc_cancel_focus_session($1)", [res.sessionId]);
+});
+
+// 2. plannedMinutes = 25, minValidMinutes = 50 -> accepted (max credit 50 >= 50)
+await setMinValidSetting(USER_A11, 50);
+await asUser(USER_A11, async () => {
+  const started = await db.query(
+    "select public.rpc_start_focus_session($1, 'a11-case-2-25-50', 25, 'pomodoro_25_5'::public.focus_mode, null, null) as res",
+    [deviceA11],
+  );
+  const res = started.rows[0].res;
+  check(
+    "A1.1-B2: plannedMinutes=25, minValidMinutes=50 is accepted (boundary 2*25 == 50) and snapshots minValidMinutes=50",
+    res.status === "running" && res.plannedMinutes === 25 && res.minValidMinutes === 50,
+    JSON.stringify(res),
+  );
+  await db.query("select public.rpc_cancel_focus_session($1)", [res.sessionId]);
+});
+
+// 3. plannedMinutes = 25, minValidMinutes = 51 -> rejected (max credit 50 < 51)
+await setMinValidSetting(USER_A11, 51);
+await expectError(
+  "A1.1-B3: plannedMinutes=25, minValidMinutes=51 is rejected with invalid_input",
+  () =>
+    asUser(USER_A11, () =>
+      db.query(
+        "select public.rpc_start_focus_session($1, 'a11-case-3-25-51', 25, 'pomodoro_25_5'::public.focus_mode, null, null)",
+        [deviceA11],
+      ),
+    ),
+  "invalid_input",
+);
+
+// 4. plannedMinutes = 30, minValidMinutes = 60 -> accepted (max credit 60 >= 60)
+await setMinValidSetting(USER_A11, 60);
+await asUser(USER_A11, async () => {
+  const started = await db.query(
+    "select public.rpc_start_focus_session($1, 'a11-case-4-30-60', 30, 'custom'::public.focus_mode, null, null) as res",
+    [deviceA11],
+  );
+  const res = started.rows[0].res;
+  check(
+    "A1.1-B4: plannedMinutes=30, minValidMinutes=60 is accepted and snapshots minValidMinutes=60",
+    res.status === "running" && res.plannedMinutes === 30 && res.minValidMinutes === 60,
+    JSON.stringify(res),
+  );
+  await db.query("select public.rpc_cancel_focus_session($1)", [res.sessionId]);
+});
+
+// 5. plannedMinutes = 50, minValidMinutes = 120 -> rejected (max credit 100 < 120)
+await setMinValidSetting(USER_A11, 120);
+await expectError(
+  "A1.1-B5: plannedMinutes=50, minValidMinutes=120 is rejected with invalid_input",
+  () =>
+    asUser(USER_A11, () =>
+      db.query(
+        "select public.rpc_start_focus_session($1, 'a11-case-5-50-120', 50, 'pomodoro_50_10'::public.focus_mode, null, null)",
+        [deviceA11],
+      ),
+    ),
+  "invalid_input",
+);
+
+// 6. Active session retains its original minimum threshold after user_settings.min_valid_focus_minutes changes!
+await setMinValidSetting(USER_A11, 15);
+let snapSessionId;
+await asUser(USER_A11, async () => {
+  const started = await db.query(
+    "select public.rpc_start_focus_session($1, 'a11-case-6-snapshot', 25, 'pomodoro_25_5'::public.focus_mode, null, null) as res",
+    [deviceA11],
+  );
+  snapSessionId = started.rows[0].res.sessionId;
+});
+
+// While session is running, user settings change to 60 minutes!
+await setMinValidSetting(USER_A11, 60);
+
+// Move session clock to 20 minutes (which satisfies the snapshotted 15m threshold, even though current setting is 60m)
+await asSuperuser(() =>
+  db.query(
+    "update public.focus_sessions set started_at = now() - interval '20 minutes 10 seconds' where id = $1",
+    [snapSessionId],
+  ),
+);
+
+await asUser(USER_A11, async () => {
+  const completed = await db.query(
+    "select public.rpc_complete_focus_session($1) as res",
+    [snapSessionId],
+  );
+  const res = completed.rows[0].res;
+  check(
+    "A1.1-B6: active session validates against its snapshotted minValidMinutes=15 (not the mid-session 60m setting change)",
+    res.isValid === true &&
+      res.minValidMinutes === 15 &&
+      res.actualMinutes === 20 &&
+      res.creditedMinutes === 20,
+    JSON.stringify(res),
+  );
+});
+
+// 7. A session below its stored minimum receives 0 credit even if user_settings is lowered mid-session.
+await setMinValidSetting(USER_A11, 20);
+let belowSnapSessionId;
+await asUser(USER_A11, async () => {
+  const started = await db.query(
+    "select public.rpc_start_focus_session($1, 'a11-case-7-below-snap', 25, 'pomodoro_25_5'::public.focus_mode, null, null) as res",
+    [deviceA11],
+  );
+  belowSnapSessionId = started.rows[0].res.sessionId;
+});
+
+// Lower user setting to 5m mid-session; session must STILL require its snapshotted 20m!
+await setMinValidSetting(USER_A11, 5);
+await asSuperuser(() =>
+  db.query(
+    "update public.focus_sessions set started_at = now() - interval '12 minutes 10 seconds' where id = $1",
+    [belowSnapSessionId],
+  ),
+);
+
+await asUser(USER_A11, async () => {
+  const completed = await db.query(
+    "select public.rpc_complete_focus_session($1) as res",
+    [belowSnapSessionId],
+  );
+  const res = completed.rows[0].res;
+  check(
+    "A1.1-B7: session at 12m below its snapshotted 20m threshold is invalid and receives 0 credit despite setting lowered to 5m",
+    res.isValid === false &&
+      res.minValidMinutes === 20 &&
+      res.actualMinutes === 12 &&
+      res.creditedMinutes === 0,
+    JSON.stringify(res),
+  );
+});
+
+// 10. Legacy session with impossible min_valid_minutes > planned_minutes * 2 cannot be marked valid on completion.
+let legacyImpossibleId;
+await asSuperuser(async () => {
+  const inserted = await db.query(
+    `insert into public.focus_sessions
+       (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
+     values ($1, $2, 'a11-case-10-legacy-impossible', 'custom', 25, 60, 'running', now() - interval '65 minutes')
+     returning id`,
+    [USER_A11, deviceA11],
+  );
+  legacyImpossibleId = inserted.rows[0].id;
+});
+
+await asUser(USER_A11, async () => {
+  const completed = await db.query(
+    "select public.rpc_complete_focus_session($1) as res",
+    [legacyImpossibleId],
+  );
+  const res = completed.rows[0].res;
+  check(
+    "A1.1-B10: legacy session with min_valid_minutes (60) > 2*planned_minutes (50) is safely marked invalid with 0 credit",
+    res.isValid === false && res.creditedMinutes === 0 && res.actualMinutes === 65,
+    JSON.stringify(res),
   );
 });
 

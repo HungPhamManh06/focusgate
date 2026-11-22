@@ -3,9 +3,18 @@ import test from "node:test";
 import {
   buildFocusPageMetrics,
   computeFocusTimerState,
+  evaluateFocusStarterOptions,
+  executeFocusCancelFlow,
+  executeFocusCompleteFlow,
   formatFocusModeLabel,
   formatSessionDurationSummary,
+  getFocusSubmissionUiLabels,
+  type FocusSubmissionState,
 } from "../lib/domain/focus-timer-state.ts";
+import {
+  getMinAllowedPlannedMinutes,
+  validatePlannedDurationAgainstMinValid,
+} from "../lib/validation.ts";
 import type { Plan } from "../lib/data/types.ts";
 
 const STARTED_AT = "2026-11-22T06:00:00.000Z";
@@ -162,7 +171,6 @@ test("B5: Timer at/beyond 2x planned duration transitions to FOCUS CREDIT LIMIT 
 });
 
 test("B6: Browser refresh / background sleep recovery derives exact elapsed time from server startedAt timestamp", () => {
-  // Simulate tab opening at t = 2m, sleeping/refreshing, and re-mounting at t = 27m 40s
   const beforeRefresh = computeFocusTimerState({
     startedAtIso: STARTED_AT,
     nowMs: STARTED_MS + 2 * 60 * 1000,
@@ -184,19 +192,14 @@ test("B6: Browser refresh / background sleep recovery derives exact elapsed time
 });
 
 test("B7, B8, B9, B10: Session duration summary & server verification formatting for valid, capped, and invalid sessions", () => {
-  // B7: Backend returns valid uncapped session
   assert.equal(
     formatSessionDurationSummary({ actualMinutes: 25, creditedMinutes: 25, isValid: true }),
     "25 min credited",
   );
-
-  // B7 (capped): Backend returns valid capped overtime session (56m actual -> 50m credited)
   assert.equal(
     formatSessionDurationSummary({ actualMinutes: 56, creditedMinutes: 50, isValid: true }),
     "50 min credited (56 min elapsed)",
   );
-
-  // B8: Backend returns invalid session (below minimum duration)
   assert.equal(
     formatSessionDurationSummary({ actualMinutes: 3, creditedMinutes: 0, isValid: false }),
     "3 min elapsed · 0 min credited",
@@ -204,7 +207,6 @@ test("B7, B8, B9, B10: Session duration summary & server verification formatting
 });
 
 test("B12 & B13: Focus metrics never display misleading 0% valid rate or green success tone when plan has 0 Must-dos", () => {
-  // Empty draft plan (0 Must-dos) and 0 completed sessions today
   const emptyDraftPlan = makePlan({ status: "draft" });
   const unconfiguredMetrics = buildFocusPageMetrics({
     sessionsCount: 0,
@@ -213,12 +215,10 @@ test("B12 & B13: Focus metrics never display misleading 0% valid rate or green s
     plan: emptyDraftPlan,
   });
 
-  // B12: No 0% when 0 completed sessions
   assert.equal(unconfiguredMetrics.validRateValue, "—");
   assert.equal(unconfiguredMetrics.validRateHint, "No completed sessions yet.");
   assert.equal(unconfiguredMetrics.validRateTone, "default");
 
-  // B13: No green "0m" success tone when plan has 0 Must-dos
   assert.equal(unconfiguredMetrics.planFocusLeftValue, "Not configured");
   assert.equal(
     unconfiguredMetrics.planFocusLeftHint,
@@ -229,7 +229,6 @@ test("B12 & B13: Focus metrics never display misleading 0% valid rate or green s
   assert.equal(unconfiguredMetrics.gateTitle, "Not configured");
   assert.equal(unconfiguredMetrics.gateDescription, "Add 1–5 Must-do tasks in your Planner.");
 
-  // Populated active plan with 50m required and 25m done -> default tone, 25m left
   const activePartialPlan = makePlan({
     status: "active",
     progress: {
@@ -252,7 +251,6 @@ test("B12 & B13: Focus metrics never display misleading 0% valid rate or green s
   assert.equal(partialMetrics.planFocusLeftTone, "default");
   assert.equal(partialMetrics.gateConfigured, true);
 
-  // Populated active plan with all focus completed (50m / 50m) -> success tone
   const activeDonePlan = makePlan({
     status: "active",
     progress: {
@@ -280,4 +278,292 @@ test("B14: Focus mode labels format all enum values and unknown fallbacks cleanl
   assert.equal(formatFocusModeLabel("custom"), "Custom");
   assert.equal(formatFocusModeLabel("open_ended"), "Open-ended");
   assert.equal(formatFocusModeLabel("flow_90_15"), "Flow 90 15");
+});
+
+// ===========================================================================
+// Milestone A1.1 Regression Suite: P1.1 (Complete vs. Cancel Retry Intent)
+// ===========================================================================
+
+test("A1.1-A: Complete vs Cancel failure and retry flows preserve user intent and never cross-call", async () => {
+  let submission: FocusSubmissionState = { status: "idle" };
+  let confirmEndOpen = true;
+  let confirmCancelOpen = true;
+  const inFlightRef = { current: false };
+
+  let completeCalls = 0;
+  let cancelCalls = 0;
+
+  // 1. Complete fails due to network error -> state is complete_error, retry target is complete, label is "Retry end & log session"
+  const completeFailState = await executeFocusCompleteFlow({
+    sessionId: "sess-1",
+    inFlightRef,
+    setSubmission: (s) => {
+      submission = s;
+    },
+    setConfirmEndOpen: (open) => {
+      confirmEndOpen = open;
+    },
+    completeAction: async () => {
+      completeCalls += 1;
+      throw new Error("Network timeout on complete");
+    },
+  });
+
+  assert.equal(completeCalls, 1);
+  assert.equal(cancelCalls, 0);
+  assert.equal(completeFailState.status, "complete_error");
+  assert.equal(submission.status, "complete_error");
+  assert.equal(confirmEndOpen, true); // dialog stays open on failure
+  const completeErrUi = getFocusSubmissionUiLabels(completeFailState);
+  assert.equal(completeErrUi.retryTarget, "complete");
+  assert.equal(completeErrUi.primaryCompleteLabel, "Retry end & log session");
+
+  // Retry Complete -> calls completeAction (never cancelAction), succeeds, closes dialog, sets verified state
+  const completeSuccessState = await executeFocusCompleteFlow({
+    sessionId: "sess-1",
+    inFlightRef,
+    setSubmission: (s) => {
+      submission = s;
+    },
+    setConfirmEndOpen: (open) => {
+      confirmEndOpen = open;
+    },
+    completeAction: async (id) => {
+      completeCalls += 1;
+      return {
+        success: "Session verified — 25 focused minutes credited.",
+        verification: {
+          sessionId: id,
+          actualMinutes: 25,
+          creditedMinutes: 25,
+          plannedMinutes: 25,
+          minValidMinutes: 5,
+          isValid: true,
+          idempotent: false,
+        },
+      };
+    },
+  });
+
+  assert.equal(completeCalls, 2);
+  assert.equal(cancelCalls, 0); // Complete retry NEVER called Cancel
+  assert.equal(confirmEndOpen, false); // Closed after success
+  assert.equal(completeSuccessState.status, "verified");
+  if (completeSuccessState.status === "verified") {
+    assert.equal(completeSuccessState.verification.creditedMinutes, 25);
+  }
+
+  // 2. Cancel fails due to network error -> state is cancel_error, retry target is cancel,
+  // Cancel dialog stays open, label is "Retry cancel session", and Cancel retry NEVER calls Complete!
+  submission = { status: "idle" };
+  confirmCancelOpen = true;
+
+  const cancelFailRes = await executeFocusCancelFlow({
+    sessionId: "sess-2",
+    inFlightRef,
+    setSubmission: (s) => {
+      submission = s;
+    },
+    setConfirmCancelOpen: (open) => {
+      confirmCancelOpen = open;
+    },
+    cancelAction: async () => {
+      cancelCalls += 1;
+      return { error: "Temporary network failure while cancelling" };
+    },
+  });
+
+  assert.equal(cancelFailRes.cancelled, false);
+  assert.equal(cancelCalls, 1);
+  assert.equal(completeCalls, 2); // Cancel failure NEVER called Complete
+  assert.equal(cancelFailRes.state.status, "cancel_error");
+  assert.equal(confirmCancelOpen, true); // Cancel dialog stays open so user can retry Cancel
+
+  const cancelErrUi = getFocusSubmissionUiLabels(cancelFailRes.state);
+  assert.equal(cancelErrUi.retryTarget, "cancel");
+  assert.equal(cancelErrUi.cancelDialogConfirmLabel, "Retry cancel session");
+
+  // Retry Cancel -> calls cancelAction (never completeAction), closes dialog, resets state to idle (never verified!)
+  const cancelSuccessRes = await executeFocusCancelFlow({
+    sessionId: "sess-2",
+    inFlightRef,
+    setSubmission: (s) => {
+      submission = s;
+    },
+    setConfirmCancelOpen: (open) => {
+      confirmCancelOpen = open;
+    },
+    cancelAction: async () => {
+      cancelCalls += 1;
+      return { success: "Session cancelled. Nothing was counted." };
+    },
+  });
+
+  assert.equal(cancelSuccessRes.cancelled, true);
+  assert.equal(cancelCalls, 2);
+  assert.equal(completeCalls, 2); // Cancel retry NEVER called Complete
+  assert.equal(confirmCancelOpen, false); // Dialog closed only after success
+  assert.equal(cancelSuccessRes.state.status, "idle"); // Never displays misleading verified completion state
+});
+
+test("A1.1-A: Synchronous inFlightRef prevents duplicate concurrent Complete or Cancel submissions", async () => {
+  const inFlightRef = { current: false };
+  let submission: FocusSubmissionState = { status: "idle" };
+  let calls = 0;
+
+  let resolveAction!: (val: { success: string }) => void;
+  const slowAction = () =>
+    new Promise<{ success: string }>((resolve) => {
+      calls += 1;
+      resolveAction = resolve;
+    });
+
+  // Fire two concurrent cancel clicks
+  const p1 = executeFocusCancelFlow({
+    sessionId: "sess-race",
+    inFlightRef,
+    setSubmission: (s) => {
+      submission = s;
+    },
+    setConfirmCancelOpen: () => undefined,
+    cancelAction: slowAction,
+  });
+
+  // While p1 is in flight, check UI labels and fire second click
+  assert.equal(inFlightRef.current, true);
+  const inFlightLabels = getFocusSubmissionUiLabels(submission);
+  assert.equal(inFlightLabels.isBusy, true);
+  assert.equal(inFlightLabels.isCancelling, true);
+  assert.equal(inFlightLabels.cancelDialogConfirmLabel, "Cancelling session…");
+
+  const p2 = executeFocusCancelFlow({
+    sessionId: "sess-race",
+    inFlightRef,
+    setSubmission: (s) => {
+      submission = s;
+    },
+    setConfirmCancelOpen: () => undefined,
+    cancelAction: slowAction,
+  });
+
+  resolveAction({ success: "Cancelled" });
+  await Promise.all([p1, p2]);
+
+  assert.equal(calls, 1); // Only 1 request was sent
+  assert.equal(inFlightRef.current, false);
+});
+
+// ===========================================================================
+// Milestone A1.1 Regression Suite: P1.2 (Minimum Duration vs Credit Cap)
+// ===========================================================================
+
+test("A1.1-B (Cases 1–5): Planned duration vs minimum-valid threshold validation and preset disabling", () => {
+  // Case 1: plannedMinutes = 25, minValidMinutes = 5 -> accepted
+  assert.equal(
+    validatePlannedDurationAgainstMinValid({ plannedMinutes: 25, minValidFocusMinutes: 5 }).valid,
+    true,
+  );
+  const eval5 = evaluateFocusStarterOptions(5);
+  assert.equal(eval5.minAllowedCustomMinutes, 5);
+  assert.equal(eval5.presets[0]?.disabled, false); // 25m allowed
+  assert.equal(eval5.presets[1]?.disabled, false); // 50m allowed
+  assert.equal(eval5.anyPresetAvailable, true);
+
+  // Case 2: plannedMinutes = 25, minValidMinutes = 50 -> accepted (25 * 2 == 50)
+  assert.equal(
+    validatePlannedDurationAgainstMinValid({ plannedMinutes: 25, minValidFocusMinutes: 50 }).valid,
+    true,
+  );
+  const eval50 = evaluateFocusStarterOptions(50);
+  assert.equal(eval50.minAllowedCustomMinutes, 25);
+  assert.equal(eval50.presets[0]?.disabled, false); // 25m allowed (max credit 50m)
+  assert.equal(eval50.presets[1]?.disabled, false); // 50m allowed (max credit 100m)
+
+  // Case 3: plannedMinutes = 25, minValidMinutes = 51 -> rejected (25 * 2 = 50 < 51)
+  const check25_51 = validatePlannedDurationAgainstMinValid({
+    plannedMinutes: 25,
+    minValidFocusMinutes: 51,
+  });
+  assert.equal(check25_51.valid, false);
+  if (!check25_51.valid) {
+    assert.equal(check25_51.minPlannedMinutes, 26);
+  }
+  const eval51 = evaluateFocusStarterOptions(51);
+  assert.equal(eval51.minAllowedCustomMinutes, 26);
+  assert.equal(eval51.presets[0]?.disabled, true); // 25m preset disabled!
+  assert.ok(eval51.presets[0]?.disabledReason?.includes("50m"));
+  assert.equal(eval51.presets[1]?.disabled, false); // 50m preset still valid
+
+  // Case 4: plannedMinutes = 30, minValidMinutes = 60 -> accepted (30 * 2 == 60)
+  assert.equal(
+    validatePlannedDurationAgainstMinValid({ plannedMinutes: 30, minValidFocusMinutes: 60 }).valid,
+    true,
+  );
+  assert.equal(getMinAllowedPlannedMinutes(60), 30);
+
+  // Case 5: plannedMinutes = 50, minValidMinutes = 120 -> rejected (50 * 2 = 100 < 120)
+  const check50_120 = validatePlannedDurationAgainstMinValid({
+    plannedMinutes: 50,
+    minValidFocusMinutes: 120,
+  });
+  assert.equal(check50_120.valid, false);
+  if (!check50_120.valid) {
+    assert.equal(check50_120.minPlannedMinutes, 60);
+  }
+  const eval120 = evaluateFocusStarterOptions(120);
+  assert.equal(eval120.minAllowedCustomMinutes, 60);
+  assert.equal(eval120.presets[0]?.disabled, true); // 25m disabled
+  assert.equal(eval120.presets[1]?.disabled, true); // 50m disabled
+  assert.equal(eval120.anyPresetAvailable, false); // Guides user to Custom >= 60m
+});
+
+test("A1.1-B (Cases 8, 9, 10): Timer projected credit never contradicts minimum threshold, even when minValid > planned or on legacy impossible sessions", () => {
+  // Case 9: Valid boundary configuration where plannedMinutes = 25 and snapshotted minValidMinutes = 50 (2x planned).
+  // At 30 minutes elapsed (past 25m planned, but still below 50m minValid!), timer MUST NOT claim Target Reached
+  // or show 30m projected credit — it must remain in below_min with 0m projected credit until 50:00!
+  const boundaryAt30m = computeFocusTimerState({
+    startedAtIso: STARTED_AT,
+    nowMs: STARTED_MS + 30 * 60 * 1000,
+    plannedMinutes: 25,
+    minValidMinutes: 50,
+  });
+  assert.equal(boundaryAt30m.phase, "below_min");
+  assert.equal(boundaryAt30m.meetsMinimumThreshold, false);
+  assert.equal(boundaryAt30m.projectedCreditedMinutes, 0);
+  assert.ok(boundaryAt30m.bannerTitle.includes("Minimum 50m required"));
+
+  // Once it reaches 50:00, it satisfies the 50m minimum and hits the 50m credit cap with 50m credit
+  const boundaryAt50m = computeFocusTimerState({
+    startedAtIso: STARTED_AT,
+    nowMs: STARTED_MS + 50 * 60 * 1000,
+    plannedMinutes: 25,
+    minValidMinutes: 50,
+  });
+  assert.equal(boundaryAt50m.phase, "credit_limit_reached");
+  assert.equal(boundaryAt50m.meetsMinimumThreshold, true);
+  assert.equal(boundaryAt50m.projectedCreditedMinutes, 50);
+
+  // Case 10: Legacy impossible session where plannedMinutes = 25 (max credit 50m) and minValidMinutes = 60.
+  // Even at 55 minutes (past the 50m credit cap) or 65 minutes (past 60m), projectedCreditedMinutes is ALWAYS 0
+  // and the UI explicitly warns that the minimum threshold exceeds the session's credit cap.
+  const legacyAt55m = computeFocusTimerState({
+    startedAtIso: STARTED_AT,
+    nowMs: STARTED_MS + 55 * 60 * 1000,
+    plannedMinutes: 25,
+    minValidMinutes: 60,
+  });
+  assert.equal(legacyAt55m.isImpossibleConfiguration, true);
+  assert.equal(legacyAt55m.meetsMinimumThreshold, false);
+  assert.equal(legacyAt55m.projectedCreditedMinutes, 0);
+  assert.ok(legacyAt55m.bannerTitle.includes("exceeds this session's 50m credit cap"));
+
+  const legacyAt65m = computeFocusTimerState({
+    startedAtIso: STARTED_AT,
+    nowMs: STARTED_MS + 65 * 60 * 1000,
+    plannedMinutes: 25,
+    minValidMinutes: 60,
+  });
+  assert.equal(legacyAt65m.isImpossibleConfiguration, true);
+  assert.equal(legacyAt65m.meetsMinimumThreshold, false);
+  assert.equal(legacyAt65m.projectedCreditedMinutes, 0);
 });

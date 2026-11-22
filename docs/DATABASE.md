@@ -1,6 +1,6 @@
 # FocusGate – Database
 
-PostgreSQL 15+ (Supabase). Four migrations, executed and tested against real
+PostgreSQL 15+ (Supabase). Five migrations, executed and tested against real
 PostgreSQL semantics.
 
 ```
@@ -8,6 +8,7 @@ supabase/migrations/20260101000001_init.sql                    schema, RLS, view
 supabase/migrations/20260101000002_plan_and_reward.sql         plan + reward RPCs
 supabase/migrations/20260101000003_backend_hardening.sql       server-owned focus, constraints
 supabase/migrations/20260101000004_focus_session_integrity.sql actual vs credited focus minutes
+supabase/migrations/20260101000005_focus_validity_snapshot.sql session-level min_valid_minutes snapshot
 supabase/seed.sql                                              development data
 ```
 
@@ -22,7 +23,7 @@ supabase/seed.sql                                              development data
 | `daily_plans` | One plan per user per date | unique `(user_id, plan_date)`, `status` |
 | `daily_plan_tasks` | Commitment snapshot | `plan_id`, `task_id`, `kind`, `required_focus_minutes`, `completed_at` |
 | `daily_plan_events` | Append-only audit history | `event_type`, `reason`, `payload`; RPC-only insert |
-| `focus_sessions` | Server-owned focus evidence | `device_id`, `client_id`, `planned/actual/credited_minutes`, `is_valid` |
+| `focus_sessions` | Server-owned focus evidence | `device_id`, `client_id`, `planned/min_valid/actual/credited_minutes`, `is_valid` |
 | `block_rules` | Per-device app policy | `rule_type` block/allow, `identifier`, `category`, `action` |
 | `unlock_grants` | Earned unlock windows | `granted/consumed/remaining`, `status`, `expires_at`, `idempotency_key` |
 | `reward_ledger` | Append-only minute history | `delta_minutes`, `reason`, unique idempotency key |
@@ -79,6 +80,9 @@ revoked; the RPCs below are the only write path.
 - requires an authenticated user and an active device owned by that user;
 - `client_id` is 8–100 characters and idempotent per `(device_id, client_id)`;
 - serializes starts per user with an advisory lock;
+- reads the user's current `min_valid_focus_minutes`, snapshots it into
+  `focus_sessions.min_valid_minutes`, and requires `planned_minutes * 2 >= min_valid_minutes`
+  (rejecting impossible durations whose 2× credit cap is below the minimum threshold);
 - refuses a second open session; a partial unique index
   `ux_focus_sessions_one_open` enforces this at the storage layer;
 - refuses another user's task or plan, a completed/cancelled task, a closed
@@ -91,8 +95,8 @@ revoked; the RPCs below are the only write path.
 - derives `actual_minutes` from `floor((now() - started_at) / 60)`, clamped to
   0–600, so a client cannot claim time that did not elapse;
 - `is_valid` and `credited_minutes` are recomputed by the trigger from
-  server-derived minutes (`credited_minutes = min(actual_minutes, planned_minutes * 2)`
-  when `is_valid`);
+  server-derived minutes against the session's snapshotted `min_valid_minutes`
+  (`credited_minutes = min(actual_minutes, planned_minutes * 2)` when `is_valid`);
 - replay on an already completed session returns the stored result.
 
 `rpc_cancel_focus_session(session)` records a cancelled session with zero
@@ -108,7 +112,10 @@ Pause/resume is not exposed because the server clock cannot verify paused time.
 - `focus_sessions.is_valid` and `focus_sessions.credited_minutes` are recomputed
   on every insert/update:
   - `status = 'completed'` and `ended_at` present and ≥ `started_at`;
-  - `actual_minutes ≥ user_settings.min_valid_focus_minutes` and `actual_minutes > 0`;
+  - `actual_minutes ≥ focus_sessions.min_valid_minutes` (snapshotted at session
+    start so mid-session settings changes do not alter active session rules),
+    `planned_minutes * 2 ≥ focus_sessions.min_valid_minutes`, and
+    `actual_minutes > 0`;
   - overtime beyond `planned_minutes × 2` does **not** invalidate the session;
     instead, `credited_minutes = least(actual_minutes, planned_minutes * 2)` when
     `is_valid = true` (and `0` when invalid or cancelled);

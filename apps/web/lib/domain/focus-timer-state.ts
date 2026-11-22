@@ -20,6 +20,60 @@ export function formatFocusModeLabel(mode: FocusMode | string): string {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
+export interface FocusStarterConfigEvaluation {
+  minValidMinutes: number;
+  minAllowedCustomMinutes: number;
+  presets: {
+    mode: "pomodoro_25_5" | "pomodoro_50_10";
+    label: string;
+    minutes: number;
+    maxCreditedMinutes: number;
+    hint: string;
+    disabled: boolean;
+    disabledReason: string | null;
+  }[];
+  anyPresetAvailable: boolean;
+}
+
+export function evaluateFocusStarterOptions(
+  minValidMinutesInput: number,
+): FocusStarterConfigEvaluation {
+  const minValidMinutes = Math.max(1, Math.round(minValidMinutesInput));
+  const minAllowedCustomMinutes = Math.max(5, Math.ceil(minValidMinutes / 2));
+
+  const rawPresets: {
+    mode: "pomodoro_25_5" | "pomodoro_50_10";
+    label: string;
+    minutes: number;
+    hint: string;
+  }[] = [
+    { mode: "pomodoro_25_5", label: "Quick block", minutes: 25, hint: "25 focus · 5 rest" },
+    { mode: "pomodoro_50_10", label: "Deep block", minutes: 50, hint: "50 focus · 10 rest" },
+  ];
+
+  const presets = rawPresets.map((preset) => {
+    const maxCreditedMinutes = preset.minutes * 2;
+    const disabled = maxCreditedMinutes < minValidMinutes;
+    const disabledReason = disabled
+      ? `Max credit is ${formatMinutes(maxCreditedMinutes)} (2× ${preset.minutes}m), below your ${formatMinutes(minValidMinutes)} minimum valid duration.`
+      : null;
+
+    return {
+      ...preset,
+      maxCreditedMinutes,
+      disabled,
+      disabledReason,
+    };
+  });
+
+  return {
+    minValidMinutes,
+    minAllowedCustomMinutes,
+    presets,
+    anyPresetAvailable: presets.some((preset) => !preset.disabled),
+  };
+}
+
 export type FocusTimerPhase =
   | "below_min"
   | "focusing"
@@ -38,10 +92,12 @@ export interface FocusTimerComputedState {
   elapsedSeconds: number;
   elapsedMinutes: number;
   plannedMinutes: number;
+  minValidMinutes: number;
   maxCreditedMinutes: number;
   projectedCreditedMinutes: number;
   overtimeSeconds: number;
   meetsMinimumThreshold: boolean;
+  isImpossibleConfiguration: boolean;
   isTargetReached: boolean;
   isOvertime: boolean;
   isCreditLimitReached: boolean;
@@ -51,12 +107,15 @@ export interface FocusTimerComputedState {
 }
 
 /**
- * Pure, deterministic state calculator for FocusTimer based on server start timestamp.
+ * Pure, deterministic state calculator for FocusTimer based on server start timestamp
+ * and the session's snapshotted `minValidMinutes`.
  *
- * Notice on validity wording:
- * Before the backend confirms completion, the UI must NEVER claim "This session is valid".
- * Instead, once `elapsedSeconds >= minValidSeconds`, it states "Minimum focus duration reached"
- * and explains the projected credit subject to server verification.
+ * Invariants enforced:
+ * 1. Before the backend confirms completion, the UI must NEVER claim "This session is valid".
+ * 2. `projectedCreditedMinutes` is ALWAYS 0 whenever `!meetsMinimumThreshold` OR
+ *    when `isImpossibleConfiguration` (`maxCreditedMinutes < minValidMinutes`).
+ * 3. If a legacy session has `maxCreditedMinutes < minValidMinutes`, reaching the credit cap
+ *    cannot be mistaken for a valid session — it explicitly surfaces an impossible-threshold warning.
  */
 export function computeFocusTimerState(input: {
   startedAtIso: string;
@@ -68,6 +127,7 @@ export function computeFocusTimerState(input: {
   const plannedMinutes = Math.max(1, Math.min(600, Math.round(input.plannedMinutes)));
   const minValidMinutes = Math.max(1, Math.round(input.minValidMinutes));
   const maxCreditedMinutes = plannedMinutes * 2;
+  const isImpossibleConfiguration = maxCreditedMinutes < minValidMinutes;
 
   const startedMs = new Date(input.startedAtIso).getTime();
   const rawDiffSeconds = Number.isFinite(startedMs)
@@ -80,54 +140,94 @@ export function computeFocusTimerState(input: {
   const plannedSeconds = plannedMinutes * 60;
   const maxCreditedSeconds = maxCreditedMinutes * 60;
 
-  const meetsMinimumThreshold = elapsedSeconds >= minValidSeconds;
+  const meetsMinimumThreshold =
+    !isImpossibleConfiguration && elapsedSeconds >= minValidSeconds;
   const isTargetReached = elapsedSeconds >= plannedSeconds;
   const isCreditLimitReached = elapsedSeconds >= maxCreditedSeconds;
   const overtimeSeconds = Math.max(0, elapsedSeconds - plannedSeconds);
 
-  // Within the target minute (or before clicking "Keep focusing" while under 1 min past target),
-  // surface the explicit "Target Reached" state; beyond that (or when user clicks Keep focusing),
-  // transition to Overtime, and finally Credit Limit Reached at 2x planned duration.
+  const ringProgress = Math.min(100, Math.max(0, (elapsedSeconds / plannedSeconds) * 100));
+
+  // Guard for any legacy session whose minimum threshold exceeds its 2x credit cap:
+  // It can never earn credit, so projectedCreditedMinutes is strictly 0 and the banner
+  // explicitly explains why.
+  if (isImpossibleConfiguration) {
+    const phase: FocusTimerPhase = isCreditLimitReached ? "credit_limit_reached" : "below_min";
+    return {
+      phase,
+      statusHeader: isCreditLimitReached ? "FOCUS CREDIT LIMIT REACHED" : "FOCUSING",
+      ringLabel: isCreditLimitReached ? "Credit limit reached" : "Below minimum",
+      clockDisplay: formatClock(elapsedSeconds),
+      subLabel: `${elapsedMinutes} / ${plannedMinutes} minutes (0m eligible)`,
+      ringProgress,
+      ringTone: "warning",
+      elapsedSeconds,
+      elapsedMinutes,
+      plannedMinutes,
+      minValidMinutes,
+      maxCreditedMinutes,
+      projectedCreditedMinutes: 0,
+      overtimeSeconds,
+      meetsMinimumThreshold: false,
+      isImpossibleConfiguration: true,
+      isTargetReached,
+      isOvertime: isTargetReached,
+      isCreditLimitReached,
+      bannerTone: "warning",
+      bannerTitle: `Minimum threshold (${formatMinutes(minValidMinutes)}) exceeds this session's ${formatMinutes(maxCreditedMinutes)} credit cap`,
+      bannerMessage: `This legacy ${formatMinutes(plannedMinutes)} block caps credit at ${formatMinutes(maxCreditedMinutes)} (2× planned), so it cannot satisfy a ${formatMinutes(minValidMinutes)} minimum threshold. Cancel and start a block of at least ${formatMinutes(Math.ceil(minValidMinutes / 2))}.`,
+    };
+  }
+
   let phase: FocusTimerPhase;
   if (isCreditLimitReached) {
     phase = "credit_limit_reached";
+  } else if (!meetsMinimumThreshold) {
+    // Even if elapsedSeconds >= plannedSeconds (e.g. planned=25m, minValid=50m, elapsed=30m),
+    // the session has NOT met its minimum threshold yet! It must remain in `below_min`
+    // with 0 projected credit until it reaches `minValidSeconds`.
+    phase = "below_min";
   } else if (isTargetReached) {
     const pastTargetWindow = elapsedSeconds >= plannedSeconds + 60;
     phase = input.keepFocusingOvertime || pastTargetWindow ? "overtime" : "target_reached";
-  } else if (meetsMinimumThreshold) {
-    phase = "focusing";
   } else {
-    phase = "below_min";
+    phase = "focusing";
   }
 
   const projectedCreditedMinutes = meetsMinimumThreshold
     ? Math.min(Math.max(elapsedMinutes, minValidMinutes), maxCreditedMinutes)
     : 0;
 
-  const ringProgress = Math.min(100, Math.max(0, (elapsedSeconds / plannedSeconds) * 100));
-
   if (phase === "below_min") {
+    const subLabel = isTargetReached
+      ? `${elapsedMinutes} / ${plannedMinutes} min (+${formatClock(overtimeSeconds)} toward ${minValidMinutes}m min)`
+      : `${elapsedMinutes} / ${plannedMinutes} minutes`;
+
     return {
       phase,
       statusHeader: "FOCUSING",
       ringLabel: "Focusing",
       clockDisplay: formatClock(elapsedSeconds),
-      subLabel: `${elapsedMinutes} / ${plannedMinutes} minutes`,
+      subLabel,
       ringProgress,
       ringTone: "accent",
       elapsedSeconds,
       elapsedMinutes,
       plannedMinutes,
+      minValidMinutes,
       maxCreditedMinutes,
-      projectedCreditedMinutes,
+      projectedCreditedMinutes: 0,
       overtimeSeconds,
-      meetsMinimumThreshold,
+      meetsMinimumThreshold: false,
+      isImpossibleConfiguration: false,
       isTargetReached,
-      isOvertime: false,
+      isOvertime: isTargetReached,
       isCreditLimitReached,
       bannerTone: "neutral",
       bannerTitle: `Minimum ${formatMinutes(minValidMinutes)} required`,
-      bannerMessage: `Keep going. Sessions under ${formatMinutes(minValidMinutes)} are saved to history but do not earn focus credit.`,
+      bannerMessage: isTargetReached
+        ? `Planned ${formatMinutes(plannedMinutes)} reached, but your session requires ${formatMinutes(minValidMinutes)} total to qualify for focus credit. Keep going.`
+        : `Keep going. Sessions under ${formatMinutes(minValidMinutes)} are saved to history but do not earn focus credit.`,
     };
   }
 
@@ -143,10 +243,12 @@ export function computeFocusTimerState(input: {
       elapsedSeconds,
       elapsedMinutes,
       plannedMinutes,
+      minValidMinutes,
       maxCreditedMinutes,
       projectedCreditedMinutes,
       overtimeSeconds,
-      meetsMinimumThreshold,
+      meetsMinimumThreshold: true,
+      isImpossibleConfiguration: false,
       isTargetReached,
       isOvertime: false,
       isCreditLimitReached,
@@ -168,10 +270,12 @@ export function computeFocusTimerState(input: {
       elapsedSeconds,
       elapsedMinutes,
       plannedMinutes,
+      minValidMinutes,
       maxCreditedMinutes,
       projectedCreditedMinutes,
       overtimeSeconds,
-      meetsMinimumThreshold,
+      meetsMinimumThreshold: true,
+      isImpossibleConfiguration: false,
       isTargetReached,
       isOvertime: false,
       isCreditLimitReached,
@@ -194,10 +298,12 @@ export function computeFocusTimerState(input: {
       elapsedSeconds,
       elapsedMinutes,
       plannedMinutes,
+      minValidMinutes,
       maxCreditedMinutes,
       projectedCreditedMinutes,
       overtimeSeconds,
-      meetsMinimumThreshold,
+      meetsMinimumThreshold: true,
+      isImpossibleConfiguration: false,
       isTargetReached,
       isOvertime: true,
       isCreditLimitReached,
@@ -219,10 +325,12 @@ export function computeFocusTimerState(input: {
     elapsedSeconds,
     elapsedMinutes,
     plannedMinutes,
+    minValidMinutes,
     maxCreditedMinutes,
     projectedCreditedMinutes: maxCreditedMinutes,
     overtimeSeconds,
-    meetsMinimumThreshold,
+    meetsMinimumThreshold: true,
+    isImpossibleConfiguration: false,
     isTargetReached,
     isOvertime: true,
     isCreditLimitReached: true,
@@ -231,6 +339,204 @@ export function computeFocusTimerState(input: {
     bannerMessage:
       "Additional elapsed time will not increase the focus credit for this session. End & log session to save your verified progress.",
   };
+}
+
+// ---------------------------------------------------------------------------
+// P1.1 — Action-Intent Preserving Submission State Machine (Complete vs Cancel)
+// ---------------------------------------------------------------------------
+
+export interface FocusVerificationSummary {
+  sessionId: string;
+  actualMinutes: number;
+  creditedMinutes: number;
+  plannedMinutes: number;
+  minValidMinutes?: number;
+  isValid: boolean;
+  idempotent: boolean;
+}
+
+export type FocusSubmissionState =
+  | { status: "idle" }
+  | { status: "completing" }
+  | { status: "cancelling" }
+  | { status: "complete_error"; message: string }
+  | { status: "cancel_error"; message: string }
+  | {
+      status: "verified";
+      verification: FocusVerificationSummary;
+      message: string;
+    };
+
+export interface FocusSubmissionUiLabels {
+  isBusy: boolean;
+  isCompleting: boolean;
+  isCancelling: boolean;
+  primaryCompleteLabel: string;
+  cancelDialogConfirmLabel: string;
+  retryTarget: "complete" | "cancel" | null;
+}
+
+export function getFocusSubmissionUiLabels(
+  submission: FocusSubmissionState,
+  pending = false,
+): FocusSubmissionUiLabels {
+  const isCompleting = submission.status === "completing";
+  const isCancelling = submission.status === "cancelling";
+  const isBusy = pending || isCompleting || isCancelling;
+
+  const primaryCompleteLabel = isCompleting
+    ? "Verifying session…"
+    : submission.status === "complete_error"
+      ? "Retry end & log session"
+      : "End & log session";
+
+  const cancelDialogConfirmLabel = isCancelling
+    ? "Cancelling session…"
+    : submission.status === "cancel_error"
+      ? "Retry cancel session"
+      : "Discard session";
+
+  const retryTarget =
+    submission.status === "complete_error"
+      ? "complete"
+      : submission.status === "cancel_error"
+        ? "cancel"
+        : null;
+
+  return {
+    isBusy,
+    isCompleting,
+    isCancelling,
+    primaryCompleteLabel,
+    cancelDialogConfirmLabel,
+    retryTarget,
+  };
+}
+
+/**
+ * Pure coordinator for Complete and Cancel operations that preserves action intent,
+ * prevents concurrent duplicate submissions via `inFlightRef`, keeps the relevant
+ * dialog open on failure, and closes it only on success.
+ */
+export async function executeFocusCompleteFlow(params: {
+  sessionId: string;
+  inFlightRef: { current: boolean };
+  setSubmission: (state: FocusSubmissionState) => void;
+  setConfirmEndOpen: (open: boolean) => void;
+  completeAction: (sessionId: string) => Promise<{
+    error?: string;
+    success?: string;
+    verification?: FocusVerificationSummary;
+  }>;
+  onToast?: (tone: "success" | "info" | "error", message: string) => void;
+}): Promise<FocusSubmissionState> {
+  if (params.inFlightRef.current) {
+    return { status: "completing" };
+  }
+  params.inFlightRef.current = true;
+  const startingState: FocusSubmissionState = { status: "completing" };
+  params.setSubmission(startingState);
+
+  try {
+    const result = await params.completeAction(params.sessionId);
+    if (result.error) {
+      const errState: FocusSubmissionState = {
+        status: "complete_error",
+        message: result.error,
+      };
+      params.setSubmission(errState);
+      params.onToast?.("error", result.error);
+      return errState;
+    }
+
+    if (result.verification) {
+      const message =
+        result.success ??
+        (result.verification.isValid
+          ? `Session verified — ${result.verification.creditedMinutes}m credited.`
+          : "Session ended below minimum valid duration.");
+      const verifiedState: FocusSubmissionState = {
+        status: "verified",
+        verification: result.verification,
+        message,
+      };
+      params.setSubmission(verifiedState);
+      params.setConfirmEndOpen(false);
+      params.onToast?.(result.verification.isValid ? "success" : "info", message);
+      return verifiedState;
+    }
+
+    const idleState: FocusSubmissionState = { status: "idle" };
+    params.setSubmission(idleState);
+    params.setConfirmEndOpen(false);
+    if (result.success) params.onToast?.("success", result.success);
+    return idleState;
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Network error while verifying session. Your session is safe — please retry.";
+    const errState: FocusSubmissionState = { status: "complete_error", message };
+    params.setSubmission(errState);
+    params.onToast?.("error", message);
+    return errState;
+  } finally {
+    params.inFlightRef.current = false;
+  }
+}
+
+export async function executeFocusCancelFlow(params: {
+  sessionId: string;
+  inFlightRef: { current: boolean };
+  setSubmission: (state: FocusSubmissionState) => void;
+  setConfirmCancelOpen: (open: boolean) => void;
+  cancelAction: (sessionId: string) => Promise<{
+    error?: string;
+    success?: string;
+  }>;
+  onToast?: (tone: "success" | "info" | "error", message: string) => void;
+}): Promise<{ state: FocusSubmissionState; cancelled: boolean }> {
+  if (params.inFlightRef.current) {
+    return { state: { status: "cancelling" }, cancelled: false };
+  }
+  params.inFlightRef.current = true;
+  const startingState: FocusSubmissionState = { status: "cancelling" };
+  params.setSubmission(startingState);
+
+  try {
+    const result = await params.cancelAction(params.sessionId);
+    if (result.error) {
+      const errState: FocusSubmissionState = {
+        status: "cancel_error",
+        message: result.error,
+      };
+      params.setSubmission(errState);
+      // Keep the Cancel confirmation dialog open so the user can retry Cancel directly
+      params.setConfirmCancelOpen(true);
+      params.onToast?.("error", result.error);
+      return { state: errState, cancelled: false };
+    }
+
+    // Successful Cancel resets submission state to idle (never `verified`),
+    // closes the cancel dialog, and logs 0 credit.
+    const idleState: FocusSubmissionState = { status: "idle" };
+    params.setSubmission(idleState);
+    params.setConfirmCancelOpen(false);
+    if (result.success) params.onToast?.("info", result.success);
+    return { state: idleState, cancelled: true };
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Could not cancel session due to a network error. Please try again.";
+    const errState: FocusSubmissionState = { status: "cancel_error", message };
+    params.setSubmission(errState);
+    params.setConfirmCancelOpen(true);
+    params.onToast?.("error", message);
+    return { state: errState, cancelled: false };
+  } finally {
+    params.inFlightRef.current = false;
+  }
 }
 
 export interface FocusPageMetricsViewModel {

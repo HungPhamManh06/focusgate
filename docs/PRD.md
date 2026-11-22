@@ -79,8 +79,12 @@ written reason, recorded in immutable plan history.
 Pomodoro 25/5, 50/10, custom and open-ended sessions. Start, complete, cancel
 (pause/resume is intentionally deferred until server-side pause accounting is
 introduced; see `docs/MILESTONE_A1_FOCUS_INTEGRITY_REPORT.md`). Every session is
-attached to a device and optionally to a task and plan. Server computes validity
-(`actual_minutes >= min_valid_focus_minutes`) and deterministic focus credit
+attached to a device and optionally to a task and plan. At session start, the
+server snapshots the user's current `min_valid_focus_minutes` into the session
+and rejects planned durations whose 2× credit cap is below that minimum
+threshold (`planned_minutes * 2 >= min_valid_minutes`). Upon completion, the
+server computes validity against the session's snapshotted `min_valid_minutes`
+(`actual_minutes >= min_valid_minutes`) and deterministic focus credit
 (`credited_minutes = min(actual_minutes, planned_minutes * 2)`). Overtime beyond
 2× planned duration never invalidates the session; task progress, plan focus
 coverage, statistics, and extra-focus rewards use `credited_minutes` from valid

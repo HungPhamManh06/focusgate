@@ -24,6 +24,27 @@ export const focusStartSchema = z.object({
   minutes: z.coerce.number().int().min(5, "A session needs at least 5 minutes.").max(180),
 });
 
+export function getMinAllowedPlannedMinutes(minValidFocusMinutes: number): number {
+  const safeMinValid = Math.max(1, Math.round(minValidFocusMinutes));
+  return Math.max(5, Math.ceil(safeMinValid / 2));
+}
+
+export function validatePlannedDurationAgainstMinValid(input: {
+  plannedMinutes: number;
+  minValidFocusMinutes: number;
+}): { valid: true } | { valid: false; error: string; minPlannedMinutes: number } {
+  const safeMinValid = Math.max(1, Math.round(input.minValidFocusMinutes));
+  const minPlannedMinutes = getMinAllowedPlannedMinutes(safeMinValid);
+  if (input.plannedMinutes * 2 < safeMinValid) {
+    return {
+      valid: false,
+      minPlannedMinutes,
+      error: `A ${input.plannedMinutes}m block caps credit at ${input.plannedMinutes * 2}m, which is below your ${safeMinValid}m minimum valid duration. Choose at least ${minPlannedMinutes} minutes.`,
+    };
+  }
+  return { valid: true };
+}
+
 export const spendSchema = z.object({
   grantId: z.string().uuid("Choose an active grant."),
   minutes: z.coerce.number().int().min(1, "Spend at least 1 minute.").max(600),

@@ -84,7 +84,7 @@ async function createDatabase(): Promise<PGlite> {
     }
     console.info(`[focusgate/db] applied ${files.length} migrations`);
   } else {
-    // Incrementally apply migration 0004 if this local workspace was initialized before it existed.
+    // Incrementally apply migrations 0004 and 0005 if this local workspace was initialized before they existed.
     const hasCredited = await db.query<{ present: boolean }>(
       `select exists (
          select 1 from information_schema.columns
@@ -99,6 +99,22 @@ async function createDatabase(): Promise<PGlite> {
         await readFile(path.join(migrationsDir, "20260101000004_focus_session_integrity.sql"), "utf8"),
       );
       console.info("[focusgate/db] applied incremental migration 20260101000004_focus_session_integrity.sql");
+    }
+
+    const hasMinValidSnapshot = await db.query<{ present: boolean }>(
+      `select exists (
+         select 1 from information_schema.columns
+         where table_schema = 'public'
+           and table_name = 'focus_sessions'
+           and column_name = 'min_valid_minutes'
+       ) as present`,
+    );
+    if (!hasMinValidSnapshot.rows[0]?.present) {
+      const migrationsDir = await resolveMigrationsDir();
+      await db.exec(
+        await readFile(path.join(migrationsDir, "20260101000005_focus_validity_snapshot.sql"), "utf8"),
+      );
+      console.info("[focusgate/db] applied incremental migration 20260101000005_focus_validity_snapshot.sql");
     }
   }
 

@@ -6,7 +6,11 @@ import {
   startFocusSession,
 } from "@/lib/data/focus";
 import { friendlyDbError } from "@/lib/data/errors";
-import { focusStartSchema } from "@/lib/validation";
+import { getWorkspace } from "@/lib/data/workspace";
+import {
+  focusStartSchema,
+  validatePlannedDurationAgainstMinValid,
+} from "@/lib/validation";
 import { revalidateWorkspace } from "./shared";
 import { firstIssue, type ActionState } from "./types";
 import type { FocusMode } from "@/lib/data/types";
@@ -20,6 +24,15 @@ export async function startFocusAction(input: {
   if (!parsed.success) return { error: firstIssue(parsed.error) };
 
   try {
+    const workspace = await getWorkspace();
+    const minValidCheck = validatePlannedDurationAgainstMinValid({
+      plannedMinutes: parsed.data.minutes,
+      minValidFocusMinutes: workspace.settings.minValidFocusMinutes,
+    });
+    if (!minValidCheck.valid) {
+      return { error: minValidCheck.error };
+    }
+
     await startFocusSession({
       taskId: parsed.data.taskId ?? null,
       mode: parsed.data.mode,
@@ -48,6 +61,7 @@ export interface FocusCompletionActionResult extends ActionState {
     actualMinutes: number;
     creditedMinutes: number;
     plannedMinutes: number;
+    minValidMinutes: number;
     isValid: boolean;
     idempotent: boolean;
   };

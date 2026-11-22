@@ -107,12 +107,14 @@ when coverage is missing. Never fires from a timer.
   "status": "running",
   "startedAt": "2026-11-21T09:00:00Z",
   "plannedMinutes": 25,
+  "minValidMinutes": 5,
   "idempotent": false
 }
 ```
 
 - The server sets `started_at`; the client cannot submit a timestamp.
 - `client_id` is 8–100 characters and idempotent per `(device_id, client_id)`.
+- Snapshots the user's current `min_valid_focus_minutes` into `focus_sessions.min_valid_minutes` and enforces `planned_minutes * 2 >= min_valid_minutes` (`invalid_input` if the 2× credit cap is below the minimum threshold).
 - Requires an active device owned by the caller, and refuses a second open
   session (`focus_session_active`).
 - Optional task/plan must belong to the caller; a plan-linked session requires a
@@ -124,14 +126,16 @@ when coverage is missing. Never fires from a timer.
 {
   "sessionId": "uuid",
   "actualMinutes": 26,
+  "creditedMinutes": 26,
+  "plannedMinutes": 25,
+  "minValidMinutes": 5,
   "isValid": true,
   "endedAt": "2026-11-21T09:26:00Z",
   "idempotent": false
 }
 ```
 
-The server derives elapsed minutes from its own clock and clamps claimed time.
-The client does not send minutes. Replaying a completed session is idempotent.
+The server derives elapsed minutes from its own clock, validates against the session's snapshotted `min_valid_minutes`, and caps `credited_minutes` at `min(actual_minutes, planned_minutes * 2)`. The client does not send minutes. Replaying a completed session is idempotent.
 
 ### `rpc_cancel_focus_session(p_session_id) → jsonb`
 
