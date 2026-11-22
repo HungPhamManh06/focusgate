@@ -21,6 +21,7 @@ import com.focusgate.app.data.BlockedApp
 import com.focusgate.app.data.FocusGateDatabase
 import com.focusgate.app.data.UsageEvent
 import com.focusgate.app.policy.PolicyEvaluator
+import com.focusgate.app.ui.LockActivity
 import com.focusgate.app.ui.MainActivity
 import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
@@ -260,7 +261,7 @@ class AppUsageMonitorService : Service() {
         lastEventTimestamp = newestTimestamp
 
         refreshDeviceEssential(now)
-        val current = resolveCurrentForeground(manager, now) ?: foregroundPackage
+        val current = resolveCurrentForeground(manager, now)
         if (current != null && current != foregroundPackage) {
             foregroundPackage = current
         }
@@ -300,6 +301,8 @@ class AppUsageMonitorService : Service() {
         var latestActive: String? = null
         var lastPausedPkg: String? = null
         var lastPausedAt = 0L
+        var lastNonEssentialPkg: String? = null
+        var lastNonEssentialAt = 0L
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
@@ -307,6 +310,10 @@ class AppUsageMonitorService : Service() {
             when {
                 isForegroundEvent(event.eventType) -> {
                     latestActive = pkg
+                    if (pkg != packageName && !PolicyEvaluator.isEssential(pkg, deviceEssential)) {
+                        lastNonEssentialPkg = pkg
+                        lastNonEssentialAt = event.timeStamp
+                    }
                 }
                 isBackgroundEvent(event.eventType) -> {
                     if (pkg == latestActive) {
@@ -320,14 +327,23 @@ class AppUsageMonitorService : Service() {
 
         if (latestActive != null) return latestActive
 
-        // On MIUI/HyperOS, dragging into Recents and dropping back into an app can emit
-        // ACTIVITY_PAUSED without re-emitting ACTIVITY_RESUMED. If no launcher/essential
-        // app was used more recently than that pause, the app is still in the foreground.
-        if (lastPausedPkg != null &&
-            lastPausedPkg != packageName &&
-            !PolicyEvaluator.isEssential(lastPausedPkg, deviceEssential) &&
-            now - lastPausedAt < FOREGROUND_LOOKBACK_MS
-        ) {
+        // On MIUI/HyperOS, dragging into Recents and dropping back into an app can:
+        // 1) emit ACTIVITY_PAUSED for the app without re-emitting ACTIVITY_RESUMED, OR
+        // 2) emit ACTIVITY_RESUMED then ACTIVITY_PAUSED for the launcher (Recents) when
+        //    the gesture is cancelled back into the underlying app.
+        val candidate = when {
+            lastPausedPkg != null &&
+                lastPausedPkg != packageName &&
+                !PolicyEvaluator.isEssential(lastPausedPkg, deviceEssential) &&
+                now - lastPausedAt < FOREGROUND_LOOKBACK_MS -> lastPausedPkg
+            lastPausedPkg != null &&
+                PolicyEvaluator.isEssential(lastPausedPkg, deviceEssential) &&
+                lastNonEssentialPkg != null &&
+                now - lastNonEssentialAt < FOREGROUND_LOOKBACK_MS -> lastNonEssentialPkg
+            else -> null
+        }
+
+        if (candidate != null) {
             val stats = manager.queryUsageStats(
                 UsageStatsManager.INTERVAL_BEST,
                 lastPausedAt,
@@ -339,10 +355,10 @@ class AppUsageMonitorService : Service() {
                         PolicyEvaluator.isEssential(stat.packageName, deviceEssential))
             } == true
             if (!essentialUsedAfter) {
-                return lastPausedPkg
+                return candidate
             }
         }
-        return null
+        return foregroundPackage
     }
 
     private fun refreshDeviceEssential(now: Long) {
@@ -436,6 +452,7 @@ class AppUsageMonitorService : Service() {
 
         if (shown) {
             lastShownBlockFor = packageName
+            runCatching { startActivity(LockActivity.createIntent(this, appLabel)) }
         } else {
             lastShownBlockFor = null
             val now = System.currentTimeMillis()
