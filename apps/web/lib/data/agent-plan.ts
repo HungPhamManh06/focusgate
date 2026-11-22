@@ -176,8 +176,16 @@ export async function completeAgentPlanTask(
     return getAgentTodayPlan(request);
   }
 
+  const current = await getAgentTodayPlan(request);
+  if (current.plan?.status === "draft") {
+    assertSupabaseOk(await ctx.supabase.rpc("rpc_confirm_plan", { p_plan_id: current.plan.id }));
+    assertSupabaseOk(await ctx.supabase.rpc("rpc_activate_plan", { p_plan_id: current.plan.id }));
+  } else if (current.plan?.status === "confirmed") {
+    assertSupabaseOk(await ctx.supabase.rpc("rpc_activate_plan", { p_plan_id: current.plan.id }));
+  }
+
   assertSupabaseOk(
-    await ctx.supabase.rpc("rpc_complete_plan_task", {
+    await ctx.supabase.rpc("rpc_complete_plan_task_direct", {
       p_plan_task_id: input.planTaskId,
     }),
   );

@@ -156,15 +156,15 @@ export function TaskFormDialog({
                     min={0}
                     max={480}
                     step={5}
-                    defaultValue={task?.requiredFocusMinutes ?? 25}
+                    defaultValue={task?.requiredFocusMinutes ?? 0}
                     required
                   />
                 </div>
               </div>
 
               <p className="text-[11px] leading-relaxed text-muted">
-                Any task with focus required &gt; 0 needs that many valid focus minutes in an active
-                plan before completion (up to the estimate). Set 0 to complete without focus.
+                Default is 0 so you can check off tasks without a timer. Set &gt; 0 only if a task
+                must be backed by focused minutes.
               </p>
 
               <details

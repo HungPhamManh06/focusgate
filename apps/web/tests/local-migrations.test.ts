@@ -126,6 +126,7 @@ test("Scenario A — Existing 0005 upgrade: supersedes 0006, applies 0007+0008, 
     "20260101000007_focus_snapshot_backfill_safety.sql",
     "20260101000008_focus_migration_compatibility.sql",
     "20260101000009_focus_pause_resume.sql",
+    "20260101000010_optional_task_focus_requirement.sql",
   ]);
   assert.deepEqual(res.recovered, []);
 
@@ -241,6 +242,7 @@ test("Scenario B — Real existing 0006 upgrade: preserves 0006 marker as '1', r
     "20260101000007_focus_snapshot_backfill_safety.sql",
     "20260101000008_focus_migration_compatibility.sql",
     "20260101000009_focus_pause_resume.sql",
+    "20260101000010_optional_task_focus_requirement.sql",
   ]);
 
   const marker0006 = await db.query<{ value: string }>(
@@ -318,6 +320,7 @@ test("Scenario C — Interrupted 0005 upgrade: recovers 0006 as 'superseded_by_0
   assert.deepEqual(res.applied, [
     "20260101000008_focus_migration_compatibility.sql",
     "20260101000009_focus_pause_resume.sql",
+    "20260101000010_optional_task_focus_requirement.sql",
   ]);
 
   const marker0006 = await db.query<{ value: string }>(
@@ -391,6 +394,7 @@ test("Scenario D — Failure before 0007 completes: keeps pending_supersede, nev
       "20260101000007_focus_snapshot_backfill_safety.sql",
       "20260101000008_focus_migration_compatibility.sql",
       "20260101000009_focus_pause_resume.sql",
+      "20260101000010_optional_task_focus_requirement.sql",
     ]);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
@@ -429,6 +433,7 @@ test("Scenario E — Existing 0007 database & Fresh 0001..0008: applies 0008 onl
   assert.deepEqual(res0007.applied, [
     "20260101000008_focus_migration_compatibility.sql",
     "20260101000009_focus_pause_resume.sql",
+    "20260101000010_optional_task_focus_requirement.sql",
   ]);
   assert.deepEqual(res0007.superseded, []);
 
@@ -437,10 +442,10 @@ test("Scenario E — Existing 0007 database & Fresh 0001..0008: applies 0008 onl
   assert.deepEqual(repeat0007.superseded, []);
   await db0007.close();
 
-  // 2. Fresh 0001..0009 installation
+  // 2. Fresh 0001..0010 installation
   const dbFresh = await createBootstrappedDb();
   const freshFirst = await applyLocalMigrations(dbFresh, MIGRATIONS_DIR);
-  assert.equal(freshFirst.applied.length, 9);
+  assert.equal(freshFirst.applied.length, 10);
   assert.deepEqual(freshFirst.superseded, []);
 
   const freshSecond = await applyLocalMigrations(dbFresh, MIGRATIONS_DIR);
