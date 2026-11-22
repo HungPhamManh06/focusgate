@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Loader2, Trash2 } from "lucide-react";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   completeTaskAction,
   deleteTaskAction,
@@ -10,6 +10,7 @@ import {
 import { formatDate, relativeDue } from "@/lib/data/format";
 import type { Task } from "@/lib/data/types";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { categoryLabels, priorityLabels } from "@/components/domain/labels";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ import { TaskFormDialog } from "./task-form-dialog";
 
 export function TaskRow({ task, timezone }: { task: Task; timezone: string }) {
   const [pending, startTransition] = useTransition();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const toast = useToast();
   const completed = task.status === "completed";
   const due = relativeDue(task.dueDate, timezone);
@@ -33,11 +35,11 @@ export function TaskRow({ task, timezone }: { task: Task; timezone: string }) {
   }
 
   function remove() {
-    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
     startTransition(async () => {
       const result = await deleteTaskAction(task.id);
       if (result.error) toast.push("error", result.error);
       else if (result.success) toast.push("success", result.success);
+      setConfirmDeleteOpen(false);
     });
   }
 
@@ -113,7 +115,7 @@ export function TaskRow({ task, timezone }: { task: Task; timezone: string }) {
         <TaskFormDialog task={task} trigger="edit" />
         <button
           type="button"
-          onClick={remove}
+          onClick={() => setConfirmDeleteOpen(true)}
           disabled={pending}
           aria-label={`Delete ${task.title}`}
           className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-danger-soft hover:text-danger"
@@ -121,6 +123,24 @@ export function TaskRow({ task, timezone }: { task: Task; timezone: string }) {
           <Trash2 className="size-3.5" />
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        onConfirm={remove}
+        eyebrow="Delete task"
+        title="Remove this task?"
+        description={
+          <>
+            You are about to permanently delete{" "}
+            <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span>. This action
+            cannot be undone.
+          </>
+        }
+        confirmLabel="Delete task"
+        confirmVariant="danger"
+        pending={pending}
+      />
     </div>
   );
 }

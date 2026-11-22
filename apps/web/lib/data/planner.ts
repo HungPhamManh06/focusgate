@@ -242,6 +242,20 @@ export async function removePlanTask(planTaskId: string): Promise<void> {
   });
 }
 
+export async function amendPlanTask(
+  planTaskId: string,
+  newKind: TaskKind,
+  reason: string | null = null,
+): Promise<{ changed: boolean; exception: boolean }> {
+  return withUser(async (db) => {
+    const result = await db.query<{ result: { changed: boolean; exception: boolean } }>(
+      "select public.rpc_amend_plan_task($1, $2::public.task_kind, $3) as result",
+      [planTaskId, newKind, reason],
+    );
+    return result.rows[0]?.result ?? { changed: false, exception: false };
+  });
+}
+
 export async function confirmPlan(planId: string): Promise<void> {
   await withUser(async (db) => {
     await db.query("select public.rpc_confirm_plan($1)", [planId]);

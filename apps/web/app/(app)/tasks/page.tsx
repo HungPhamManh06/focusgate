@@ -3,7 +3,6 @@ import { ListTodo, Search, SlidersHorizontal } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { getTaskCounts, listTasks, type TaskFilters } from "@/lib/data/tasks";
 import { getWorkspace } from "@/lib/data/workspace";
@@ -12,6 +11,7 @@ import { kindDescriptions, kindLabels } from "@/components/domain/labels";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "./task-form-dialog";
 import { TaskRow } from "./task-row";
+import { TaskSearch } from "./task-search";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +89,7 @@ export default async function TasksPage({
             <Link
               key={tab.value}
               href={buildHref(params, { view: tab.value })}
+              aria-current={view === tab.value ? "page" : undefined}
               className={cn(
                 "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
                 view === tab.value
@@ -106,6 +107,7 @@ export default async function TasksPage({
             <SlidersHorizontal className="mx-1 size-3.5 text-muted" aria-hidden />
             <Link
               href={buildHref(params, { kind: undefined })}
+              aria-current={!kind ? "page" : undefined}
               className={cn(
                 "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
                 !kind
@@ -119,6 +121,7 @@ export default async function TasksPage({
               <Link
                 key={option}
                 href={buildHref(params, { kind: option === kind ? undefined : option })}
+                aria-current={kind === option ? "page" : undefined}
                 className={cn(
                   "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
                   kind === option
@@ -131,21 +134,7 @@ export default async function TasksPage({
             ))}
           </div>
 
-          <form action="/tasks" className="relative">
-            {view !== "all" ? <input type="hidden" name="view" value={view} /> : null}
-            {kind ? <input type="hidden" name="kind" value={kind} /> : null}
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted"
-              aria-hidden
-            />
-            <Input
-              name="q"
-              defaultValue={search ?? ""}
-              placeholder="Search tasks"
-              aria-label="Search tasks"
-              className="h-9 w-full pl-8 text-[12px] sm:w-[190px]"
-            />
-          </form>
+          <TaskSearch initialQuery={search} />
         </div>
       </div>
 

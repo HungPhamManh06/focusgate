@@ -72,6 +72,7 @@ export default async function StatisticsPage({
           <Link
             key={option.value}
             href={`/statistics?period=${option.value}`}
+            aria-current={period === option.value ? "page" : undefined}
             className={cn(
               "rounded-full px-4 py-1.5 text-[12px] font-medium transition-colors",
               period === option.value

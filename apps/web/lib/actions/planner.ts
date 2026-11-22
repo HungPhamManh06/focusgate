@@ -3,6 +3,7 @@
 import {
   activatePlan,
   addPlanTask,
+  amendPlanTask,
   completePlan,
   completePlanTask,
   confirmPlan,
@@ -45,6 +46,30 @@ export async function removePlanTaskAction(planTaskId: string): Promise<ActionSt
     await removePlanTask(planTaskId);
     revalidateWorkspace();
     return { success: "Task removed from the plan." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function amendPlanTaskAction(input: {
+  planTaskId: string;
+  newKind: TaskKind;
+  reason?: string | null;
+}): Promise<ActionState> {
+  if (!taskKinds.includes(input.newKind)) return { error: "Choose a valid task type." };
+  try {
+    const outcome = await amendPlanTask(
+      input.planTaskId,
+      input.newKind,
+      input.reason?.trim() || null,
+    );
+    revalidateWorkspace();
+    if (!outcome.changed) return { success: "Task commitment tier unchanged." };
+    return {
+      success: outcome.exception
+        ? "Exception recorded in gate history and task tier updated."
+        : "Task commitment tier updated.",
+    };
   } catch (error) {
     return { error: friendlyDbError(error) };
   }

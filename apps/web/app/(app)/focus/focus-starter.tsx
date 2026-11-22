@@ -96,11 +96,12 @@ export function FocusStarter({
 
         <div>
           <p className="mb-2 text-[12px] font-medium text-ink-soft">Session length</p>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Session length presets">
             {presets.map((preset) => (
               <button
                 key={preset.mode}
                 type="button"
+                aria-pressed={mode === preset.mode}
                 onClick={() => setMode(preset.mode)}
                 className={cn(
                   "rounded-xl border px-3.5 py-3 text-left transition-colors",
@@ -122,6 +123,7 @@ export function FocusStarter({
             ))}
             <button
               type="button"
+              aria-pressed={mode === "custom"}
               onClick={() => setMode("custom")}
               className={cn(
                 "rounded-xl border px-3.5 py-3 text-left transition-colors",

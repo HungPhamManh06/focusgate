@@ -229,14 +229,21 @@ export default async function DashboardPage() {
                       action={confirmPlanAction.bind(null, plan.id)}
                       variant="accent"
                       size="sm"
-                      confirmMessage="Confirm this plan? Tasks are locked once confirmed."
-                      disabled={plan.tasks.length === 0}
+                      confirmTitle="Lock today's gate?"
+                      confirmMessage="Confirming locks your Must-Do commitments for the day. Any later downgrade requires an audited exception."
+                      confirmLabel="Confirm & lock plan"
+                      disabled={plan.progress.mustDoTotal === 0}
                     >
                       Confirm plan
                     </ActionButton>
                     <Link href="/planner" className={buttonVariants({ variant: "outline", size: "sm" })}>
                       Edit tasks
                     </Link>
+                    {plan.progress.mustDoTotal === 0 ? (
+                      <span className="text-[11px] text-muted">
+                        Add at least one must-do in the planner to confirm.
+                      </span>
+                    ) : null}
                   </>
                 ) : null}
                 {plan.status === "confirmed" ? (
@@ -258,7 +265,9 @@ export default async function DashboardPage() {
                       action={completePlanAction.bind(null, plan.id)}
                       variant="outline"
                       size="sm"
-                      confirmMessage="Close the day? Unfinished must-do tasks will block the reward."
+                      confirmTitle="Close today's plan?"
+                      confirmMessage="Closing the day evaluates your gate and unlocks your reward if all Must-Do tasks and focus targets are complete."
+                      confirmLabel="Complete day"
                     >
                       Complete day
                     </ActionButton>

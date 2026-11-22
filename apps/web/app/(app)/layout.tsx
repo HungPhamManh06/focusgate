@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatMinutes } from "@/lib/data/format";
+import { formatMinutes, initials } from "@/lib/data/format";
 import { getWalletSummary } from "@/lib/data/rewards";
 import { getWorkspace } from "@/lib/data/workspace";
 import { Logo } from "@/components/ui/logo";
@@ -15,6 +15,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <ToastProvider>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:border focus:border-accent focus:bg-surface focus:px-4 focus:py-2 focus:text-[12.5px] focus:font-medium focus:text-ink focus:shadow-lift"
+      >
+        Skip to main content
+      </a>
+
       <div className="min-h-screen lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
         <Sidebar displayName={workspace.profile.displayName} availableMinutes={availableMinutes} />
 
@@ -30,11 +37,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               >
                 {formatMinutes(availableMinutes)}
               </Link>
+              <span
+                title={`${workspace.profile.displayName} · Local workspace`}
+                aria-label={`Workspace user: ${workspace.profile.displayName}`}
+                className="flex size-8 items-center justify-center rounded-full bg-ink text-[10.5px] font-semibold text-canvas"
+              >
+                {initials(workspace.profile.displayName)}
+              </span>
               <ThemeToggle />
             </div>
           </header>
 
-          <main className="flex-1 pb-24 lg:pb-0">{children}</main>
+          <main id="main-content" tabIndex={-1} className="flex-1 pb-24 focus:outline-none lg:pb-0">
+            {children}
+          </main>
 
           <MobileNav />
         </div>

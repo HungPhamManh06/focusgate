@@ -5,7 +5,11 @@ import { cn } from "@/lib/utils";
 const fieldBase =
   "w-full rounded-xl border border-line bg-surface text-ink shadow-[0_1px_0_rgba(0,0,0,0.02)] transition-colors placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/10 disabled:cursor-not-allowed disabled:opacity-60";
 
-export function Input({ className, type = "text", ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+export function Input({
+  className,
+  type = "text",
+  ...props
+}: React.ComponentPropsWithRef<"input">) {
   return <input type={type} className={cn(fieldBase, "h-11 px-3.5 text-sm", className)} {...props} />;
 }
 

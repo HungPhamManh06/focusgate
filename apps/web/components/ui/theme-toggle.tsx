@@ -26,6 +26,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     <button
       type="button"
       onClick={toggle}
+      aria-pressed={dark}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
       className={cn(
         "flex size-9 items-center justify-center rounded-full border border-line bg-surface text-ink-soft transition-colors hover:text-ink",

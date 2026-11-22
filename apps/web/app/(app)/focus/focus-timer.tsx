@@ -6,6 +6,7 @@ import { cancelFocusAction, completeFocusAction } from "@/lib/actions/focus";
 import { formatClock, formatMinutes } from "@/lib/data/format";
 import type { FocusSession } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ProgressRing } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/toast";
 
@@ -18,6 +19,8 @@ export function FocusTimer({
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [pending, startTransition] = useTransition();
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -34,26 +37,29 @@ export function FocusTimer({
   const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
   const willBeValid = elapsedSeconds >= minValidMinutes * 60;
 
-  function endSession() {
-    if (!willBeValid) {
-      const proceed = window.confirm(
-        `You have focused ${formatMinutes(elapsedMinutes)}. Sessions under ${formatMinutes(minValidMinutes)} are saved but do not count toward your plan. End anyway?`,
-      );
-      if (!proceed) return;
-    }
+  function performComplete() {
     startTransition(async () => {
       const result = await completeFocusAction(session.id);
       if (result.error) toast.push("error", result.error);
       else if (result.success) toast.push("success", result.success);
+      setConfirmEndOpen(false);
     });
   }
 
-  function cancelSession() {
-    if (!window.confirm("Cancel this session? No time will be logged.")) return;
+  function endSession() {
+    if (!willBeValid) {
+      setConfirmEndOpen(true);
+      return;
+    }
+    performComplete();
+  }
+
+  function performCancel() {
     startTransition(async () => {
       const result = await cancelFocusAction(session.id);
       if (result.error) toast.push("error", result.error);
       else if (result.success) toast.push("info", result.success);
+      setConfirmCancelOpen(false);
     });
   }
 
@@ -102,7 +108,12 @@ export function FocusTimer({
             {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
             End &amp; log session
           </Button>
-          <Button onClick={cancelSession} disabled={pending} variant="ghost" size="lg">
+          <Button
+            onClick={() => setConfirmCancelOpen(true)}
+            disabled={pending}
+            variant="ghost"
+            size="lg"
+          >
             {pending ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
             Cancel
           </Button>
@@ -113,6 +124,32 @@ export function FocusTimer({
           start time.
         </p>
       </div>
+
+      <ConfirmDialog
+        open={confirmEndOpen}
+        onClose={() => setConfirmEndOpen(false)}
+        onConfirm={performComplete}
+        eyebrow="Short session"
+        title="End before minimum threshold?"
+        description={`You have focused for ${formatMinutes(elapsedMinutes)}. Sessions under ${formatMinutes(minValidMinutes)} are saved to your history, but do not count toward today's plan requirements.`}
+        confirmLabel="End anyway"
+        cancelLabel="Keep focusing"
+        confirmVariant="primary"
+        pending={pending}
+      />
+
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        onClose={() => setConfirmCancelOpen(false)}
+        onConfirm={performCancel}
+        eyebrow="Cancel session"
+        title="Discard this focus block?"
+        description="Cancelling stops the clock immediately and logs 0 minutes toward your tasks or daily focus total."
+        confirmLabel="Discard session"
+        cancelLabel="Keep focusing"
+        confirmVariant="danger"
+        pending={pending}
+      />
     </div>
   );
 }

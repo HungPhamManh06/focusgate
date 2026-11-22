@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 export interface BarPoint {
@@ -18,9 +21,12 @@ export function BarChart({
   emptyLabel?: string;
   height?: number;
 }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const max = Math.max(...data.map((point) => point.value), 1);
   const hasData = data.some((point) => point.value > 0);
-  const step = data.length > 45 ? 15 : data.length > 14 ? 5 : 1;
+  const step = data.length > 45 ? 10 : data.length > 14 ? 5 : 1;
+  const scrollable = data.length > 30;
+  const activePoint = activeIndex !== null ? data[activeIndex] : null;
 
   if (!hasData) {
     return (
@@ -36,47 +42,85 @@ export function BarChart({
   return (
     <div>
       <div className="flex items-center justify-between pb-3">
-        <p className="text-[10.5px] text-muted">Peak {formatValue(max)}</p>
-        <p className="text-[10.5px] text-muted">0</p>
+        <p className="text-[10.5px] text-muted tabular-nums">
+          {activePoint ? (
+            <span className="font-medium text-ink">
+              {activePoint.label}: {formatValue(activePoint.value)}
+            </span>
+          ) : (
+            <>Peak {formatValue(max)}</>
+          )}
+        </p>
+        <p className="text-[10.5px] text-muted">
+          {scrollable ? "Scroll horizontally · 0" : "0"}
+        </p>
       </div>
-      <div className="relative" style={{ height }}>
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
-          {[0, 1, 2, 3].map((line) => (
-            <span key={line} className="h-px w-full bg-line/60" />
-          ))}
-        </div>
-        <div className="relative flex h-full items-end gap-[2px]">
-          {data.map((point, index) => (
-            <div
-              key={`${point.label}-${index}`}
-              className="group flex h-full flex-1 items-end"
-              title={`${point.label}: ${formatValue(point.value)}`}
-            >
-              <div
-                className={cn(
-                  "w-full rounded-t-[3px] transition-colors",
-                  point.value > 0
-                    ? tone === "accent"
-                      ? "bg-accent group-hover:bg-accent-strong"
-                      : "bg-ink/60 group-hover:bg-ink"
-                    : "bg-line/50",
-                )}
-                style={{ height: point.value > 0 ? `${Math.max(3, (point.value / max) * 100)}%` : 2 }}
-              />
+
+      <div className={cn(scrollable && "-mx-1 overflow-x-auto px-1 pb-1")}>
+        <div style={scrollable ? { minWidth: `${Math.max(540, data.length * 8)}px` } : undefined}>
+          <div className="relative" style={{ height }}>
+            <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
+              {[0, 1, 2, 3].map((line) => (
+                <span key={line} className="h-px w-full bg-line/60" />
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
-      <div className="mt-2 flex gap-[2px]">
-        {data.map((point, index) => (
-          <div key={`${point.label}-label-${index}`} className="flex-1 overflow-visible">
-            {index % step === 0 ? (
-              <p className="whitespace-nowrap text-center text-[9.5px] text-muted">{point.label}</p>
-            ) : (
-              <p className="text-center text-[9.5px] text-transparent">·</p>
-            )}
+            <div
+              className="relative flex h-full items-end gap-[2px]"
+              onMouseLeave={() => setActiveIndex(null)}
+            >
+              {data.map((point, index) => {
+                const isActive = activeIndex === index;
+                return (
+                  <button
+                    key={`${point.label}-${index}`}
+                    type="button"
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onFocus={() => setActiveIndex(index)}
+                    onBlur={() => setActiveIndex(null)}
+                    onClick={() => setActiveIndex(isActive ? null : index)}
+                    aria-label={`${point.label}: ${formatValue(point.value)}`}
+                    className="group relative flex h-full flex-1 items-end focus:outline-none"
+                  >
+                    <div
+                      className={cn(
+                        "w-full rounded-t-[3px] transition-colors",
+                        point.value > 0
+                          ? tone === "accent"
+                            ? isActive
+                              ? "bg-accent-strong"
+                              : "bg-accent group-hover:bg-accent-strong"
+                            : isActive
+                              ? "bg-ink"
+                              : "bg-ink/60 group-hover:bg-ink"
+                          : isActive
+                            ? "bg-ink/30"
+                            : "bg-line/50",
+                      )}
+                      style={{
+                        height:
+                          point.value > 0 ? `${Math.max(4, (point.value / max) * 100)}%` : 2,
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        ))}
+
+          <div className="mt-2 flex gap-[2px]">
+            {data.map((point, index) => (
+              <div key={`${point.label}-label-${index}`} className="flex-1 overflow-visible">
+                {index % step === 0 ? (
+                  <p className="whitespace-nowrap text-center text-[9.5px] text-muted tabular-nums">
+                    {point.label}
+                  </p>
+                ) : (
+                  <p className="text-center text-[9.5px] text-transparent">·</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

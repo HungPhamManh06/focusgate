@@ -394,7 +394,9 @@ export default async function PlannerPage() {
                           action={confirmPlanAction.bind(null, plan.id)}
                           variant="accent"
                           className="w-full"
-                          confirmMessage="Confirm this plan? You will not be able to add or remove tasks."
+                          confirmTitle="Lock today's gate?"
+                          confirmMessage="Confirming turns today's plan into a contract. You will not be able to freely add or remove tasks without recording an audited amendment."
+                          confirmLabel="Confirm & lock plan"
                           disabled={plan.progress.mustDoTotal === 0}
                           pendingLabel="Confirming…"
                         >
@@ -430,7 +432,9 @@ export default async function PlannerPage() {
                           action={completePlanAction.bind(null, plan.id)}
                           variant="outline"
                           className="w-full"
-                          confirmMessage="Close the day? Every must-do needs verified focus first."
+                          confirmTitle="Close today's plan?"
+                          confirmMessage="Every Must-Do task needs verified focus first. Once closed, your reward grant is ready to claim."
+                          confirmLabel="Complete day"
                         >
                           Complete day
                         </ActionButton>

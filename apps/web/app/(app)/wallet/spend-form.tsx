@@ -9,6 +9,10 @@ import type { Grant } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+
+const QUICK_MINUTES = [10, 15, 30] as const;
+const QUICK_SOURCES = ["YouTube", "Gaming", "Social", "Show / Film"] as const;
 
 export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: string }) {
   const [state, formAction, pending] = useActionState(spendMinutesAction, EMPTY_ACTION_STATE);
@@ -41,12 +45,18 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
 
   const selected = grants.find((grant) => grant.id === grantId);
   const maxMinutes = Math.max(1, selected?.remainingMinutes ?? 1);
+  const clampedMinutes = Math.max(1, Math.min(minutes || 0, maxMinutes));
 
   return (
     <form action={formAction} className="space-y-4">
       <div>
         <Label htmlFor="spend-grant">From grant</Label>
-        <Select id="spend-grant" name="grantId" value={grantId} onChange={(event) => setGrantId(event.target.value)}>
+        <Select
+          id="spend-grant"
+          name="grantId"
+          value={grantId}
+          onChange={(event) => setGrantId(event.target.value)}
+        >
           {grants.map((grant) => (
             <option key={grant.id} value={grant.id}>
               {formatMinutes(grant.remainingMinutes)} left · expires{" "}
@@ -56,31 +66,83 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
         </Select>
       </div>
 
-      <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3">
-        <div>
-          <Label htmlFor="spend-minutes">Minutes</Label>
-          <Input
-            id="spend-minutes"
-            name="minutes"
-            type="number"
-            min={1}
-            max={maxMinutes}
-            value={minutes}
-            onChange={(event) => setMinutes(Number(event.target.value))}
-            required
-          />
+      <div>
+        <div className="mb-1.5 flex items-center justify-between">
+          <Label htmlFor="spend-minutes" className="mb-0">
+            Minutes
+          </Label>
+          <div className="flex items-center gap-1" role="group" aria-label="Quick duration presets">
+            {QUICK_MINUTES.filter((preset) => preset < maxMinutes).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setMinutes(preset)}
+                aria-pressed={minutes === preset}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[10.5px] font-medium tabular-nums transition-colors",
+                  minutes === preset
+                    ? "border-accent/40 bg-accent-soft text-accent"
+                    : "border-line bg-surface-2/60 text-muted hover:text-ink",
+                )}
+              >
+                {preset}m
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setMinutes(maxMinutes)}
+              aria-pressed={minutes === maxMinutes}
+              className={cn(
+                "rounded-md border px-2 py-0.5 text-[10.5px] font-medium tabular-nums transition-colors",
+                minutes === maxMinutes
+                  ? "border-accent/40 bg-accent-soft text-accent"
+                  : "border-line bg-surface-2/60 text-muted hover:text-ink",
+              )}
+            >
+              Max ({maxMinutes}m)
+            </button>
+          </div>
         </div>
-        <div>
-          <Label htmlFor="spend-label">What for?</Label>
-          <Input
-            id="spend-label"
-            name="label"
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-            placeholder="YouTube, gaming, social…"
-            maxLength={120}
-            required
-          />
+        <Input
+          id="spend-minutes"
+          name="minutes"
+          type="number"
+          min={1}
+          max={maxMinutes}
+          value={minutes}
+          onChange={(event) => setMinutes(Number(event.target.value))}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="spend-label">What for?</Label>
+        <Input
+          id="spend-label"
+          name="label"
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          placeholder="YouTube, gaming, social…"
+          maxLength={120}
+          required
+        />
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {QUICK_SOURCES.map((source) => (
+            <button
+              key={source}
+              type="button"
+              onClick={() => setLabel(source)}
+              aria-pressed={label === source}
+              className={cn(
+                "rounded-full border px-2.5 py-0.5 text-[10.5px] transition-colors",
+                label === source
+                  ? "border-accent/40 bg-accent-soft font-medium text-accent"
+                  : "border-line bg-surface-2/50 text-muted hover:text-ink",
+              )}
+            >
+              {source}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -90,7 +152,7 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
 
       <Button type="submit" variant="primary" disabled={pending} className="w-full">
         {pending ? <Loader2 className="size-4 animate-spin" /> : <MinusCircle className="size-4" />}
-        Spend {Math.max(1, Math.min(minutes || 0, maxMinutes))} min
+        Spend {clampedMinutes} min
       </Button>
     </form>
   );

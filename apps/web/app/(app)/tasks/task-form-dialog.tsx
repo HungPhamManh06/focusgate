@@ -1,12 +1,13 @@
 "use client";
 
 import { Loader2, Pencil, Plus, X } from "lucide-react";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useCallback, useEffect, useState } from "react";
 import { createTaskAction, updateTaskAction } from "@/lib/actions/tasks";
 import { EMPTY_ACTION_STATE } from "@/lib/actions/types";
 import type { Task } from "@/lib/data/types";
 import { isoToDateInput } from "@/lib/validation";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useDialogAccessibility } from "@/components/ui/confirm-dialog";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -26,21 +27,14 @@ export function TaskFormDialog({
     EMPTY_ACTION_STATE,
   );
   const toast = useToast();
+  const handleClose = useCallback(() => setOpen(false), []);
+  const dialogRef = useDialogAccessibility(open, handleClose);
 
   useEffect(() => {
     if (!state.success) return;
     toast.push("success", state.success);
     setOpen(false);
   }, [state.success, toast]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
 
   const isEdit = trigger === "edit";
 
@@ -69,10 +63,11 @@ export function TaskFormDialog({
           className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 backdrop-blur-[2px] sm:items-center sm:p-6"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setOpen(false);
+            if (event.target === event.currentTarget && !pending) setOpen(false);
           }}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="task-dialog-title"
@@ -88,8 +83,9 @@ export function TaskFormDialog({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
+                disabled={pending}
                 aria-label="Close dialog"
-                className="flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                className="flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
               >
                 <X className="size-4" />
               </button>
@@ -209,6 +205,7 @@ export function TaskFormDialog({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
+                  disabled={pending}
                   className={buttonVariants({ variant: "ghost", size: "md" })}
                 >
                   Cancel
