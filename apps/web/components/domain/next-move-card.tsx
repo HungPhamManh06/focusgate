@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Compass } from "lucide-react";
+import { ArrowRight, CheckCircle2, Compass, ListPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,12 +9,18 @@ import { formatDate, formatMinutes, relativeDue } from "@/lib/data/format";
 
 export function NextMoveCard({
   suggestion,
+  hasPlan,
+  totalTasksCount,
   timezone,
 }: {
   suggestion: NextMoveSuggestion | null;
+  hasPlan: boolean;
+  totalTasksCount: number;
   timezone: string;
 }) {
   if (!suggestion) {
+    const noTasksAtAll = totalTasksCount === 0 && !hasPlan;
+
     return (
       <Card>
         <CardHeader>
@@ -22,26 +28,41 @@ export function NextMoveCard({
             <Compass className="size-4 text-accent" strokeWidth={1.8} />
             <CardTitle>Your next move</CardTitle>
           </div>
-          <Badge tone="success">Clear</Badge>
+          <Badge tone={noTasksAtAll ? "neutral" : "success"}>
+            {noTasksAtAll ? "Start here" : "Clear"}
+          </Badge>
         </CardHeader>
         <CardContent className="pt-4">
           <div className="flex items-start gap-3.5 rounded-2xl border border-line bg-surface-2/60 p-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-success-soft text-success">
-              <CheckCircle2 className="size-4" strokeWidth={2} />
+            <span
+              className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
+                noTasksAtAll
+                  ? "bg-accent-soft text-accent"
+                  : "bg-success-soft text-success"
+              }`}
+            >
+              {noTasksAtAll ? (
+                <ListPlus className="size-4" strokeWidth={2} />
+              ) : (
+                <CheckCircle2 className="size-4" strokeWidth={2} />
+              )}
             </span>
             <div>
               <p className="text-[14px] font-semibold text-ink">
-                You&apos;re all caught up.
+                {noTasksAtAll ? "Add your first task first." : "You're all caught up."}
               </p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
-                Take a moment to review tomorrow&apos;s plan.
+                {noTasksAtAll
+                  ? "Create a few tasks in your backlog—starting with at least one Must-do—before building today's plan."
+                  : "No outstanding Must-do tasks need your attention."}
               </p>
               <div className="mt-3">
                 <Link
-                  href="/tasks"
+                  href={noTasksAtAll ? "/tasks" : "/planner"}
                   className={buttonVariants({ variant: "outline", size: "sm" })}
                 >
-                  View task queue <ArrowRight className="size-3.5" />
+                  {noTasksAtAll ? "Add tasks to backlog" : "Review tomorrow's plan"}{" "}
+                  <ArrowRight className="size-3.5" />
                 </Link>
               </div>
             </div>
@@ -60,7 +81,7 @@ export function NextMoveCard({
       <CardHeader>
         <div>
           <p className="label-xs text-muted">Your next move</p>
-          <CardTitle className="mt-1.5">Recommended focus target</CardTitle>
+          <CardTitle className="mt-1.5">Recommended priority task</CardTitle>
         </div>
         <KindBadge kind={task.kind} />
       </CardHeader>
@@ -77,7 +98,7 @@ export function NextMoveCard({
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-muted tabular-nums">
             <span>{priorityLabels[task.priority]} priority</span>
             <span aria-hidden>·</span>
-            <span>{formatMinutes(task.estimatedMinutes)} est.</span>
+            <span>{formatMinutes(task.estimatedMinutes)}</span>
             {focusRequired > 0 ? (
               <>
                 <span aria-hidden>·</span>
@@ -112,14 +133,6 @@ export function NextMoveCard({
             >
               View task <ArrowRight className="size-3.5" />
             </Link>
-            {!inTodayPlan ? (
-              <Link
-                href="/planner"
-                className="text-[11.5px] font-medium text-accent hover:underline"
-              >
-                Add to today&apos;s plan
-              </Link>
-            ) : null}
           </div>
         </div>
       </CardContent>

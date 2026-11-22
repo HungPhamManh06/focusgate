@@ -4,10 +4,12 @@ export function Progress({
   value,
   className,
   tone = "accent",
+  label = "Progress",
 }: {
   value: number;
   className?: string;
   tone?: "accent" | "success" | "warning" | "ink";
+  label?: string;
 }) {
   const safe = Math.min(100, Math.max(0, value));
   const tones = {
@@ -20,6 +22,7 @@ export function Progress({
   return (
     <div
       role="progressbar"
+      aria-label={label}
       aria-valuenow={Math.round(safe)}
       aria-valuemin={0}
       aria-valuemax={100}
@@ -38,12 +41,14 @@ export function ProgressRing({
   size = 132,
   stroke = 7,
   className,
+  label = "Completion progress",
   children,
 }: {
   value: number;
   size?: number;
   stroke?: number;
   className?: string;
+  label?: string;
   children?: React.ReactNode;
 }) {
   const safe = Math.min(100, Math.max(0, value));
@@ -52,7 +57,15 @@ export function ProgressRing({
   const offset = circumference - (safe / 100) * circumference;
 
   return (
-    <div className={cn("relative inline-flex items-center justify-center", className)} style={{ width: size, height: size }}>
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuenow={Math.round(safe)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      className={cn("relative inline-flex items-center justify-center", className)}
+      style={{ width: size, height: size }}
+    >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
         <circle
           cx={size / 2}

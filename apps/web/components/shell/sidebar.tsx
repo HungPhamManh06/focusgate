@@ -58,10 +58,10 @@ export function Sidebar({
       <div className="space-y-4 px-4 pb-5">
         <div className="rounded-2xl border border-line bg-surface-2 p-4">
           <div className="flex items-center justify-between">
-            <p className="label-xs text-muted">Unlocked time</p>
+            <p className="label-xs text-muted">Available time</p>
             <span className="size-1.5 rounded-full bg-success" aria-hidden />
           </div>
-          <p className="mt-3 font-display text-[30px] leading-none tracking-[-0.02em]">
+          <p className="mt-3 font-display text-[30px] leading-none tracking-[-0.02em] tabular-nums">
             {formatMinutes(availableMinutes)}
           </p>
           <Link

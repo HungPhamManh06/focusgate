@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate, formatMinutes } from "@/lib/data/format";
 import type { Wallet } from "@/lib/data/types";
+import { summarizeWalletForDashboard } from "@/lib/domain/dashboard-state";
 
 export function RewardWalletCard({
   wallet,
@@ -12,21 +13,15 @@ export function RewardWalletCard({
   wallet: Wallet;
   timezone: string;
 }) {
-  const now = new Date();
-  const activeGrants = wallet.grants
-    .filter((grant) => grant.status === "active" && new Date(grant.expiresAt) > now)
-    .sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
-
-  const nextExpiringGrant = activeGrants[0];
-
-  // Authoritative sum of unspent minutes on grants that have already expired.
-  // Never inferred by subtracting spent from earned.
-  const expiredGrants = wallet.grants.filter(
-    (grant) =>
-      grant.status === "expired" ||
-      (grant.status === "active" && new Date(grant.expiresAt) <= now),
-  );
-  const expiredMinutes = expiredGrants.reduce((sum, grant) => sum + grant.remainingMinutes, 0);
+  const {
+    availableMinutes,
+    earnedMinutes,
+    consumedMinutes,
+    expiredMinutes,
+    activeGrants,
+    expiredGrants,
+    nextExpiringGrant,
+  } = summarizeWalletForDashboard(wallet);
 
   return (
     <Card className="relative flex flex-col justify-between overflow-hidden">
@@ -43,7 +38,7 @@ export function RewardWalletCard({
 
           <div className="mt-4">
             <p className="font-display text-[48px] leading-none tracking-[-0.025em] tabular-nums">
-              {formatMinutes(wallet.availableMinutes)}
+              {formatMinutes(availableMinutes)}
             </p>
             <p className="mt-2 text-[12.5px] font-medium text-ink-soft">
               Available leisure time
@@ -58,13 +53,13 @@ export function RewardWalletCard({
             <div className="rounded-xl border border-line/80 bg-surface-2 px-3 py-2.5">
               <dt className="text-[10.5px] text-muted">Earned</dt>
               <dd className="mt-1 text-[13.5px] font-semibold tabular-nums">
-                {formatMinutes(wallet.earnedMinutes)}
+                {formatMinutes(earnedMinutes)}
               </dd>
             </div>
             <div className="rounded-xl border border-line/80 bg-surface-2 px-3 py-2.5">
               <dt className="text-[10.5px] text-muted">Spent</dt>
               <dd className="mt-1 text-[13.5px] font-semibold tabular-nums">
-                {formatMinutes(wallet.consumedMinutes)}
+                {formatMinutes(consumedMinutes)}
               </dd>
             </div>
             <div className="rounded-xl border border-line/80 bg-surface-2 px-3 py-2.5">
@@ -108,13 +103,19 @@ export function RewardWalletCard({
                 </span>
               </p>
             ) : expiredGrants.length > 0 ? (
-              <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
-                Previous grants have expired. Complete today&apos;s plan to earn a fresh grant.
-              </p>
+              <div className="mt-1.5">
+                <p className="text-[12px] font-medium text-ink">No active grants.</p>
+                <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">
+                  Previous grants have expired. Complete today&apos;s plan to earn a fresh grant.
+                </p>
+              </div>
             ) : (
-              <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
-                No active grants yet. Finish today&apos;s Must-do tasks to unlock your first reward block.
-              </p>
+              <div className="mt-1.5">
+                <p className="text-[12px] font-medium text-ink">No active grants.</p>
+                <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">
+                  Complete today&apos;s plan to earn a fresh grant.
+                </p>
+              </div>
             )}
           </div>
         </div>

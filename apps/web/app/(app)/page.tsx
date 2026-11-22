@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   CalendarClock,
+  CheckCircle2,
   Flame,
   ListTodo,
   Sparkles,
@@ -38,6 +39,10 @@ import { getTodayPlan } from "@/lib/data/planner";
 import { getWallet } from "@/lib/data/rewards";
 import { getTaskCounts } from "@/lib/data/tasks";
 import { getWorkspace } from "@/lib/data/workspace";
+import {
+  formatPlanProgressStat,
+  resolveMissionPhase,
+} from "@/lib/domain/dashboard-state";
 
 export const dynamic = "force-dynamic";
 
@@ -63,101 +68,79 @@ export default async function DashboardPage() {
     timeZone: timezone,
   }).format(new Date());
 
-  const progressPercent =
-    plan && plan.progress.mustDoTotal > 0
-      ? Math.round((plan.progress.mustDoCompleted / plan.progress.mustDoTotal) * 100)
-      : 0;
-
   const todayGrant = plan
     ? wallet.grants.find(
         (grant) => grant.dailyPlanId === plan.id && grant.source === "daily_plan_base",
       )
     : undefined;
 
-  const readyToCloseDay =
-    plan?.status === "active" &&
-    plan.progress.mustDoTotal > 0 &&
-    plan.progress.mustDoCompleted >= plan.progress.mustDoTotal &&
-    plan.progress.focusDone >= plan.progress.focusRequired;
+  const phase = resolveMissionPhase(plan, todayGrant);
+  const planStat = formatPlanProgressStat(plan);
 
-  // Single state-driven Header CTA (One screen. One clear next action.)
+  // Header action: single state-appropriate CTA without competing duplicate buttons
   function renderHeaderAction() {
-    if (!plan) {
-      return (
-        <ActionButton action={createPlanAction} variant="accent" size="md">
-          <Sparkles className="size-4" /> Create today&apos;s plan
-        </ActionButton>
-      );
-    }
-
-    if (plan.status === "draft") {
-      return (
-        <Link href="/planner" className={buttonVariants({ variant: "accent", size: "md" })}>
-          <CalendarClock className="size-4" /> Continue planning
-        </Link>
-      );
-    }
-
-    if (plan.status === "confirmed") {
-      return (
-        <ActionButton
-          action={activatePlanAction.bind(null, plan.id)}
-          variant="accent"
-          size="md"
-          pendingLabel="Activating…"
-        >
-          <Flame className="size-4" /> Activate focus
-        </ActionButton>
-      );
-    }
-
-    if (plan.status === "active") {
-      if (readyToCloseDay) {
+    switch (phase) {
+      case "no_plan":
         return (
+          <ActionButton action={createPlanAction} variant="outline" size="md">
+            <Sparkles className="size-4" /> Create today&apos;s plan
+          </ActionButton>
+        );
+      case "draft_empty":
+      case "draft_ready":
+        return (
+          <Link href="/planner" className={buttonVariants({ variant: "outline", size: "md" })}>
+            <CalendarClock className="size-4" /> Continue planning
+          </Link>
+        );
+      case "confirmed":
+        return plan ? (
+          <ActionButton
+            action={activatePlanAction.bind(null, plan.id)}
+            variant="outline"
+            size="md"
+            pendingLabel="Activating…"
+          >
+            <Flame className="size-4" /> Activate focus
+          </ActionButton>
+        ) : null;
+      case "active_focus":
+        return (
+          <Link href="/focus" className={buttonVariants({ variant: "outline", size: "md" })}>
+            <Timer className="size-4" /> Go to focus
+          </Link>
+        );
+      case "active_ready_to_close":
+        return plan ? (
           <ActionButton
             action={completePlanAction.bind(null, plan.id)}
-            variant="accent"
+            variant="outline"
             size="md"
             confirmTitle="Close today's plan?"
             confirmMessage="All Must-do commitments and verified focus targets are met. Complete the day to unlock your reward?"
             confirmLabel="Complete day"
           >
-            <Sparkles className="size-4" /> Complete day
+            <CheckCircle2 className="size-4" /> Complete day
           </ActionButton>
-        );
-      }
-      return (
-        <Link href="/focus" className={buttonVariants({ variant: "accent", size: "md" })}>
-          <Timer className="size-4" /> Go to focus
-        </Link>
-      );
-    }
-
-    if (plan.status === "completed") {
-      if (todayGrant) {
+        ) : null;
+      case "completed_unclaimed":
+        return plan ? (
+          <ActionButton
+            action={claimRewardAction.bind(null, plan.id)}
+            variant="outline"
+            size="md"
+            pendingLabel="Claiming…"
+          >
+            <Sparkles className="size-4" /> Claim reward
+          </ActionButton>
+        ) : null;
+      case "completed_claimed":
         return (
           <Link href="/wallet" className={buttonVariants({ variant: "outline", size: "md" })}>
-            Open reward wallet <ArrowRight className="size-4" />
+            View wallet <ArrowRight className="size-4" />
           </Link>
         );
-      }
-      return (
-        <ActionButton
-          action={claimRewardAction.bind(null, plan.id)}
-          variant="accent"
-          size="md"
-          pendingLabel="Claiming…"
-        >
-          <Sparkles className="size-4" /> Claim reward
-        </ActionButton>
-      );
     }
-
-    return (
-      <Link href="/planner" className={buttonVariants({ variant: "outline", size: "md" })}>
-        <CalendarClock className="size-4" /> Open planner
-      </Link>
-    );
   }
 
   const otherOpenCount = Math.max(0, counts.open - counts.mustDoOpen);
@@ -172,7 +155,7 @@ export default async function DashboardPage() {
         actions={renderHeaderAction()}
       />
 
-      {/* 2. Daily Overview — 3 focused stat cards without duplicate Unlocked Time */}
+      {/* 2. Daily Overview — 3 focused stat cards with honest empty states */}
       <section
         className="mt-7 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3"
         aria-label="Daily overview"
@@ -182,8 +165,10 @@ export default async function DashboardPage() {
           value={formatMinutes(focus.minutes)}
           hint={
             plan && plan.progress.focusRequired > 0
-              ? `${focus.validSessions} valid session${focus.validSessions === 1 ? "" : "s"} · ${formatMinutes(plan.progress.focusDone)} of ${formatMinutes(plan.progress.focusRequired)} plan target`
-              : `${focus.validSessions} valid session${focus.validSessions === 1 ? "" : "s"} of ${focus.sessions} today`
+              ? `${focus.validSessions} valid session${focus.validSessions === 1 ? "" : "s"} · ${formatMinutes(plan.progress.focusDone)} of ${formatMinutes(plan.progress.focusRequired)} target`
+              : focus.sessions > 0
+                ? `${focus.validSessions} valid session${focus.validSessions === 1 ? "" : "s"} of ${focus.sessions} today`
+                : "No focus sessions logged today · target not set"
           }
           icon={Timer}
           tone="accent"
@@ -196,8 +181,12 @@ export default async function DashboardPage() {
         >
           <StatCard
             label="Open tasks"
-            value={String(counts.open)}
-            hint={`${counts.mustDoOpen} must-do · ${otherOpenCount} should-do & bonus →`}
+            value={counts.open > 0 ? String(counts.open) : "No open tasks"}
+            hint={
+              counts.open > 0
+                ? `${counts.mustDoOpen} must-do · ${otherOpenCount} should-do & bonus →`
+                : "Your task queue is empty · add a task →"
+            }
             icon={ListTodo}
             className="flex h-full flex-col justify-between transition-colors group-hover:border-ink/25"
           />
@@ -205,18 +194,10 @@ export default async function DashboardPage() {
 
         <StatCard
           label="Plan progress"
-          value={
-            plan
-              ? `${plan.progress.mustDoCompleted}/${plan.progress.mustDoTotal}`
-              : "No plan"
-          }
-          hint={
-            plan
-              ? `${progressPercent}% of today's Must-do gate completed`
-              : "Create today's plan to set your Must-do gate"
-          }
+          value={planStat.value}
+          hint={planStat.hint}
           icon={Target}
-          tone={progressPercent === 100 && plan && plan.progress.mustDoTotal > 0 ? "success" : "default"}
+          tone={planStat.tone}
           className="flex h-full flex-col justify-between sm:col-span-2 lg:col-span-1"
         />
       </section>
@@ -243,7 +224,12 @@ export default async function DashboardPage() {
         aria-label="Next move, upcoming deadlines, and recent focus"
       >
         <div className="space-y-4">
-          <NextMoveCard suggestion={nextMove} timezone={timezone} />
+          <NextMoveCard
+            suggestion={nextMove}
+            hasPlan={Boolean(plan)}
+            totalTasksCount={counts.total}
+            timezone={timezone}
+          />
 
           <Card>
             <CardHeader>
@@ -264,8 +250,8 @@ export default async function DashboardPage() {
               {upcoming.length === 0 ? (
                 <EmptyState
                   icon={ListTodo}
-                  title="No upcoming deadlines"
-                  description="None of your open tasks have a due date assigned right now."
+                  title="Nothing due soon."
+                  description="You have no outstanding tasks with an approaching deadline."
                   className="px-5 py-7"
                 />
               ) : (
