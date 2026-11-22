@@ -78,10 +78,10 @@ Created forward-only migrations [20260101000005_focus_validity_snapshot.sql](fil
    - On `UPDATE`, strictly preserves `old.min_valid_minutes` so the snapshot is immutable after session start.
    - Evaluates validity against the session's `min_valid_minutes` and requires `(new.planned_minutes * 2) >= v_min_valid`.
 4. **Local PGlite vs. Hosted Supabase Migration Strategy:**
-   - **Local PGlite ([apps/web/lib/db/migrations.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/migrations.ts)):** Tracks applied (`"1"`) and superseded (`"superseded_by_0007"`) migrations in `auth.local_meta`. Existing `0005` workspaces verify `0007` exists, execute `0007` and `0008`, and only mark `0006` as `superseded_by_0007` after `0007` commits.
-   - **Hosted Supabase ([docs/SUPABASE_MIGRATION_RUNBOOK.md](file:///c:/Users/hungv/Downloads/focusgate/docs/SUPABASE_MIGRATION_RUNBOOK.md)):** Hosted Supabase does **not** use `applyLocalMigrations()`. Hosted databases at `0005` must run `supabase migration repair --status applied 20260101000006` before `supabase db push` to bypass `0006`'s unguarded backfill and apply `0007` + `0008` safely.
+   - **Local PGlite ([apps/web/lib/db/migrations.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/migrations.ts)):** Tracks applied (`"1"`), durable pending-supersession intent (`pending_supersede:<0006>`), and completed supersession (`"superseded_by_0007"`) in `auth.local_meta`. Existing `0005` workspaces record `pending_supersede:<0006>` before running `0007`, execute `0007` + `0008`, and only mark `0006` as `superseded_by_0007` after `0007` completes. If interrupted between `0007` commit and `0006` marker write, the next run recovers `0006 = "superseded_by_0007"` without re-running `0007`.
+   - **Hosted Supabase ([docs/SUPABASE_MIGRATION_RUNBOOK.md](file:///c:/Users/hungv/Downloads/focusgate/docs/SUPABASE_MIGRATION_RUNBOOK.md)):** Hosted Supabase does **not** use `applyLocalMigrations()`. Hosted databases at `0005` must run `supabase migration repair --status applied 20260101000006 --remote` before `supabase db push --remote` to bypass `0006`'s unguarded backfill and apply `0007` + `0008` safely.
    - **Compatibility Migration `0008`:** Ensures `fn_validate_focus_session()` and `min_valid_minutes` constraints are identical across both the `0005`-skip path and the `0006`-applied path with zero row mutations.
-   - Note: Migrations `0001..0007` remain immutable historical deployment artifacts.
+   - Note: Migrations `0001..0008` remain immutable historical deployment artifacts once committed.
 
 ---
 
@@ -104,8 +104,8 @@ Created forward-only migrations [20260101000005_focus_validity_snapshot.sql](fil
 
 ## 5. Regression Test Cases & Results
 
-### 5.1. PostgreSQL / PGlite Verification (`npm run db:verify` — [scripts/verify-db.mjs](file:///c:/Users/hungv/Downloads/focusgate/scripts/verify-db.mjs))
-All **115 / 115 checks passed**, including Milestone A1.1 and A1.1.2.1 database checks (`setUserSettingsHistory` fixture helper disabling/re-enabling `trg_user_settings_touch` safely so historical `updated_at` timestamps are genuine):
+### 5.1. Database Verification (`npm run db:verify` — [scripts/verify-db.mjs](file:///c:/Users/hungv/Downloads/focusgate/scripts/verify-db.mjs))
+All **116 / 116 checks passed** (`0001..0008`), including Milestone A1.1, A1.1.1, and A1.1.2 database checks (`setUserSettingsHistory` fixture helper disabling/re-enabling `trg_user_settings_touch` safely so historical `updated_at` timestamps are genuine):
 1. `A1.1-B1`: `plannedMinutes = 25`, `minValidMinutes = 5` → accepted, snapshots `minValidMinutes = 5`.
 2. `A1.1-B2`: `plannedMinutes = 25`, `minValidMinutes = 50` → accepted (boundary `25 * 2 == 50`), snapshots `minValidMinutes = 50`.
 3. `A1.1-B3`: `plannedMinutes = 25`, `minValidMinutes = 51` → rejected with `invalid_input`.
@@ -130,7 +130,12 @@ All **22 / 22 unit tests passed** (`4` in `dashboard-state.test.ts`, `13` in `fo
 
 ---
 
-## 6. Remaining Limitations & Verification Scope
+## 6. Verification Breakdown & Remaining Limitations
 
-- **Verified in this environment:** Fresh database migration sequence (`0001..0007`) via `npm run db:verify` (`115/115`), seeded workspace & incremental upgrade verification via `node scripts/verify-local-seed.mjs` (`14/14`), `applyLocalMigrations` fresh/0005/0006/failure-recovery tests (`3/3`), TypeScript typecheck across `packages/shared-contracts` and `apps/web`, unit test suite (`20/20`), and Next.js production build (`npm run web:build`).
-- **Not verified in this environment:** Hosted/remote Supabase deployment (`supabase db reset` against a Docker/cloud Supabase instance) and physical Android/Windows device sync, as no remote Supabase credentials or Docker daemon are configured in this workspace.
+1. **Database Verification (`npm run db:verify`):** **PASS — 116 / 116 checks** (`0001..0008`).
+2. **Frontend & Domain Unit Tests (`npm run test`):** **PASS — 22 / 22 total** (`4` in `dashboard-state.test.ts` + `13` in `focus-integrity.test.ts` + `5` in `local-migrations.test.ts`).
+3. **Local PGlite Migration Tests (`apps/web/tests/local-migrations.test.ts`):** **PASS — 5 / 5 scenarios** (Scenario A `0005→0007+0008`, Scenario B `0006→0007+0008`, Scenario C interrupted `0005` marker recovery, Scenario D failed `0007` retry recovery, Scenario E `0007→0008` + Fresh `0001..0008` & no-op).
+4. **Local Seed & Incremental Upgrade Verification (`node scripts/verify-local-seed.mjs`):** **PASS — 14 / 14 checks** (`Local workspace OK`).
+5. **Typecheck (`npm run typecheck`):** **PASS — 0 errors** across `@focusgate/web` and `@focusgate/shared-contracts`.
+6. **Production Build (`npm run web:build`):** **PASS** (`✓ Compiled successfully`).
+7. **Hosted Supabase Deployment Verification:** **Not executed in this environment** (`supabase` CLI is not installed in PATH and no remote Supabase project credentials exist; documented procedures in [docs/SUPABASE_MIGRATION_RUNBOOK.md](file:///c:/Users/hungv/Downloads/focusgate/docs/SUPABASE_MIGRATION_RUNBOOK.md) are verified against official Supabase CLI v3+ `--remote` documentation and SQL static analysis).
