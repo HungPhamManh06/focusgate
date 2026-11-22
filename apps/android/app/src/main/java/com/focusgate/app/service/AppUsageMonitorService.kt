@@ -259,14 +259,18 @@ class AppUsageMonitorService : Service() {
         }
         lastEventTimestamp = newestTimestamp
 
-        val current = foregroundPackage
+        refreshDeviceEssential(now)
+        val current = resolveCurrentForeground(manager, now) ?: foregroundPackage
+        if (current != null && current != foregroundPackage) {
+            foregroundPackage = current
+        }
+
         if (current == null || current == packageName || emergencyActive) {
             hideOverlay()
             lastShownBlockFor = null
             return
         }
 
-        refreshDeviceEssential(now)
         val unlockedByPlan = AgentPreferences.isPlanUnlocked(this)
         val isBlocked = !unlockedByPlan && PolicyEvaluator.isBlocked(
             packageName = current,
@@ -284,8 +288,61 @@ class AppUsageMonitorService : Service() {
         }
 
         if (current == suppressedPackage && now < suppressedUntil) return
-        if (lastShownBlockFor == current && isOverlayVisible) return
+        if (lastShownBlockFor == current && isOverlayVisible && overlayController.isShowingFor(current)) {
+            return
+        }
         showBlockScreen(current)
+    }
+
+    private fun resolveCurrentForeground(manager: UsageStatsManager, now: Long): String? {
+        val events = manager.queryEvents(now - FOREGROUND_LOOKBACK_MS, now) ?: return null
+        val event = UsageEvents.Event()
+        var latestActive: String? = null
+        var lastPausedPkg: String? = null
+        var lastPausedAt = 0L
+
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val pkg = event.packageName ?: continue
+            when {
+                isForegroundEvent(event.eventType) -> {
+                    latestActive = pkg
+                }
+                isBackgroundEvent(event.eventType) -> {
+                    if (pkg == latestActive) {
+                        latestActive = null
+                    }
+                    lastPausedPkg = pkg
+                    lastPausedAt = event.timeStamp
+                }
+            }
+        }
+
+        if (latestActive != null) return latestActive
+
+        // On MIUI/HyperOS, dragging into Recents and dropping back into an app can emit
+        // ACTIVITY_PAUSED without re-emitting ACTIVITY_RESUMED. If no launcher/essential
+        // app was used more recently than that pause, the app is still in the foreground.
+        if (lastPausedPkg != null &&
+            lastPausedPkg != packageName &&
+            !PolicyEvaluator.isEssential(lastPausedPkg, deviceEssential) &&
+            now - lastPausedAt < FOREGROUND_LOOKBACK_MS
+        ) {
+            val stats = manager.queryUsageStats(
+                UsageStatsManager.INTERVAL_BEST,
+                lastPausedAt,
+                now,
+            )
+            val essentialUsedAfter = stats?.any { stat ->
+                stat.lastTimeUsed > lastPausedAt + 300L &&
+                    (stat.packageName == packageName ||
+                        PolicyEvaluator.isEssential(stat.packageName, deviceEssential))
+            } == true
+            if (!essentialUsedAfter) {
+                return lastPausedPkg
+            }
+        }
+        return null
     }
 
     private fun refreshDeviceEssential(now: Long) {
@@ -471,10 +528,11 @@ class AppUsageMonitorService : Service() {
 
     companion object {
         private const val TAG = "FocusGateMonitor"
-        private const val POLL_INTERVAL_MS = 500L
+        private const val POLL_INTERVAL_MS = 350L
         private const val RESTART_DELAY_MS = 600L
         private const val RESTART_REQUEST_CODE = 1001
         private const val INITIAL_LOOKBACK_MS = 10_000L
+        private const val FOREGROUND_LOOKBACK_MS = 20_000L
         private const val FAILURE_NOTIFY_INTERVAL_MS = 30_000L
         private const val ESSENTIAL_REFRESH_MS = 60_000L
         private const val SUPPRESS_AFTER_EXIT_MS = 2_000L
