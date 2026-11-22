@@ -8,7 +8,6 @@ export interface JourneyStageInfo {
   stepNumber: string;
   key: StageKey;
   label: string;
-  shortDescription: string;
   state: StageState;
 }
 
@@ -125,12 +124,12 @@ export function buildMissionViewModel(
       stageStates.plan = "current";
       currentStepNumber = "01";
       currentStepLabel = "Plan";
-      headline = "Lock in your commitments.";
+      headline = "No Must-do tasks yet.";
       description =
-        "Choose at least one Must-do task to establish today's commitment before confirming the plan.";
+        "Choose at least one important task to establish today's commitment.";
       statusLine =
         plan && plan.tasks.length > 0
-          ? `0 Must-do tasks selected (${plan.tasks.length} non-gate task${plan.tasks.length === 1 ? "" : "s"} in draft)`
+          ? `0 Must-do tasks selected (${plan.tasks.length} optional task${plan.tasks.length === 1 ? "" : "s"} in draft)`
           : "0 Must-do tasks selected";
       break;
     }
@@ -145,7 +144,7 @@ export function buildMissionViewModel(
       statusLine = `${mustDoTotal} Must-do task${mustDoTotal === 1 ? "" : "s"} selected · ${
         hasFocusTarget
           ? `${formatMinutes(focusRequired)} focus target`
-          : "No focus requirement"
+          : "Focus target not set"
       }`;
       break;
     }
@@ -184,7 +183,7 @@ export function buildMissionViewModel(
         headline = "Protect your attention.";
         description =
           "Complete verified focus sessions to meet today's focus requirement and unlock task completion.";
-        statusLine = `${formatMinutes(focusDone)} / ${formatMinutes(focusRequired)} verified focus completed`;
+        statusLine = `${formatMinutes(focusDone)} / ${formatMinutes(focusRequired)} minutes completed`;
       }
       break;
     }
@@ -238,35 +237,30 @@ export function buildMissionViewModel(
       stepNumber: "01",
       key: "plan",
       label: "Plan",
-      shortDescription: "Choose your Must-dos",
       state: stageStates.plan,
     },
     {
       stepNumber: "02",
       key: "commit",
       label: "Commit",
-      shortDescription: "Confirm your plan",
       state: stageStates.commit,
     },
     {
       stepNumber: "03",
       key: "focus",
       label: "Focus",
-      shortDescription: "Complete verified sessions",
       state: stageStates.focus,
     },
     {
       stepNumber: "04",
       key: "complete",
       label: "Complete",
-      shortDescription: "Finish all Must-dos",
       state: stageStates.complete,
     },
     {
       stepNumber: "05",
       key: "unlock",
       label: "Unlock",
-      shortDescription: "Claim earned time",
       state: stageStates.unlock,
     },
   ];
@@ -308,7 +302,7 @@ export function formatPlanProgressStat(plan: Plan | null): PlanProgressCardDispl
       value: "No tasks selected",
       hint:
         plan.tasks.length > 0
-          ? `${plan.tasks.length} non-gate task${plan.tasks.length === 1 ? "" : "s"} in draft · add a Must-do`
+          ? `${plan.tasks.length} optional task${plan.tasks.length === 1 ? "" : "s"} in draft · add a Must-do`
           : "Awaiting your first Must-do task",
       tone: "warning",
     };
@@ -333,9 +327,10 @@ export interface NextMoveCandidateResult {
 /**
  * Pure task selection algorithm for "Your Next Move":
  * 1. Unfinished Must-do in today's plan.
- * 2. Unfinished Must-do in backlog with nearest deadline.
- * 3. Unfinished Should-do (in today's plan first, then backlog by deadline/priority).
- * 4. Bonus only when no unfinished Must-do exists anywhere.
+ * 2. Unfinished Must-do in backlog with nearest deadline / overdue.
+ * 3. Remaining unfinished Must-do tasks.
+ * 4. Unfinished Should-do when no Must-do remains open.
+ * 5. Bonus only when no unfinished Must-do exists.
  * Never selects completed or cancelled tasks.
  */
 export function selectNextMoveFromTasks(
@@ -402,7 +397,7 @@ export function selectNextMoveFromTasks(
     };
   }
 
-  // 2. Check unfinished Must-do in backlog (ordered by nearest deadline, then priority)
+  // 2 & 3. Check unfinished Must-do in backlog (ordered by nearest deadline/overdue, then priority)
   const backlogMustDos = openTasks.filter((t) => t.kind === "must_do");
   if (backlogMustDos.length > 0) {
     const sorted = [...backlogMustDos].sort((a, b) => {
@@ -418,12 +413,12 @@ export function selectNextMoveFromTasks(
       focusDone: 0,
       focusRequired: chosen.requiredFocusMinutes,
       reason: chosen.dueDate
-        ? "Suggested because this is an unfinished Must-do with the nearest deadline."
+        ? "Suggested because this is your highest-priority unfinished Must-do with the nearest deadline."
         : "Suggested because this is your highest-priority unfinished Must-do task.",
     };
   }
 
-  // 3. Check Should-do / Bonus in today's plan (suppressing Bonus if any Must-do is open)
+  // 4. Check Should-do / Bonus in today's plan (suppressing Bonus if any Must-do is open)
   if (openPlanTasks.length > 0) {
     const eligiblePlan = hasOpenMustDo
       ? openPlanTasks.filter((pt) => pt.kind !== "bonus")
@@ -466,7 +461,7 @@ export function selectNextMoveFromTasks(
     }
   }
 
-  // 4. Fall back to open backlog (Should-do first, then Bonus only if no Must-do is open)
+  // 5. Fall back to open backlog (Should-do first, then Bonus only if no Must-do is open)
   const eligibleBacklog = hasOpenMustDo
     ? openTasks.filter((t) => t.kind !== "bonus")
     : openTasks;
@@ -490,6 +485,26 @@ export function selectNextMoveFromTasks(
         ? "Suggested as the highest-priority Should-do in your open work queue."
         : "Suggested because no Must-do or Should-do tasks remain open.",
   };
+}
+
+/**
+ * Excludes the task already surfaced in "Your Next Move" from the "Due Soon"
+ * list so a single task never appears twice on the Dashboard, and returns at
+ * most `limit` open tasks with deadlines.
+ */
+export function filterDueSoonTasks(
+  upcomingTasks: Task[],
+  nextMoveTaskId: string | null | undefined,
+  limit = 4,
+): Task[] {
+  return upcomingTasks
+    .filter(
+      (task) =>
+        (task.status === "todo" || task.status === "in_progress") &&
+        Boolean(task.dueDate) &&
+        task.id !== nextMoveTaskId,
+    )
+    .slice(0, limit);
 }
 
 export interface WalletBreakdownSummary {

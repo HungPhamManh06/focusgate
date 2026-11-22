@@ -25,7 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="min-h-screen lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
         <Sidebar displayName={workspace.profile.displayName} availableMinutes={availableMinutes} />
 
-        <div className="flex min-h-screen flex-col">
+        <div className="flex min-h-screen min-w-0 flex-col">
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-canvas/85 px-5 backdrop-blur-md lg:hidden">
             <Link href="/" aria-label="FocusGate home">
               <Logo />

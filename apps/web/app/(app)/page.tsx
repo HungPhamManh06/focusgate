@@ -1,21 +1,5 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  CalendarClock,
-  CheckCircle2,
-  Flame,
-  ListTodo,
-  Sparkles,
-  Target,
-  Timer,
-} from "lucide-react";
-import {
-  activatePlanAction,
-  completePlanAction,
-  createPlanAction,
-} from "@/lib/actions/planner";
-import { claimRewardAction } from "@/lib/actions/rewards";
-import { ActionButton } from "@/components/ui/action-button";
+import { ArrowRight, ListTodo, Target, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,24 +24,27 @@ import { getWallet } from "@/lib/data/rewards";
 import { getTaskCounts } from "@/lib/data/tasks";
 import { getWorkspace } from "@/lib/data/workspace";
 import {
+  filterDueSoonTasks,
   formatPlanProgressStat,
-  resolveMissionPhase,
 } from "@/lib/domain/dashboard-state";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [workspace, plan, focus, wallet, upcoming, sessions, counts] = await Promise.all([
+  // Fetch 5 upcoming tasks with due dates so that if 1 is promoted to "Your Next Move",
+  // "Due Soon" can still display up to 4 distinct remaining deadlines.
+  const [workspace, plan, focus, wallet, upcomingRaw, sessions, counts] = await Promise.all([
     getWorkspace(),
     getTodayPlan(),
     getTodayFocusSummary(),
     getWallet(),
-    getUpcomingTasks(4),
+    getUpcomingTasks(5),
     getRecentSessions(4),
     getTaskCounts(),
   ]);
 
   const nextMove = await getNextMoveCandidate(plan);
+  const dueSoonTasks = filterDueSoonTasks(upcomingRaw, nextMove?.task.id, 4);
 
   const { timezone, displayName } = workspace.profile;
   const firstName = displayName.split(/\s+/)[0] ?? displayName;
@@ -74,88 +61,19 @@ export default async function DashboardPage() {
       )
     : undefined;
 
-  const phase = resolveMissionPhase(plan, todayGrant);
   const planStat = formatPlanProgressStat(plan);
-
-  // Header action: single state-appropriate CTA without competing duplicate buttons
-  function renderHeaderAction() {
-    switch (phase) {
-      case "no_plan":
-        return (
-          <ActionButton action={createPlanAction} variant="outline" size="md">
-            <Sparkles className="size-4" /> Create today&apos;s plan
-          </ActionButton>
-        );
-      case "draft_empty":
-      case "draft_ready":
-        return (
-          <Link href="/planner" className={buttonVariants({ variant: "outline", size: "md" })}>
-            <CalendarClock className="size-4" /> Continue planning
-          </Link>
-        );
-      case "confirmed":
-        return plan ? (
-          <ActionButton
-            action={activatePlanAction.bind(null, plan.id)}
-            variant="outline"
-            size="md"
-            pendingLabel="Activating…"
-          >
-            <Flame className="size-4" /> Activate focus
-          </ActionButton>
-        ) : null;
-      case "active_focus":
-        return (
-          <Link href="/focus" className={buttonVariants({ variant: "outline", size: "md" })}>
-            <Timer className="size-4" /> Go to focus
-          </Link>
-        );
-      case "active_ready_to_close":
-        return plan ? (
-          <ActionButton
-            action={completePlanAction.bind(null, plan.id)}
-            variant="outline"
-            size="md"
-            confirmTitle="Close today's plan?"
-            confirmMessage="All Must-do commitments and verified focus targets are met. Complete the day to unlock your reward?"
-            confirmLabel="Complete day"
-          >
-            <CheckCircle2 className="size-4" /> Complete day
-          </ActionButton>
-        ) : null;
-      case "completed_unclaimed":
-        return plan ? (
-          <ActionButton
-            action={claimRewardAction.bind(null, plan.id)}
-            variant="outline"
-            size="md"
-            pendingLabel="Claiming…"
-          >
-            <Sparkles className="size-4" /> Claim reward
-          </ActionButton>
-        ) : null;
-      case "completed_claimed":
-        return (
-          <Link href="/wallet" className={buttonVariants({ variant: "outline", size: "md" })}>
-            View wallet <ArrowRight className="size-4" />
-          </Link>
-        );
-    }
-  }
-
   const otherOpenCount = Math.max(0, counts.open - counts.mustDoOpen);
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 py-7 sm:px-8 sm:py-9">
-      {/* 1. Greeting Header */}
+    <div className="mx-auto w-full max-w-[1220px] overflow-x-hidden px-4 py-7 sm:px-8 sm:py-9">
+      {/* 1. Greeting Header — Clean editorial greeting without competing duplicate CTAs */}
       <PageHeader
         eyebrow={dateLabel}
         title={`${greeting(timezone)}, ${firstName}.`}
         description="Make today count. Finish what matters, focus deeply, and earn your time."
-        actions={renderHeaderAction()}
       />
 
-      {/* 2. Daily Overview — 3 focused stat cards with honest empty states */}
+      {/* 2. Daily Overview — 3 focused stat cards */}
       <section
         className="mt-7 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3"
         aria-label="Daily overview"
@@ -228,6 +146,7 @@ export default async function DashboardPage() {
             suggestion={nextMove}
             hasPlan={Boolean(plan)}
             totalTasksCount={counts.total}
+            completedTasksCount={counts.completed}
             timezone={timezone}
           />
 
@@ -236,7 +155,7 @@ export default async function DashboardPage() {
               <div>
                 <CardTitle>Due soon</CardTitle>
                 <p className="mt-1 text-[12px] text-muted">
-                  Nearest deadlines in your open work queue.
+                  Other upcoming deadlines in your open work queue.
                 </p>
               </div>
               <Link
@@ -247,16 +166,16 @@ export default async function DashboardPage() {
               </Link>
             </CardHeader>
             <CardContent className="pt-4">
-              {upcoming.length === 0 ? (
+              {dueSoonTasks.length === 0 ? (
                 <EmptyState
                   icon={ListTodo}
                   title="Nothing due soon."
-                  description="You have no outstanding tasks with an approaching deadline."
+                  description="You have no other outstanding tasks with an approaching deadline."
                   className="px-5 py-7"
                 />
               ) : (
                 <ul className="divide-y divide-line">
-                  {upcoming.map((task) => {
+                  {dueSoonTasks.map((task) => {
                     const due = relativeDue(task.dueDate, timezone);
                     const overdue = due?.includes("overdue") ?? false;
                     return (

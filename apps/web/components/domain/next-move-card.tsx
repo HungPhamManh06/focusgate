@@ -11,15 +11,17 @@ export function NextMoveCard({
   suggestion,
   hasPlan,
   totalTasksCount,
+  completedTasksCount,
   timezone,
 }: {
   suggestion: NextMoveSuggestion | null;
   hasPlan: boolean;
   totalTasksCount: number;
+  completedTasksCount: number;
   timezone: string;
 }) {
   if (!suggestion) {
-    const noTasksAtAll = totalTasksCount === 0 && !hasPlan;
+    const noTasksCreatedYet = totalTasksCount === 0 && completedTasksCount === 0 && !hasPlan;
 
     return (
       <Card>
@@ -28,20 +30,20 @@ export function NextMoveCard({
             <Compass className="size-4 text-accent" strokeWidth={1.8} />
             <CardTitle>Your next move</CardTitle>
           </div>
-          <Badge tone={noTasksAtAll ? "neutral" : "success"}>
-            {noTasksAtAll ? "Start here" : "Clear"}
+          <Badge tone={noTasksCreatedYet ? "neutral" : "success"}>
+            {noTasksCreatedYet ? "Start here" : "Clear"}
           </Badge>
         </CardHeader>
         <CardContent className="pt-4">
           <div className="flex items-start gap-3.5 rounded-2xl border border-line bg-surface-2/60 p-4">
             <span
               className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
-                noTasksAtAll
+                noTasksCreatedYet
                   ? "bg-accent-soft text-accent"
                   : "bg-success-soft text-success"
               }`}
             >
-              {noTasksAtAll ? (
+              {noTasksCreatedYet ? (
                 <ListPlus className="size-4" strokeWidth={2} />
               ) : (
                 <CheckCircle2 className="size-4" strokeWidth={2} />
@@ -49,22 +51,23 @@ export function NextMoveCard({
             </span>
             <div>
               <p className="text-[14px] font-semibold text-ink">
-                {noTasksAtAll ? "Add your first task first." : "You're all caught up."}
+                {noTasksCreatedYet ? "Add your first task." : "You're all caught up."}
               </p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
-                {noTasksAtAll
+                {noTasksCreatedYet
                   ? "Create a few tasks in your backlog—starting with at least one Must-do—before building today's plan."
-                  : "No outstanding Must-do tasks need your attention."}
+                  : "No outstanding tasks need your attention."}
               </p>
-              <div className="mt-3">
-                <Link
-                  href={noTasksAtAll ? "/tasks" : "/planner"}
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                >
-                  {noTasksAtAll ? "Add tasks to backlog" : "Review tomorrow's plan"}{" "}
-                  <ArrowRight className="size-3.5" />
-                </Link>
-              </div>
+              {noTasksCreatedYet ? (
+                <div className="mt-3">
+                  <Link
+                    href="/tasks"
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    Open tasks <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
+              ) : null}
             </div>
           </div>
         </CardContent>
@@ -98,7 +101,7 @@ export function NextMoveCard({
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-muted tabular-nums">
             <span>{priorityLabels[task.priority]} priority</span>
             <span aria-hidden>·</span>
-            <span>{formatMinutes(task.estimatedMinutes)}</span>
+            <span>{formatMinutes(task.estimatedMinutes)} estimated</span>
             {focusRequired > 0 ? (
               <>
                 <span aria-hidden>·</span>

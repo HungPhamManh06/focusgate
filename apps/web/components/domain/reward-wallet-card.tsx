@@ -70,22 +70,17 @@ export function RewardWalletCard({
             </div>
           </dl>
 
-          {/* Next Expiration Window */}
-          <div className="mt-4 rounded-xl border border-line bg-surface px-3.5 py-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted">
-                <Clock3 className="size-3.5" /> Next expiration
-              </span>
-              {activeGrants.length > 0 ? (
+          {/* Grant Status / Next Expiration Window — No duplicate labels when empty */}
+          {nextExpiringGrant ? (
+            <div className="mt-4 rounded-xl border border-line bg-surface px-3.5 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted">
+                  <Clock3 className="size-3.5" /> Next expiration
+                </span>
                 <Badge tone="success">
                   {activeGrants.length} active grant{activeGrants.length === 1 ? "" : "s"}
                 </Badge>
-              ) : (
-                <Badge tone="neutral">No active grants</Badge>
-              )}
-            </div>
-
-            {nextExpiringGrant ? (
+              </div>
               <p className="mt-1.5 text-[12.5px] font-medium text-ink tabular-nums">
                 {formatMinutes(nextExpiringGrant.remainingMinutes)} ·{" "}
                 <span className="font-normal text-ink-soft">
@@ -102,22 +97,17 @@ export function RewardWalletCard({
                   )}
                 </span>
               </p>
-            ) : expiredGrants.length > 0 ? (
-              <div className="mt-1.5">
-                <p className="text-[12px] font-medium text-ink">No active grants.</p>
-                <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">
-                  Previous grants have expired. Complete today&apos;s plan to earn a fresh grant.
-                </p>
-              </div>
-            ) : (
-              <div className="mt-1.5">
-                <p className="text-[12px] font-medium text-ink">No active grants.</p>
-                <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">
-                  Complete today&apos;s plan to earn a fresh grant.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-line bg-surface-2/60 px-3.5 py-3">
+              <p className="text-[12px] font-semibold text-ink">No active grants.</p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+                {expiredGrants.length > 0
+                  ? "Previous rewards have expired. Complete today's plan to earn a fresh grant."
+                  : "Complete today's plan to earn your first leisure grant."}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mt-5 border-t border-line pt-4">
