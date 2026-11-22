@@ -11,7 +11,12 @@ import { Sidebar } from "@/components/shell/sidebar";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [workspace, availableMinutes] = await Promise.all([getWorkspace(), getWalletSummary()]);
+  const [workspace, walletSummaryResult] = await Promise.all([
+    getWorkspace(),
+    getWalletSummary()
+      .then((minutes) => ({ minutes, error: false }))
+      .catch(() => ({ minutes: null, error: true })),
+  ]);
 
   return (
     <ToastProvider>
@@ -23,7 +28,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </a>
 
       <div className="min-h-screen lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
-        <Sidebar displayName={workspace.profile.displayName} availableMinutes={availableMinutes} />
+        <Sidebar
+          displayName={workspace.profile.displayName}
+          availableMinutes={walletSummaryResult.minutes}
+          walletError={walletSummaryResult.error}
+        />
 
         <div className="flex min-h-screen min-w-0 flex-col">
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-canvas/85 px-5 backdrop-blur-md lg:hidden">
@@ -35,7 +44,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 href="/wallet"
                 className="rounded-full border border-line bg-surface px-3 py-1.5 text-[11.5px] font-medium text-ink-soft"
               >
-                {formatMinutes(availableMinutes)}
+                {walletSummaryResult.minutes !== null
+                  ? formatMinutes(walletSummaryResult.minutes)
+                  : "Wallet"}
               </Link>
               <span
                 title={`${workspace.profile.displayName} · Local workspace`}

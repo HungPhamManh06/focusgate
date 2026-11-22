@@ -58,7 +58,7 @@ export function DailyMissionCard({
   const vm = buildMissionViewModel(plan, settings, todayGrant);
 
   return (
-    <Card className="flex flex-col justify-between overflow-hidden">
+    <Card className="overflow-hidden">
       <div>
         {/* Card Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-4 sm:px-7">
@@ -168,21 +168,21 @@ export function DailyMissionCard({
         </div>
 
         {/* Current Step Detail Panel */}
-        <CardContent className="space-y-5 px-5 py-6 sm:px-7">
+        <CardContent className="space-y-4 px-5 py-5 sm:px-7">
           {vm.phase === "draft_empty" ? (
             /* STATE B1 — DRAFT WITHOUT MUST-DO: Single clean empty state without duplicate circles/cards */
-            <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
               <div className="max-w-lg">
                 <p className="label-xs text-accent">
                   Step {vm.currentStepNumber} · {vm.currentStepLabel}
                 </p>
-                <h2 className="mt-2 font-display text-[30px] leading-[1.06] tracking-[-0.015em] sm:text-[34px]">
+                <h2 className="mt-1.5 font-display text-[30px] leading-[1.06] tracking-[-0.015em] sm:text-[34px]">
                   {vm.headline}
                 </h2>
-                <p className="mt-2 text-[13.5px] leading-relaxed text-ink-soft">
+                <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
                   {vm.description}
                 </p>
-                <p className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-[12px] font-medium text-ink tabular-nums">
+                <p className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-[12.5px] font-medium text-ink tabular-nums">
                   <Target className="size-3.5 text-accent" strokeWidth={1.9} />
                   {vm.statusLine}
                 </p>
@@ -412,7 +412,7 @@ export function DailyMissionCard({
             <Link href="/planner" className={buttonVariants({ variant: "accent", size: "md" })}>
               <CalendarClock className="size-4" /> Add tasks to today&apos;s plan
             </Link>
-            <p className="text-[11.5px] text-muted">
+            <p className="text-[12.5px] text-muted">
               At least one Must-do task is required before confirming.
             </p>
           </>

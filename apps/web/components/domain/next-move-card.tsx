@@ -50,10 +50,10 @@ export function NextMoveCard({
               )}
             </span>
             <div>
-              <p className="text-[14px] font-semibold text-ink">
+              <p className="text-[14.5px] font-semibold text-ink">
                 {noTasksCreatedYet ? "Add your first task." : "You're all caught up."}
               </p>
-              <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+              <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">
                 {noTasksCreatedYet
                   ? "Create a few tasks in your backlog—starting with at least one Must-do—before building today's plan."
                   : "No outstanding tasks need your attention."}
@@ -92,19 +92,19 @@ export function NextMoveCard({
       <CardContent className="pt-4">
         <div className="rounded-2xl border border-line bg-surface-2/60 p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-semibold leading-snug text-ink">
+            <h3 className="text-[15.5px] font-semibold leading-snug text-ink">
               {task.title}
             </h3>
             {inTodayPlan ? <Badge tone="accent">In today&apos;s plan</Badge> : null}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-muted tabular-nums">
-            <span>{priorityLabels[task.priority]} priority</span>
-            <span aria-hidden>·</span>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-ink-soft tabular-nums">
+            <span className="font-medium">{priorityLabels[task.priority]} priority</span>
+            <span className="text-muted" aria-hidden>·</span>
             <span>{formatMinutes(task.estimatedMinutes)} estimated</span>
             {focusRequired > 0 ? (
               <>
-                <span aria-hidden>·</span>
+                <span className="text-muted" aria-hidden>·</span>
                 <span>
                   {inTodayPlan
                     ? `${formatMinutes(focusDone)} / ${formatMinutes(focusRequired)} focus`
@@ -114,20 +114,20 @@ export function NextMoveCard({
             ) : null}
             {due ? (
               <>
-                <span aria-hidden>·</span>
-                <span className={overdue ? "font-medium text-danger" : "text-ink-soft"}>
+                <span className="text-muted" aria-hidden>·</span>
+                <span className={overdue ? "font-semibold text-danger" : "font-medium text-ink"}>
                   {due}
                 </span>
               </>
             ) : task.dueDate ? (
               <>
-                <span aria-hidden>·</span>
+                <span className="text-muted" aria-hidden>·</span>
                 <span>Due {formatDate(task.dueDate, undefined, timezone)}</span>
               </>
             ) : null}
           </div>
 
-          <p className="mt-2.5 text-[12px] leading-relaxed text-muted">{reason}</p>
+          <p className="mt-2.5 text-[13px] leading-relaxed text-ink-soft">{reason}</p>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line/80 pt-3">
             <Link

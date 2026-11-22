@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { formatMinutes, initials } from "@/lib/data/format";
+import { isSidebarWalletActive } from "@/lib/domain/dashboard-state";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -12,11 +13,14 @@ import { isNavActive, navItems } from "./nav-items";
 export function Sidebar({
   displayName,
   availableMinutes,
+  walletError = false,
 }: {
   displayName: string;
-  availableMinutes: number;
+  availableMinutes: number | null;
+  walletError?: boolean;
 }) {
   const pathname = usePathname();
+  const hasAvailableTime = isSidebarWalletActive(availableMinutes);
 
   return (
     <aside className="sticky top-0 hidden h-screen flex-col border-r border-line bg-surface lg:flex">
@@ -59,16 +63,29 @@ export function Sidebar({
         <div className="rounded-2xl border border-line bg-surface-2 p-4">
           <div className="flex items-center justify-between">
             <p className="label-xs text-muted">Available time</p>
-            <span className="size-1.5 rounded-full bg-success" aria-hidden />
+            {hasAvailableTime ? (
+              <span
+                className="size-2 rounded-full bg-success"
+                title="Leisure time available to spend"
+                aria-label="Leisure time available"
+              />
+            ) : null}
           </div>
-          <p className="mt-3 font-display text-[30px] leading-none tracking-[-0.02em] tabular-nums">
-            {formatMinutes(availableMinutes)}
-          </p>
+          {walletError || availableMinutes === null ? (
+            <p className="mt-2.5 text-[12.5px] font-medium text-warning">
+              Balance unavailable
+            </p>
+          ) : (
+            <p className="mt-3 font-display text-[30px] leading-none tracking-[-0.02em] tabular-nums">
+              {formatMinutes(availableMinutes)}
+            </p>
+          )}
           <Link
             href="/wallet"
-            className="mt-3 inline-flex items-center gap-1 text-[11.5px] font-medium text-accent hover:underline"
+            className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline"
           >
-            Open wallet <ArrowUpRight className="size-3" />
+            {walletError || availableMinutes === null ? "Retry in wallet" : "Open wallet"}{" "}
+            <ArrowUpRight className="size-3" />
           </Link>
         </div>
 

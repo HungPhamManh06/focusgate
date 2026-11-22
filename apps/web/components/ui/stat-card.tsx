@@ -34,7 +34,7 @@ export function StatCard({
         ) : null}
       </div>
       <p className="mt-4 font-display text-[34px] leading-none tracking-[-0.02em]">{value}</p>
-      {hint ? <p className="mt-2 text-[11.5px] leading-relaxed text-muted">{hint}</p> : null}
+      {hint ? <p className="mt-2 text-[12.5px] leading-relaxed text-ink-soft">{hint}</p> : null}
     </div>
   );
 }

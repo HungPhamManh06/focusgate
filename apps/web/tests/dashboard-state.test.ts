@@ -4,6 +4,7 @@ import {
   buildMissionViewModel,
   filterDueSoonTasks,
   formatPlanProgressStat,
+  isSidebarWalletActive,
   resolveMissionPhase,
   selectNextMoveFromTasks,
   summarizeWalletForDashboard,
@@ -290,6 +291,8 @@ test("Reward wallet summary handles both active grants and expired-only grants c
   assert.equal(activeSummary.availableMinutes, 20);
   assert.equal(activeSummary.expiredMinutes, 20);
   assert.equal(activeSummary.nextExpiringGrant?.id, "g-active");
+  assert.equal(activeSummary.hasAvailableTime, true);
+  assert.equal(isSidebarWalletActive(activeSummary.availableMinutes), true);
 
   const walletExpiredOnly: Wallet = {
     ...walletWithActive,
@@ -301,4 +304,7 @@ test("Reward wallet summary handles both active grants and expired-only grants c
   assert.equal(expiredSummary.activeGrants.length, 0);
   assert.equal(expiredSummary.nextExpiringGrant, undefined);
   assert.equal(expiredSummary.expiredGrants.length, 1);
+  assert.equal(expiredSummary.hasAvailableTime, false);
+  assert.equal(isSidebarWalletActive(0), false);
+  assert.equal(isSidebarWalletActive(null), false);
 });

@@ -515,6 +515,7 @@ export interface WalletBreakdownSummary {
   activeGrants: Grant[];
   expiredGrants: Grant[];
   nextExpiringGrant: Grant | undefined;
+  hasAvailableTime: boolean;
 }
 
 export function summarizeWalletForDashboard(
@@ -542,5 +543,10 @@ export function summarizeWalletForDashboard(
     activeGrants,
     expiredGrants,
     nextExpiringGrant: activeGrants[0],
+    hasAvailableTime: wallet.availableMinutes > 0,
   };
+}
+
+export function isSidebarWalletActive(availableMinutes: number | null | undefined): boolean {
+  return typeof availableMinutes === "number" && availableMinutes > 0;
 }

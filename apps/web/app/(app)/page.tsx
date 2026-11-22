@@ -65,7 +65,7 @@ export default async function DashboardPage() {
   const otherOpenCount = Math.max(0, counts.open - counts.mustDoOpen);
 
   return (
-    <div className="mx-auto w-full max-w-[1220px] overflow-x-hidden px-4 py-7 sm:px-8 sm:py-9">
+    <div className="mx-auto w-full max-w-[1280px] overflow-x-hidden px-4 py-7 sm:px-8 sm:py-9 lg:px-10">
       {/* 1. Greeting Header — Clean editorial greeting without competing duplicate CTAs */}
       <PageHeader
         eyebrow={dateLabel}
@@ -75,7 +75,7 @@ export default async function DashboardPage() {
 
       {/* 2. Daily Overview — 3 focused stat cards */}
       <section
-        className="mt-7 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3"
+        className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
         aria-label="Daily overview"
       >
         <StatCard
@@ -122,7 +122,7 @@ export default async function DashboardPage() {
 
       {/* 3. Main Content — Today's Mission (~66%) + Reward Wallet (~34%) */}
       <section
-        className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.95fr)_minmax(320px,1fr)]"
+        className="mt-6 grid items-start gap-5 lg:grid-cols-[minmax(0,1.95fr)_minmax(340px,1fr)]"
         aria-label="Today's mission and reward wallet"
       >
         <DailyMissionCard
@@ -138,10 +138,10 @@ export default async function DashboardPage() {
 
       {/* 4. Supporting Information — Your Next Move + Due Soon | Recent Focus */}
       <section
-        className="mt-6 grid gap-4 lg:grid-cols-2"
+        className="mt-6 grid items-start gap-5 lg:grid-cols-2"
         aria-label="Next move, upcoming deadlines, and recent focus"
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
           <NextMoveCard
             suggestion={nextMove}
             hasPlan={Boolean(plan)}
@@ -154,15 +154,15 @@ export default async function DashboardPage() {
             <CardHeader>
               <div>
                 <CardTitle>Due soon</CardTitle>
-                <p className="mt-1 text-[12px] text-muted">
+                <p className="mt-1 text-[13px] text-ink-soft">
                   Other upcoming deadlines in your open work queue.
                 </p>
               </div>
               <Link
                 href="/tasks"
-                className="inline-flex items-center gap-1 text-[11.5px] font-medium text-accent hover:underline"
+                className="inline-flex items-center gap-1 text-[12.5px] font-medium text-accent hover:underline"
               >
-                View all tasks <ArrowRight className="size-3" />
+                View all tasks <ArrowRight className="size-3.5" />
               </Link>
             </CardHeader>
             <CardContent className="pt-4">
@@ -185,16 +185,16 @@ export default async function DashboardPage() {
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-[13px] font-medium text-ink">
+                            <p className="truncate text-[14px] font-medium text-ink">
                               {task.title}
                             </p>
                             {overdue ? <Badge tone="danger">Overdue</Badge> : null}
                           </div>
-                          <p className="mt-0.5 text-[11px] text-muted tabular-nums">
-                            <span className={overdue ? "font-medium text-danger" : undefined}>
+                          <p className="mt-1 text-[12.5px] text-ink-soft tabular-nums">
+                            <span className={overdue ? "font-semibold text-danger" : "font-medium"}>
                               {due ?? formatDate(task.dueDate, undefined, timezone)}
                             </span>{" "}
-                            · {formatMinutes(task.estimatedMinutes)} est.
+                            <span className="text-muted">·</span> {formatMinutes(task.estimatedMinutes)} est.
                           </p>
                         </div>
                         <KindBadge kind={task.kind} />
@@ -212,15 +212,15 @@ export default async function DashboardPage() {
             <CardHeader>
               <div>
                 <CardTitle>Recent focus</CardTitle>
-                <p className="mt-1 text-[12px] text-muted">
+                <p className="mt-1 text-[13px] text-ink-soft">
                   Your last verified and logged focus blocks.
                 </p>
               </div>
               <Link
                 href="/statistics"
-                className="inline-flex items-center gap-1 text-[11.5px] font-medium text-accent hover:underline"
+                className="inline-flex items-center gap-1 text-[12.5px] font-medium text-accent hover:underline"
               >
-                Statistics <ArrowRight className="size-3" />
+                Statistics <ArrowRight className="size-3.5" />
               </Link>
             </CardHeader>
             <CardContent className="pt-4">
@@ -256,10 +256,10 @@ export default async function DashboardPage() {
                         <Timer className="size-3.5" strokeWidth={1.9} />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium text-ink">
+                        <p className="truncate text-[14px] font-medium text-ink">
                           {session.taskTitle ?? "Free focus"}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-muted tabular-nums">
+                        <p className="mt-0.5 text-[12.5px] text-ink-soft tabular-nums">
                           {formatDate(
                             session.startedAt,
                             { month: "short", day: "numeric" },
@@ -279,9 +279,9 @@ export default async function DashboardPage() {
             </CardContent>
           </div>
 
-          <div className="border-t border-line bg-surface-2/40 px-5 py-3.5 text-[11px] text-muted sm:px-6">
+          <div className="border-t border-line bg-surface-2/40 px-5 py-3.5 text-[12px] text-ink-soft sm:px-6">
             Sessions require at least{" "}
-            <span className="font-medium text-ink-soft">
+            <span className="font-semibold text-ink">
               {formatMinutes(workspace.settings.minValidFocusMinutes)}
             </span>{" "}
             on the server clock to count toward a Must-do task.
