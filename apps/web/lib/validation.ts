@@ -23,6 +23,27 @@ export const deviceRenameSchema = z.object({
     .max(80, "Keep the device name under 80 characters."),
 });
 
+export const blockRuleTypes = ["block", "allow"] as const;
+export const blockCategories = ["social", "video", "games", "entertainment", "other"] as const;
+export const blockActions = ["overlay", "minimize", "terminate", "notify"] as const;
+
+export const blockRuleSchema = z.object({
+  deviceId: z.string().uuid("Choose a valid device."),
+  ruleType: z.enum(blockRuleTypes),
+  identifier: z
+    .string()
+    .trim()
+    .min(1, "Enter an app or process identifier.")
+    .max(256, "Keep the identifier under 256 characters."),
+  displayName: z
+    .string()
+    .trim()
+    .min(1, "Give the rule a display name.")
+    .max(200, "Keep the display name under 200 characters."),
+  category: z.enum(blockCategories),
+  action: z.enum(blockActions),
+});
+
 export const taskFormSchema = z
   .object({
     title: z.string().trim().min(1, "Give the task a title.").max(160, "Keep the title under 160 characters."),

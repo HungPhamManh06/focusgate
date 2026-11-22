@@ -3,15 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
-import { listDevices } from "@/lib/data/devices";
+import { listBlockRules, listDevices } from "@/lib/data/devices";
 import { getWorkspace } from "@/lib/data/workspace";
+import { BlockRulesCard } from "./block-rules-card";
 import { DeviceRow } from "./device-row";
 import { RegisterDeviceForm } from "./register-device-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function DevicesPage() {
-  const [workspace, devices] = await Promise.all([getWorkspace(), listDevices()]);
+  const [workspace, devices, rules] = await Promise.all([
+    getWorkspace(),
+    listDevices(),
+    listBlockRules(),
+  ]);
   const activeCount = devices.filter((device) => device.status === "active").length;
   const revokedCount = devices.length - activeCount;
 
@@ -88,6 +93,10 @@ export default async function DevicesPage() {
             </CardContent>
           </Card>
         </aside>
+      </div>
+
+      <div className="mt-4">
+        <BlockRulesCard devices={devices} rules={rules} />
       </div>
     </div>
   );
