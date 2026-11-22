@@ -99,6 +99,7 @@ export interface FocusSession {
 
 export interface Grant {
   id: string;
+  dailyPlanId: string | null;
   grantedMinutes: number;
   consumedMinutes: number;
   remainingMinutes: number;

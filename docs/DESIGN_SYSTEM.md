@@ -132,7 +132,13 @@ warning, Confirmed = accent, Active = success with dot, Completed = neutral.
 ### Stat cards
 
 `label-xs` label, 34 px display value, 11.5 px hint, optional 28 px tinted icon.
-Four across at `xl`, two at `sm`, one on mobile.
+Three across on the Dashboard Daily Overview (`Focus Today`, `Open Tasks`, `Plan Progress` — avoiding duplicate `Unlocked Time` metrics that already live in the Sidebar and Reward Wallet card); four across at `xl` on analytical screens such as Statistics.
+
+### Domain composition components (`components/domain/*`)
+
+- `DailyMissionCard`: Centerpiece of the Dashboard (~66% desktop width). Visualizes the five-stage FocusGate journey (`Plan → Commit → Focus → Complete → Unlock`) with live progress, verified focus coverage, committed task checklist, and a single state-appropriate primary CTA (`No Plan`, `Draft`, `Confirmed`, `Active`, `Completed`, `Claimed`).
+- `RewardWalletCard`: Companion card (~34% desktop width) showing authoritative `availableMinutes`, a three-part ledger breakdown (`Earned`, `Spent`, `Expired` derived from real grant records), next grant expiration timestamp, and a link to wallet history.
+- `NextMoveCard`: Recommends the single highest-leverage open task (prioritizing unfinished Must-dos and nearest deadlines, and suppressing Bonus tasks while Must-dos remain open) with a clear rationale and non-duplicate navigation action.
 
 ### Empty, loading and error states
 
@@ -173,7 +179,7 @@ period is 90 days; cards never force horizontal page scroll.
 
 | Screen | Primary block | Supporting blocks |
 |---|---|---|
-| Dashboard | Today's gate progress + actions | 4 stats, reward wallet, due soon, recent focus |
+| Dashboard | `DailyMissionCard` (5-stage journey + single primary CTA) | 3 Daily Overview stats, `RewardWalletCard`, `NextMoveCard`, Due soon, Recent focus |
 | Tasks | Grouped must-do / should-do / bonus list | Counts, status tabs, type filters, search |
 | Planner | Plan tasks + gate lifecycle stepper | Gate summary, backlog add, event history |
 | Focus | Live timer or session starter | Today's focus stats, plan coverage, session log |
@@ -210,7 +216,8 @@ apps/web/components/ui/               button, card, input, badge, progress,
                                       stat-card, empty-state, skeleton, toast,
                                       action-button, page-header, logo, theme
 apps/web/components/shell/            sidebar, mobile nav, nav config
-apps/web/components/domain/labels.tsx domain badge/label mappings
+apps/web/components/domain/           domain badge/label mappings, daily-mission-card,
+                                      reward-wallet-card, next-move-card
 apps/web/components/charts/           bar chart, tiny bars
 apps/web/app/(app)/                   six screens + loading/error states
 ```

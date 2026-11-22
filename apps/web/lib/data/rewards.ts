@@ -7,6 +7,7 @@ import { ensureDevice } from "./workspace";
 
 interface GrantRow {
   id: string;
+  daily_plan_id: string | null;
   granted_minutes: number;
   consumed_minutes: number;
   remaining_minutes: number;
@@ -65,7 +66,7 @@ export async function getWalletSummary(): Promise<number> {
 export async function getWallet(): Promise<Wallet> {
   return withUser(async (db) => {
     const grantsResult = await db.query<GrantRow>(
-      `select id, granted_minutes, consumed_minutes, remaining_minutes, status,
+      `select id, daily_plan_id, granted_minutes, consumed_minutes, remaining_minutes, status,
               source, expires_at, created_at
        from public.unlock_grants where user_id = $1
        order by created_at desc limit 20`,
@@ -86,6 +87,7 @@ export async function getWallet(): Promise<Wallet> {
 
     const grants: Grant[] = grantsResult.rows.map((row) => ({
       id: row.id,
+      dailyPlanId: row.daily_plan_id,
       grantedMinutes: row.granted_minutes,
       consumedMinutes: row.consumed_minutes,
       remainingMinutes: row.remaining_minutes,
