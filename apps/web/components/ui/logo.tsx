@@ -4,7 +4,7 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "flex size-9 items-center justify-center rounded-[11px] bg-ink text-canvas",
+        "flex size-9 items-center justify-center rounded-[11px] bg-gradient-to-br from-[#1E1414] via-[#121111] to-[#291111] text-[#FAF7F5] ring-1 ring-inset ring-white/10",
         className,
       )}
     >
@@ -12,7 +12,7 @@ export function LogoMark({ className }: { className?: string }) {
         <path
           d="M5.5 20V10.2a6.5 6.5 0 0 1 13 0V20"
           stroke="currentColor"
-          strokeWidth="1.7"
+          strokeWidth="1.75"
           strokeLinecap="round"
         />
         <path
@@ -21,7 +21,8 @@ export function LogoMark({ className }: { className?: string }) {
           strokeWidth="1.7"
           strokeLinecap="round"
         />
-        <path d="M5.5 20h13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M5.5 20h13" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+        <circle cx="12" cy="7.6" r="1.35" fill="#EF4444" />
       </svg>
     </span>
   );
