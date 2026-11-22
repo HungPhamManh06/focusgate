@@ -5,7 +5,10 @@ Next.js 15 (App Router) + React 19 + TypeScript + Tailwind CSS v4.
 ## 1. Architecture & Data Layer
 
 - **Server-First Data Access (`apps/web/lib/data/*`):** All reads run in Server Components via `withUser()` (`apps/web/lib/db/index.ts`), which executes queries inside a transaction with `role = authenticated` and `request.jwt.claim.sub` bound to the active user so RLS policies and `SECURITY DEFINER` RPCs behave identically to Supabase PostgREST.
-- **Local PGlite Persistence:** In local development, `.data/postgres` runs embedded PostgreSQL (PGlite) initialized from `supabase/migrations/20260101000001_init.sql` through `20260101000007_focus_snapshot_backfill_safety.sql`. `applyLocalMigrations()` (`apps/web/lib/db/migrations.ts`) tracks applied migrations in `auth.local_meta` (`migration:<filename>`) so existing `0005` workspaces mark the unguarded historical `0006` as `superseded_by_0007` and upgrade directly via `0007`, existing `0006` workspaces apply `0007`, and repeated boots never re-run applied migrations. Failed migrations throw before any marker is written, and `0007` is idempotent for crash recovery.
+- **Local PGlite Persistence:** In local development, `.data/postgres` runs embedded PostgreSQL (PGlite) initialized from `supabase/migrations/20260101000001_init.sql` through `20260101000008_focus_migration_compatibility.sql`. `applyLocalMigrations()` (`apps/web/lib/db/migrations.ts`) tracks applied migrations in `auth.local_meta` (`migration:<filename>`):
+  - **Applied (`"1"`):** Migration SQL executed on this workspace.
+  - **Superseded (`"superseded_by_0007"`):** On existing `0005` local workspaces, the unguarded historical `0006` backfill is **not** executed; `0006` is marked `superseded_by_0007` **only after** `0007` completes, and `0008` ensures identical trigger/constraint parity.
+  - **Hosted Supabase:** Hosted deployments do **not** use `applyLocalMigrations()`; operators must follow [docs/SUPABASE_MIGRATION_RUNBOOK.md](file:///c:/Users/hungv/Downloads/focusgate/docs/SUPABASE_MIGRATION_RUNBOOK.md).
 - **Server Actions (`apps/web/lib/actions/*`):** Mutations validate inputs with Zod (`apps/web/lib/validation.ts`), call PostgreSQL RPCs, and revalidate affected routes.
 
 ## 2. Focus Mode Reliability & Invariants (`/focus`)

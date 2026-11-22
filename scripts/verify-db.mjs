@@ -25,6 +25,7 @@ const MIGRATIONS = [
   "supabase/migrations/20260101000005_focus_validity_snapshot.sql",
   "supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql",
   "supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql",
+  "supabase/migrations/20260101000008_focus_migration_compatibility.sql",
 ];
 
 const USER_A = "11111111-1111-4111-8111-111111111111";

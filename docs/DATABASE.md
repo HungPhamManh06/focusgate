@@ -1,6 +1,6 @@
 # FocusGate – Database
 
-PostgreSQL 15+ (Supabase). Seven migrations, executed and tested against real
+PostgreSQL 15+ (Supabase). Eight migrations, executed and tested against real
 PostgreSQL semantics.
 
 ```
@@ -9,10 +9,13 @@ supabase/migrations/20260101000002_plan_and_reward.sql                         p
 supabase/migrations/20260101000003_backend_hardening.sql                       server-owned focus, constraints
 supabase/migrations/20260101000004_focus_session_integrity.sql                 actual vs credited focus minutes
 supabase/migrations/20260101000005_focus_validity_snapshot.sql                 session-level min_valid_minutes snapshot
-| `20260101000006_legacy_snapshot_and_insert_hardening.sql` | Immutable historical migration (superseded by `0007` on local upgrades) |
-| `20260101000007_focus_snapshot_backfill_safety.sql` | Forward-only timestamp-guarded safe backfill for active sessions |
+supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql    immutable historical migration (superseded by 0007 on 0005 upgrades; see docs/SUPABASE_MIGRATION_RUNBOOK.md)
+supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql          timestamp-guarded safe backfill for active sessions
+supabase/migrations/20260101000008_focus_migration_compatibility.sql           idempotent constraint & trigger sync for 0006-bypassed upgrades
 supabase/seed.sql                                                              development data
 ```
+
+> **Hosted Supabase Deployments:** Hosted databases currently at `0005` must follow [docs/SUPABASE_MIGRATION_RUNBOOK.md](file:///c:/Users/hungv/Downloads/focusgate/docs/SUPABASE_MIGRATION_RUNBOOK.md) (`supabase migration repair --status applied 20260101000006` before `supabase db push`) so the unguarded `0006` backfill is bypassed safely. Hosted Supabase does **not** use the local PGlite runner (`apps/web/lib/db/migrations.ts`).
 
 ## 1. Tables
 

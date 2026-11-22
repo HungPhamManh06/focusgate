@@ -57,9 +57,9 @@ Consequently, if a user clicked **Cancel → Discard session** and `cancelFocusA
 
 ---
 
-## 3. Database Migrations & RPC Changes (`0005`, `0006`, & `0007` — Milestone A1.1.1 & A1.1.2 Hardening)
+## 3. Database Migrations & RPC Changes (`0005`–`0008` — Milestone A1.1.1, A1.1.2 & A1.1.2.2)
 
-Created forward-only migrations [20260101000005_focus_validity_snapshot.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000005_focus_validity_snapshot.sql), [20260101000006_legacy_snapshot_and_insert_hardening.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql), and [20260101000007_focus_snapshot_backfill_safety.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql):
+Created forward-only migrations [20260101000005_focus_validity_snapshot.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000005_focus_validity_snapshot.sql), [20260101000006_legacy_snapshot_and_insert_hardening.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql) (immutable historical artifact), [20260101000007_focus_snapshot_backfill_safety.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql), and [20260101000008_focus_migration_compatibility.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000008_focus_migration_compatibility.sql):
 
 1. **`focus_sessions.min_valid_minutes` Schema & No-Default INSERT Hardening (Milestone A1.1.1 Issue 2):**
    - `min_valid_minutes integer not null` with `check (min_valid_minutes between 1 and 120)` and **no column default (`DEFAULT` dropped)**.
@@ -77,12 +77,11 @@ Created forward-only migrations [20260101000005_focus_validity_snapshot.sql](fil
    - On `INSERT`, snapshots `user_settings.min_valid_focus_minutes` whenever `new.min_valid_minutes is null or new.min_valid_minutes < 1`. If an explicit positive value (`1..120`) is supplied (e.g. by `rpc_start_focus_session` or administrative test fixtures), clamps it to `1..120`. (Authenticated clients have `INSERT`/`UPDATE`/`DELETE` revoked on `public.focus_sessions` and can only start sessions through `rpc_start_focus_session`).
    - On `UPDATE`, strictly preserves `old.min_valid_minutes` so the snapshot is immutable after session start.
    - Evaluates validity against the session's `min_valid_minutes` and requires `(new.planned_minutes * 2) >= v_min_valid`.
-4. **Reliable Local Migration Detection ([apps/web/lib/db/migrations.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/migrations.ts) & [apps/web/lib/db/index.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/index.ts)):**
-   - Tracks applied migrations via `migration:<filename>` markers in `auth.local_meta`.
-   - Fresh workspaces execute `0001..0007` once and record all markers.
-   - Existing `0005` workspaces mark the unguarded historical `0006` as `superseded_by_0007` (without executing `0006`'s unsafe backfill) and upgrade directly via `0007`. Existing `0006` workspaces apply `0007`, and repeated initializations are no-ops.
-   - If a migration SQL statement fails, `rollback` runs and no marker is written; `0007` is idempotent so crash recovery between SQL commit and marker insertion is safe.
-   - Note: Migrations `0001..0006` remain immutable historical deployment artifacts (`0006` matches commit `e9a1589815c08f33bb40968b398eafe70a8ece07` exactly).
+4. **Local PGlite vs. Hosted Supabase Migration Strategy:**
+   - **Local PGlite ([apps/web/lib/db/migrations.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/migrations.ts)):** Tracks applied (`"1"`) and superseded (`"superseded_by_0007"`) migrations in `auth.local_meta`. Existing `0005` workspaces verify `0007` exists, execute `0007` and `0008`, and only mark `0006` as `superseded_by_0007` after `0007` commits.
+   - **Hosted Supabase ([docs/SUPABASE_MIGRATION_RUNBOOK.md](file:///c:/Users/hungv/Downloads/focusgate/docs/SUPABASE_MIGRATION_RUNBOOK.md)):** Hosted Supabase does **not** use `applyLocalMigrations()`. Hosted databases at `0005` must run `supabase migration repair --status applied 20260101000006` before `supabase db push` to bypass `0006`'s unguarded backfill and apply `0007` + `0008` safely.
+   - **Compatibility Migration `0008`:** Ensures `fn_validate_focus_session()` and `min_valid_minutes` constraints are identical across both the `0005`-skip path and the `0006`-applied path with zero row mutations.
+   - Note: Migrations `0001..0007` remain immutable historical deployment artifacts.
 
 ---
 
@@ -118,7 +117,7 @@ All **115 / 115 checks passed**, including Milestone A1.1 and A1.1.2.1 database 
 9. `A1.1-B10`: Legacy session with `min_valid_minutes = 60` and `planned_minutes = 25` is safely marked `isValid = false` with `creditedMinutes = 0` upon completion.
 
 ### 5.2. Frontend & Local Migration Unit Tests (`npm run test` — [apps/web/tests/focus-integrity.test.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/tests/focus-integrity.test.ts), [apps/web/tests/local-migrations.test.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/tests/local-migrations.test.ts))
-All **20 / 20 unit tests passed** (`4` in `dashboard-state.test.ts`, `13` in `focus-integrity.test.ts`, and `3` in `local-migrations.test.ts`), covering:
+All **22 / 22 unit tests passed** (`4` in `dashboard-state.test.ts`, `13` in `focus-integrity.test.ts`, and `5` in `local-migrations.test.ts`), covering:
 - **Complete vs. Cancel Retry Flows (`A1.1-A`):**
   - Complete failure → `complete_error`, label `"Retry end & log session"`, retry calls Complete and never calls Cancel.
   - Cancel failure → `cancel_error`, Cancel dialog stays open, label `"Retry cancel session"`, retry calls Cancel and never calls Complete.

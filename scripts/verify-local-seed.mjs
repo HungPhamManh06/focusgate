@@ -158,13 +158,19 @@ const active50_120 = (
   )
 ).rows[0].id;
 
-// Now apply 0005 and 0007 (skipping unguarded 0006, matching applyLocalMigrations safe upgrade path)
+// Now apply 0005, 0007, and 0008 (skipping unguarded 0006, matching applyLocalMigrations safe upgrade path)
 await dbUpgrade.exec(
   await readFile(path.join(migrationsDir, "20260101000005_focus_validity_snapshot.sql"), "utf8"),
 );
 await dbUpgrade.exec(
   await readFile(
     path.join(migrationsDir, "20260101000007_focus_snapshot_backfill_safety.sql"),
+    "utf8",
+  ),
+);
+await dbUpgrade.exec(
+  await readFile(
+    path.join(migrationsDir, "20260101000008_focus_migration_compatibility.sql"),
     "utf8",
   ),
 );
@@ -177,7 +183,7 @@ const upgradedRows = await dbUpgrade.query(
   [USER],
 );
 check(
-  "incremental migration 0005+0006 upgrade preserves historical valid completed sessions & credits",
+  "incremental migration 0005+0007+0008 upgrade preserves historical valid completed sessions & credits",
   upgradedRows.rows[0].n === 6 &&
     upgradedRows.rows[0].minutes === sessions.rows[0].minutes &&
     upgradedRows.rows[0].min_snap >= 1,

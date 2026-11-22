@@ -19,6 +19,12 @@ async function createBootstrappedDb(): Promise<PGlite> {
   return db;
 }
 
+async function applySpecificMigrations(db: PGlite, filenames: string[]): Promise<void> {
+  for (const file of filenames) {
+    await db.exec(await readFile(path.join(MIGRATIONS_DIR, file), "utf8"));
+  }
+}
+
 async function setUserSettingsHistory(
   db: PGlite,
   userId: string,
@@ -39,13 +45,24 @@ async function setUserSettingsHistory(
   }
 }
 
-test("Local migrations: fresh initialization runs 0001..0007 once and repeated runs are no-ops", async () => {
+test("Fresh installation: applies 0001..0008, enforces no-default & INSERT snapshot, and repeated run is a no-op", async () => {
   const db = await createBootstrappedDb();
 
   const first = await applyLocalMigrations(db, MIGRATIONS_DIR);
-  assert.equal(first.applied.length, 7);
+  assert.equal(first.applied.length, 8);
   assert.deepEqual(first.superseded, []);
   assert.ok(first.applied.includes("20260101000007_focus_snapshot_backfill_safety.sql"));
+  assert.ok(first.applied.includes("20260101000008_focus_migration_compatibility.sql"));
+
+  const colMeta = await db.query<{ column_default: string | null; is_nullable: string }>(
+    `select column_default, is_nullable
+     from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'focus_sessions'
+       and column_name = 'min_valid_minutes'`,
+  );
+  assert.equal(colMeta.rows[0]?.column_default, null);
+  assert.equal(colMeta.rows[0]?.is_nullable, "NO");
 
   const second = await applyLocalMigrations(db, MIGRATIONS_DIR);
   assert.deepEqual(second.applied, []);
@@ -54,20 +71,17 @@ test("Local migrations: fresh initialization runs 0001..0007 once and repeated r
   await db.close();
 });
 
-test("Local migrations: 0005 upgrade supersedes unsafe 0006, applies 0007, protects legit snapshots, and repairs safe legacy ones", async () => {
+test("Upgrade from 0005: supersedes 0006 without running its SQL, applies 0007+0008, preserves legit 1, repairs safe 50->60", async () => {
   const db = await createBootstrappedDb();
 
-  const pre0006 = [
+  await applySpecificMigrations(db, [
     "20260101000001_init.sql",
     "20260101000002_plan_and_reward.sql",
     "20260101000003_backend_hardening.sql",
     "20260101000004_focus_session_integrity.sql",
     "20260101000005_focus_validity_snapshot.sql",
-  ];
-  for (const file of pre0006) {
-    await db.exec(await readFile(path.join(MIGRATIONS_DIR, file), "utf8"));
-  }
-  // Simulate an older 0005 workspace that still had DEFAULT 1 on min_valid_minutes
+  ]);
+  // Preserve genuine legacy 0005 DEFAULT 1 state
   await db.exec("alter table public.focus_sessions alter column min_valid_minutes set default 1;");
 
   await db.query(
@@ -77,7 +91,7 @@ test("Local migrations: 0005 upgrade supersedes unsafe 0006, applies 0007, prote
   );
   await db.exec(await readFile(SEED_SQL, "utf8"));
 
-  // 1) Legitimate active session started when min_valid=1, then user raises setting to 60 mid-session
+  // 1) Legitimate active session started with threshold 1, then setting raised to 60 after start
   await db.query("update public.user_settings set min_valid_focus_minutes = 1 where user_id = $1", [
     SEED_USER,
   ]);
@@ -85,7 +99,7 @@ test("Local migrations: 0005 upgrade supersedes unsafe 0006, applies 0007, prote
   await db.exec("set role authenticated");
   const started = await db.query<{ res: { sessionId: string; minValidMinutes: number } }>(
     `select public.rpc_start_focus_session(
-       $1, 'local-mig-legit-1', 25,
+       $1, 'upgrade-0005-legit-1', 25,
        'pomodoro_25_5'::public.focus_mode, null, null
      ) as res`,
     [SEED_DEVICE],
@@ -103,7 +117,7 @@ test("Local migrations: 0005 upgrade supersedes unsafe 0006, applies 0007, prote
     [SEED_USER],
   );
 
-  // 2) Safe legacy repair user: settings.updated_at <= started_at, stored=50, current=60
+  // 2) Safe legacy active session: stored 50, setting 60, updated_at <= started_at
   const SAFE_USER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const SAFE_DEV = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   await db.query(
@@ -120,19 +134,24 @@ test("Local migrations: 0005 upgrade supersedes unsafe 0006, applies 0007, prote
     await db.query<{ id: string }>(
       `insert into public.focus_sessions
          (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
-       values ($1, $2, 'safe-legacy-25-50', 'pomodoro_25_5', 25, 50, 'running', now() - interval '30 minutes')
+       values ($1, $2, 'safe-legacy-0005', 'pomodoro_25_5', 25, 50, 'running', now() - interval '30 minutes')
        returning id`,
       [SAFE_USER, SAFE_DEV],
     )
   ).rows[0]!.id;
 
-  // Run incremental upgrade from 0005 -> MUST supersede 0006 (not execute it) and apply 0007
-  const upgradeFrom0005 = await applyLocalMigrations(db, MIGRATIONS_DIR);
-  assert.deepEqual(upgradeFrom0005.superseded, [
-    "20260101000006_legacy_snapshot_and_insert_hardening.sql",
-  ]);
-  assert.deepEqual(upgradeFrom0005.applied, [
+  const orderCheck = await db.query<{ ok: boolean }>(
+    `select (select updated_at from public.user_settings where user_id = $1) <=
+            (select started_at from public.focus_sessions where id = $2) as ok`,
+    [SAFE_USER, safeLegacyId],
+  );
+  assert.equal(orderCheck.rows[0]?.ok, true);
+
+  const res = await applyLocalMigrations(db, MIGRATIONS_DIR);
+  assert.deepEqual(res.superseded, ["20260101000006_legacy_snapshot_and_insert_hardening.sql"]);
+  assert.deepEqual(res.applied, [
     "20260101000007_focus_snapshot_backfill_safety.sql",
+    "20260101000008_focus_migration_compatibility.sql",
   ]);
 
   const marker0006 = await db.query<{ value: string }>(
@@ -140,35 +159,137 @@ test("Local migrations: 0005 upgrade supersedes unsafe 0006, applies 0007, prote
   );
   assert.equal(marker0006.rows[0]?.value, "superseded_by_0007");
 
-  // Legitimate snapshot MUST remain 1
-  const legitCheck = await db.query<{ min_valid_minutes: number }>(
+  const legitAfter = await db.query<{ min_valid_minutes: number }>(
     "select min_valid_minutes from public.focus_sessions where id = $1",
     [legitSessionId],
   );
-  assert.equal(legitCheck.rows[0]?.min_valid_minutes, 1);
+  assert.equal(legitAfter.rows[0]?.min_valid_minutes, 1);
 
-  // Safe legacy session MUST be repaired 50 -> 60
-  const safeCheck = await db.query<{ min_valid_minutes: number }>(
+  const safeAfter = await db.query<{ min_valid_minutes: number }>(
     "select min_valid_minutes from public.focus_sessions where id = $1",
     [safeLegacyId],
   );
-  assert.equal(safeCheck.rows[0]?.min_valid_minutes, 60);
+  assert.equal(safeAfter.rows[0]?.min_valid_minutes, 60);
 
-  // Repeated run must be a no-op
-  const repeatCheck = await applyLocalMigrations(db, MIGRATIONS_DIR);
-  assert.deepEqual(repeatCheck.applied, []);
-  assert.deepEqual(repeatCheck.superseded, []);
+  // Close `safeLegacyId` before inserting a new open session for `SAFE_USER`
+  await db.query("select set_config('request.jwt.claim.sub', $1, false)", [SAFE_USER]);
+  await db.exec("set role authenticated");
+  await db.query("select public.rpc_cancel_focus_session($1)", [safeLegacyId]);
+  await db.exec("reset role");
 
-  // Upgrade from 0006 (where column_default is ALREADY NULL and 0007 marker is absent) -> runs 0007
-  await db.query(
-    "delete from auth.local_meta where key = 'migration:20260101000007_focus_snapshot_backfill_safety.sql'",
+  // Verify no-default & INSERT trigger snapshot still work after 0005->0007->0008
+  const omittedInsert = await db.query<{ min_valid_minutes: number }>(
+    `insert into public.focus_sessions
+       (user_id, device_id, client_id, mode, planned_minutes, status, started_at)
+     values ($1, $2, 'post-0005-upgrade-omitted', 'custom', 35, 'running', now())
+     returning min_valid_minutes`,
+    [SAFE_USER, SAFE_DEV],
   );
-  const upgradeFrom0006 = await applyLocalMigrations(db, MIGRATIONS_DIR);
-  assert.deepEqual(upgradeFrom0006.applied, [
-    "20260101000007_focus_snapshot_backfill_safety.sql",
+  assert.equal(omittedInsert.rows[0]?.min_valid_minutes, 60);
+
+  await db.close();
+});
+
+test("Upgrade from 0006 (genuine 0001..0006 database): records 0006 applied, runs 0007+0008, repairs safe, preserves ambiguous & credits", async () => {
+  const db = await createBootstrappedDb();
+
+  // Genuinely apply 0001..0006
+  await applySpecificMigrations(db, [
+    "20260101000001_init.sql",
+    "20260101000002_plan_and_reward.sql",
+    "20260101000003_backend_hardening.sql",
+    "20260101000004_focus_session_integrity.sql",
+    "20260101000005_focus_validity_snapshot.sql",
+    "20260101000006_legacy_snapshot_and_insert_hardening.sql",
   ]);
 
-  // Historical valid completed seed credits remain untouched (183m)
+  await db.query(
+    `insert into auth.users (id, email, raw_user_meta_data)
+     values ($1, 'alex@focusgate.local', '{"display_name":"Alex Morgan"}'::jsonb)`,
+    [SEED_USER],
+  );
+  await db.exec(await readFile(SEED_SQL, "utf8"));
+
+  // Safe repair user (updated_at <= started_at, stored=50, setting=60)
+  const U_SAFE = "11111111-1111-4111-8111-111111111111";
+  const D_SAFE = "11111111-1111-4111-8111-222222222222";
+  await db.query(
+    `insert into auth.users (id, email, raw_user_meta_data)
+     values ($1, 'u_safe@focusgate.local', '{"display_name":"U Safe"}'::jsonb)`,
+    [U_SAFE],
+  );
+  await setUserSettingsHistory(db, U_SAFE, 60, "now() - interval '4 hours'");
+  await db.query(
+    "insert into public.devices (id, user_id, name, platform) values ($1, $2, 'D Safe', 'web')",
+    [D_SAFE, U_SAFE],
+  );
+  const safeId = (
+    await db.query<{ id: string }>(
+      `insert into public.focus_sessions
+         (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
+       values ($1, $2, 'from-0006-safe', 'pomodoro_25_5', 25, 50, 'running', now() - interval '30 minutes')
+       returning id`,
+      [U_SAFE, D_SAFE],
+    )
+  ).rows[0]!.id;
+
+  // Ambiguous user (updated_at > started_at, stored=50, setting=60)
+  const U_AMB = "22222222-2222-4222-8222-111111111111";
+  const D_AMB = "22222222-2222-4222-8222-222222222222";
+  await db.query(
+    `insert into auth.users (id, email, raw_user_meta_data)
+     values ($1, 'u_amb@focusgate.local', '{"display_name":"U Amb"}'::jsonb)`,
+    [U_AMB],
+  );
+  await db.query(
+    "update public.user_settings set min_valid_focus_minutes = 60 where user_id = $1",
+    [U_AMB],
+  );
+  await db.query(
+    "insert into public.devices (id, user_id, name, platform) values ($1, $2, 'D Amb', 'web')",
+    [D_AMB, U_AMB],
+  );
+  const ambId = (
+    await db.query<{ id: string }>(
+      `insert into public.focus_sessions
+         (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
+       values ($1, $2, 'from-0006-amb', 'pomodoro_25_5', 25, 50, 'running', now() - interval '30 minutes')
+       returning id`,
+      [U_AMB, D_AMB],
+    )
+  ).rows[0]!.id;
+
+  const ambOrder = await db.query<{ ok: boolean }>(
+    `select (select updated_at from public.user_settings where user_id = $1) >
+            (select started_at from public.focus_sessions where id = $2) as ok`,
+    [U_AMB, ambId],
+  );
+  assert.equal(ambOrder.rows[0]?.ok, true);
+
+  const res = await applyLocalMigrations(db, MIGRATIONS_DIR);
+  assert.deepEqual(res.superseded, []);
+  assert.deepEqual(res.applied, [
+    "20260101000007_focus_snapshot_backfill_safety.sql",
+    "20260101000008_focus_migration_compatibility.sql",
+  ]);
+
+  const marker0006 = await db.query<{ value: string }>(
+    "select value from auth.local_meta where key = 'migration:20260101000006_legacy_snapshot_and_insert_hardening.sql'",
+  );
+  assert.equal(marker0006.rows[0]?.value, "1");
+
+  const safeRow = await db.query<{ min_valid_minutes: number }>(
+    "select min_valid_minutes from public.focus_sessions where id = $1",
+    [safeId],
+  );
+  assert.equal(safeRow.rows[0]?.min_valid_minutes, 60);
+
+  const ambRow = await db.query<{ min_valid_minutes: number }>(
+    "select min_valid_minutes from public.focus_sessions where id = $1",
+    [ambId],
+  );
+  assert.equal(ambRow.rows[0]?.min_valid_minutes, 50);
+
   const hist = await db.query<{ minutes: number }>(
     "select coalesce(sum(credited_minutes) filter (where is_valid), 0)::int as minutes from public.focus_sessions where user_id = $1 and status = 'completed'",
     [SEED_USER],
@@ -178,14 +299,50 @@ test("Local migrations: 0005 upgrade supersedes unsafe 0006, applies 0007, prote
   await db.close();
 });
 
-test("Local migrations: failed migration never writes a false applied marker", async () => {
+test("Upgrade from 0007 & interrupted marker recovery: applies 0008, recovers safely, and repeats as no-op", async () => {
+  const db = await createBootstrappedDb();
+
+  await applySpecificMigrations(db, [
+    "20260101000001_init.sql",
+    "20260101000002_plan_and_reward.sql",
+    "20260101000003_backend_hardening.sql",
+    "20260101000004_focus_session_integrity.sql",
+    "20260101000005_focus_validity_snapshot.sql",
+    "20260101000006_legacy_snapshot_and_insert_hardening.sql",
+    "20260101000007_focus_snapshot_backfill_safety.sql",
+  ]);
+
+  const res1 = await applyLocalMigrations(db, MIGRATIONS_DIR);
+  assert.deepEqual(res1.applied, [
+    "20260101000007_focus_snapshot_backfill_safety.sql",
+    "20260101000008_focus_migration_compatibility.sql",
+  ]);
+
+  const res2 = await applyLocalMigrations(db, MIGRATIONS_DIR);
+  assert.deepEqual(res2.applied, []);
+  assert.deepEqual(res2.superseded, []);
+
+  // Simulate interruption between 0007 execution and marker write
+  await db.query(
+    "delete from auth.local_meta where key = 'migration:20260101000007_focus_snapshot_backfill_safety.sql'",
+  );
+  const recovery = await applyLocalMigrations(db, MIGRATIONS_DIR);
+  assert.deepEqual(recovery.applied, ["20260101000007_focus_snapshot_backfill_safety.sql"]);
+
+  await db.close();
+});
+
+test("Failure recovery: SQL failure rolls back and never writes a false applied marker", async () => {
   const db = await createBootstrappedDb();
   await applyLocalMigrations(db, MIGRATIONS_DIR);
 
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "focusgate-mig-fail-"));
   try {
     const failingFile = "20260101000099_intentional_failure.sql";
-    await writeFile(path.join(tmpDir, failingFile), "begin; select * from nonexistent_table_xyz; commit;");
+    await writeFile(
+      path.join(tmpDir, failingFile),
+      "begin; select * from nonexistent_table_xyz; commit;",
+    );
 
     await assert.rejects(() => applyLocalMigrations(db, tmpDir));
 
