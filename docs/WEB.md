@@ -5,7 +5,7 @@ Next.js 15 (App Router) + React 19 + TypeScript + Tailwind CSS v4.
 ## 1. Architecture & Data Layer
 
 - **Server-First Data Access (`apps/web/lib/data/*`):** All reads run in Server Components via `withUser()` (`apps/web/lib/db/index.ts`), which executes queries inside a transaction with `role = authenticated` and `request.jwt.claim.sub` bound to the active user so RLS policies and `SECURITY DEFINER` RPCs behave identically to Supabase PostgREST.
-- **Local PGlite Persistence:** In local development, `.data/postgres` runs embedded PostgreSQL (PGlite) initialized from `supabase/migrations/20260101000001_init.sql` through `20260101000005_focus_validity_snapshot.sql`. Incremental schema checks automatically apply new forward-only migrations (`0004` and `0005`) to existing local workspaces.
+- **Local PGlite Persistence:** In local development, `.data/postgres` runs embedded PostgreSQL (PGlite) initialized from `supabase/migrations/20260101000001_init.sql` through `20260101000006_legacy_snapshot_and_insert_hardening.sql`. Incremental schema checks automatically apply new forward-only migrations (`0004`, `0005`, and `0006`) to existing local workspaces.
 - **Server Actions (`apps/web/lib/actions/*`):** Mutations validate inputs with Zod (`apps/web/lib/validation.ts`), call PostgreSQL RPCs, and revalidate affected routes.
 
 ## 2. Focus Mode Reliability & Invariants (`/focus`)

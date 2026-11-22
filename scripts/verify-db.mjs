@@ -23,6 +23,7 @@ const MIGRATIONS = [
   "supabase/migrations/20260101000003_backend_hardening.sql",
   "supabase/migrations/20260101000004_focus_session_integrity.sql",
   "supabase/migrations/20260101000005_focus_validity_snapshot.sql",
+  "supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql",
 ];
 
 const USER_A = "11111111-1111-4111-8111-111111111111";
@@ -1418,6 +1419,85 @@ await asUser(USER_A11, async () => {
     "A1.1-B10: legacy session with min_valid_minutes (60) > 2*planned_minutes (50) is safely marked invalid with 0 credit",
     res.isValid === false && res.creditedMinutes === 0 && res.actualMinutes === 65,
     JSON.stringify(res),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Milestone A1.1.1: Legacy Snapshot Preservation & INSERT Default Hardening
+// ---------------------------------------------------------------------------
+// 1. Direct INSERT omitting `min_valid_minutes` MUST snapshot `user_settings.min_valid_focus_minutes`
+//    instead of silently defaulting to 1!
+await setMinValidSetting(USER_A11, 35);
+let omittedInsertId;
+await asSuperuser(async () => {
+  const inserted = await db.query(
+    `insert into public.focus_sessions
+       (user_id, device_id, client_id, mode, planned_minutes, status, started_at)
+     values ($1, $2, 'a111-insert-omitted-min-valid', 'custom', 30, 'running', now())
+     returning id, min_valid_minutes`,
+    [USER_A11, deviceA11],
+  );
+  omittedInsertId = inserted.rows[0].id;
+  check(
+    "A1.1.1-4: INSERT omitting min_valid_minutes snapshots user_settings.min_valid_focus_minutes (35), not 1",
+    inserted.rows[0].min_valid_minutes === 35,
+    JSON.stringify(inserted.rows[0]),
+  );
+});
+
+// 2. UPDATE cannot alter an existing session's snapshotted min_valid_minutes (immutability rule)
+await asSuperuser(async () => {
+  const updated = await db.query(
+    `update public.focus_sessions
+     set min_valid_minutes = 1
+     where id = $1
+     returning min_valid_minutes`,
+    [omittedInsertId],
+  );
+  check(
+    "A1.1.1-6: UPDATE cannot mutate an existing session's snapshotted min_valid_minutes (stays 35)",
+    updated.rows[0].min_valid_minutes === 35,
+    JSON.stringify(updated.rows[0]),
+  );
+});
+await asUser(USER_A11, () =>
+  db.query("select public.rpc_cancel_focus_session($1)", [omittedInsertId]),
+);
+
+// 3. INSERT with explicit valid threshold (e.g. 45) preserves the explicit threshold
+let explicitInsertId;
+await asSuperuser(async () => {
+  const inserted = await db.query(
+    `insert into public.focus_sessions
+       (user_id, device_id, client_id, mode, planned_minutes, min_valid_minutes, status, started_at)
+     values ($1, $2, 'a111-insert-explicit-min-valid', 'custom', 30, 45, 'running', now())
+     returning id, min_valid_minutes`,
+    [USER_A11, deviceA11],
+  );
+  explicitInsertId = inserted.rows[0].id;
+  check(
+    "A1.1.1-5: INSERT with explicit valid min_valid_minutes (45) preserves the supplied threshold",
+    inserted.rows[0].min_valid_minutes === 45,
+    JSON.stringify(inserted.rows[0]),
+  );
+});
+await asUser(USER_A11, () =>
+  db.query("select public.rpc_cancel_focus_session($1)", [explicitInsertId]),
+);
+
+// 4. Verify column_default on public.focus_sessions.min_valid_minutes is NULL and is_nullable is NO
+await asSuperuser(async () => {
+  const colMeta = await db.query(
+    `select column_default, is_nullable
+     from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'focus_sessions'
+       and column_name = 'min_valid_minutes'`,
+  );
+  check(
+    "A1.1.1-schema: focus_sessions.min_valid_minutes has NO default (NULL) and is NOT NULL",
+    colMeta.rows[0]?.column_default === null && colMeta.rows[0]?.is_nullable === "NO",
+    JSON.stringify(colMeta.rows[0]),
   );
 });
 

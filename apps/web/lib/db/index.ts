@@ -116,6 +116,26 @@ async function createDatabase(): Promise<PGlite> {
       );
       console.info("[focusgate/db] applied incremental migration 20260101000005_focus_validity_snapshot.sql");
     }
+
+    const hasMinValidDefault = await db.query<{ has_default: boolean }>(
+      `select column_default is not null as has_default
+       from information_schema.columns
+       where table_schema = 'public'
+         and table_name = 'focus_sessions'
+         and column_name = 'min_valid_minutes'`,
+    );
+    if (hasMinValidDefault.rows[0]?.has_default) {
+      const migrationsDir = await resolveMigrationsDir();
+      await db.exec(
+        await readFile(
+          path.join(migrationsDir, "20260101000006_legacy_snapshot_and_insert_hardening.sql"),
+          "utf8",
+        ),
+      );
+      console.info(
+        "[focusgate/db] applied incremental migration 20260101000006_legacy_snapshot_and_insert_hardening.sql",
+      );
+    }
   }
 
   await db.query(

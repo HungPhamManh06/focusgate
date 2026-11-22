@@ -19,9 +19,15 @@ begin;
 -- ---------------------------------------------------------------------------
 -- 1. Add session-level min_valid_minutes snapshot & safely backfill history
 -- ---------------------------------------------------------------------------
+-- Note: DEFAULT is intentionally NOT set to 1 so that a direct INSERT omitting
+-- `min_valid_minutes` passes NULL into the BEFORE INSERT trigger
+-- `fn_validate_focus_session()`, which snapshots `user_settings.min_valid_focus_minutes`
+-- before PostgreSQL checks NOT NULL and `min_valid_minutes between 1 and 120`.
 alter table public.focus_sessions
-    add column if not exists min_valid_minutes integer not null default 1
-        check (min_valid_minutes between 1 and 120);
+    add column if not exists min_valid_minutes integer;
+
+alter table public.focus_sessions
+    alter column min_valid_minutes drop default;
 
 -- Temporarily disable user triggers on focus_sessions during backfill so
 -- immutable completed/cancelled sessions preserve their exact historical
@@ -31,7 +37,9 @@ alter table public.focus_sessions disable trigger user;
 update public.focus_sessions fs
 set min_valid_minutes = case
     -- For running/paused sessions, snapshot the user's current setting
-    -- clamped to the session's 2x credit cap so active sessions remain consistent.
+    -- WITHOUT clamping to `planned_minutes * 2`. If a legacy active session had
+    -- `planned_minutes * 2 < min_valid_focus_minutes`, it must remain explicitly
+    -- impossible to validate rather than having its threshold silently weakened.
     when fs.status in ('running', 'paused') then
         greatest(
             1,
@@ -42,8 +50,7 @@ set min_valid_minutes = case
                      from public.user_settings s
                      where s.user_id = fs.user_id),
                     1
-                ),
-                fs.planned_minutes * 2
+                )
             )
         )
     -- For historical valid completed sessions, ensure the stored threshold does
@@ -81,6 +88,22 @@ end;
 
 alter table public.focus_sessions enable trigger user;
 
+alter table public.focus_sessions
+    alter column min_valid_minutes set not null;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint
+        where conname = 'focus_sessions_min_valid_minutes_check'
+          and conrelid = 'public.focus_sessions'::regclass
+    ) then
+        alter table public.focus_sessions
+            add constraint focus_sessions_min_valid_minutes_check
+            check (min_valid_minutes between 1 and 120);
+    end if;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- 2. Authoritative validation trigger using session-level min_valid_minutes
 -- ---------------------------------------------------------------------------
@@ -93,16 +116,19 @@ declare
     v_min_valid integer := 1;
     v_elapsed_minutes integer;
 begin
-    -- On INSERT, if min_valid_minutes was not explicitly provided (or on direct
-    -- privileged seed insert), snapshot from user_settings; on UPDATE, preserve
-    -- the session's snapshotted min_valid_minutes.
+    -- On INSERT, if min_valid_minutes was omitted (NULL) or < 1, snapshot from
+    -- user_settings. If an explicit valid integer (1..120) was supplied (e.g. by
+    -- rpc_start_focus_session or administrative/test fixtures), clamp it to 1..120.
+    -- On UPDATE, strictly preserve old.min_valid_minutes so the snapshot is immutable.
     if tg_op = 'INSERT' then
         select s.min_valid_focus_minutes into v_user_min_valid
         from public.user_settings s
         where s.user_id = new.user_id;
 
         if new.min_valid_minutes is null or new.min_valid_minutes < 1 then
-            new.min_valid_minutes := greatest(coalesce(v_user_min_valid, 1), 1);
+            new.min_valid_minutes := least(120, greatest(coalesce(v_user_min_valid, 1), 1));
+        else
+            new.min_valid_minutes := least(120, greatest(new.min_valid_minutes, 1));
         end if;
     else
         new.min_valid_minutes := coalesce(old.min_valid_minutes, new.min_valid_minutes, 1);

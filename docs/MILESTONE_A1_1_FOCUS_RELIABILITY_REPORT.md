@@ -57,25 +57,28 @@ Consequently, if a user clicked **Cancel → Discard session** and `cancelFocusA
 
 ---
 
-## 3. Database Migration & RPC Changes (`20260101000005_focus_validity_snapshot.sql`)
+## 3. Database Migrations & RPC Changes (`0005` & `0006` — Milestone A1.1.1 Hardening)
 
-Created forward-only migration [supabase/migrations/20260101000005_focus_validity_snapshot.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000005_focus_validity_snapshot.sql):
+Created forward-only migrations [supabase/migrations/20260101000005_focus_validity_snapshot.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000005_focus_validity_snapshot.sql) and [supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql](file:///c:/Users/hungv/Downloads/focusgate/supabase/migrations/20260101000006_legacy_snapshot_and_insert_hardening.sql):
 
-1. **`ALTER TABLE public.focus_sessions ADD COLUMN IF NOT EXISTS min_valid_minutes`:**
-   - Default `1`, constrained `between 1 and 120`.
-2. **Safe Historical Backfill:**
-   - Disables user triggers on `public.focus_sessions` during the `UPDATE` so completed/cancelled rows remain immutable and retain their exact historical `is_valid`, `actual_minutes`, and `credited_minutes`.
-   - Backfills `min_valid_minutes` from the user's `user_settings.min_valid_focus_minutes` (clamped for historical valid completed rows to `actual_minutes` and for running rows to `planned_minutes * 2`). Historically invalid sessions remain `is_valid = false` with `credited_minutes = 0`.
+1. **`focus_sessions.min_valid_minutes` Schema & No-Default INSERT Hardening (Milestone A1.1.1 Issue 2):**
+   - `min_valid_minutes integer not null` with `check (min_valid_minutes between 1 and 120)` and **no column default (`DEFAULT` dropped)**.
+   - Why no column default? PostgreSQL evaluates column defaults *before* firing `BEFORE INSERT` triggers. When `DEFAULT 1` was present, any direct `INSERT` that omitted `min_valid_minutes` arrived in `fn_validate_focus_session()` with `NEW.min_valid_minutes = 1`, bypassing `if new.min_valid_minutes is null` and silently weakening the threshold to 1 minute.
+   - By dropping the column default while keeping `NOT NULL` and `CHECK (min_valid_minutes between 1 and 120)` (which PostgreSQL enforces *after* the `BEFORE INSERT` trigger returns), an omitted `min_valid_minutes` arrives in `fn_validate_focus_session()` as `NULL`, causing the trigger to snapshot `user_settings.min_valid_focus_minutes` automatically.
+2. **Unclamped Legacy Active Session Backfill & Historical Preservation (Milestone A1.1.1 Issue 1):**
+   - Disables user triggers on `public.focus_sessions` during backfill so completed/cancelled rows remain immutable and retain their exact historical `is_valid`, `actual_minutes`, and `credited_minutes`.
+   - For existing active (`running`/`paused`) sessions, backfills `min_valid_minutes` directly from `user_settings.min_valid_focus_minutes` (`between 1 and 120`) **without clamping to `planned_minutes * 2`**.
+   - Consequently, if a legacy active session had `planned_minutes = 25` and `min_valid_focus_minutes = 60` (or `planned_minutes = 50` and `min_valid_focus_minutes = 120`), its backfilled threshold remains `60` (or `120`), keeping it explicitly impossible to validate (`is_valid = false`, `credited_minutes = 0`) and surfacing the impossible-configuration warning in `FocusTimer` rather than silently weakening the requirement to `50` (or `100`).
+   - **Backfill Limitation Note:** Because sessions created prior to migration `0005` did not record `min_valid_focus_minutes` at the moment they started, the exact setting value at original session start is not recoverable if the user changed their settings afterwards. The migration uses the user's current `user_settings.min_valid_focus_minutes` at migration time as the best available historical approximation.
 3. **`public.fn_validate_focus_session()`:**
-   - On `INSERT`, snapshots `user_settings.min_valid_focus_minutes` if `new.min_valid_minutes` was not set.
-   - On `UPDATE`, preserves `old.min_valid_minutes` so the snapshot is immutable after session start.
+   - On `INSERT`, snapshots `user_settings.min_valid_focus_minutes` whenever `new.min_valid_minutes is null or new.min_valid_minutes < 1`. If an explicit positive value (`1..120`) is supplied (e.g. by `rpc_start_focus_session` or administrative test fixtures), clamps it to `1..120`. (Note: authenticated clients have `INSERT`/`UPDATE`/`DELETE` revoked on `public.focus_sessions` and can only start sessions through `rpc_start_focus_session`, which always reads `user_settings.min_valid_focus_minutes` server-side).
+   - On `UPDATE`, strictly preserves `old.min_valid_minutes` so the snapshot is immutable after session start.
    - Evaluates validity against the session's `min_valid_minutes` and requires `(new.planned_minutes * 2) >= v_min_valid`.
-4. **`public.rpc_start_focus_session(...)`:**
-   - Enforces `p_planned_minutes * 2 >= v_min_valid`, inserts `v_min_valid` into `focus_sessions.min_valid_minutes`, and returns `'minValidMinutes', v_session.min_valid_minutes` in both fresh and idempotent replay JSON payloads.
-5. **`public.rpc_complete_focus_session(p_session_id)`:**
-   - Returns `'minValidMinutes', v_session.min_valid_minutes` alongside `actualMinutes`, `creditedMinutes`, `plannedMinutes`, `isValid`, `endedAt`, and `idempotent`.
-6. **Incremental Local Upgrade ([apps/web/lib/db/index.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/index.ts)):**
-   - Automatically checks `information_schema.columns` for `min_valid_minutes` on existing `.data/postgres` instances and applies `20260101000005_focus_validity_snapshot.sql` seamlessly.
+4. **`public.rpc_start_focus_session(...)` & `public.rpc_complete_focus_session(p_session_id)`:**
+   - `rpc_start_focus_session` enforces `p_planned_minutes * 2 >= v_min_valid`, inserts `v_min_valid` into `focus_sessions.min_valid_minutes`, and returns `'minValidMinutes', v_session.min_valid_minutes`.
+   - `rpc_complete_focus_session` returns `'minValidMinutes', v_session.min_valid_minutes` alongside `actualMinutes`, `creditedMinutes`, `plannedMinutes`, `isValid`, `endedAt`, and `idempotent`.
+5. **Incremental Local Upgrade ([apps/web/lib/db/index.ts](file:///c:/Users/hungv/Downloads/focusgate/apps/web/lib/db/index.ts)):**
+   - Automatically checks `information_schema.columns` for `min_valid_minutes` and whether `column_default` is still non-null on existing `.data/postgres` instances, applying `0005` and `0006` seamlessly.
 
 ---
 
