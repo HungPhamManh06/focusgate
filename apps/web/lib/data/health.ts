@@ -9,6 +9,7 @@ export interface DailyHealthMetric {
   sleepMinutes: number;
   avgHeartRate: number | null;
   activeCalories: number;
+  weightKg: number | null;
   source: string;
   syncedAt: string;
 }
@@ -18,6 +19,8 @@ export interface HealthSummary {
   days: DailyHealthMetric[];
   avgSteps: number;
   avgSleepMinutes: number;
+  avgCalories: number;
+  latestWeightKg: number | null;
 }
 
 export async function upsertDailyHealthMetrics(
@@ -29,6 +32,7 @@ export async function upsertDailyHealthMetrics(
       sleepMinutes: number;
       avgHeartRate?: number | null;
       activeCalories: number;
+      weightKg?: number | null;
       source?: string;
     }>;
   },
@@ -60,6 +64,10 @@ export async function upsertDailyHealthMetrics(
             ? Math.max(30, Math.min(240, Math.round(m.avgHeartRate)))
             : null,
         active_calories: Math.max(0, Math.round(m.activeCalories)),
+        weight_kg:
+          m.weightKg !== undefined && m.weightKg !== null && m.weightKg > 0
+            ? Math.round(m.weightKg * 100) / 100
+            : null,
         source: m.source?.trim() || "health_connect",
         synced_at: now,
       }));
@@ -76,14 +84,15 @@ export async function upsertDailyHealthMetrics(
     for (const m of input.metrics) {
       await db.query(
         `insert into public.daily_health_metrics
-           (user_id, device_id, metric_date, steps, sleep_minutes, avg_heart_rate, active_calories, source, synced_at)
-         values ($1, $2, $3::date, $4, $5, $6, $7, $8, now())
+           (user_id, device_id, metric_date, steps, sleep_minutes, avg_heart_rate, active_calories, weight_kg, source, synced_at)
+         values ($1, $2, $3::date, $4, $5, $6, $7, $8, $9, now())
          on conflict (user_id, metric_date)
          do update set
            steps = excluded.steps,
            sleep_minutes = excluded.sleep_minutes,
-           avg_heart_rate = excluded.avg_heart_rate,
+           avg_heart_rate = coalesce(excluded.avg_heart_rate, public.daily_health_metrics.avg_heart_rate),
            active_calories = excluded.active_calories,
+           weight_kg = coalesce(excluded.weight_kg, public.daily_health_metrics.weight_kg),
            source = excluded.source,
            synced_at = now()`,
         [
@@ -94,6 +103,9 @@ export async function upsertDailyHealthMetrics(
           Math.max(0, Math.round(m.sleepMinutes)),
           m.avgHeartRate ?? null,
           Math.max(0, Math.round(m.activeCalories)),
+          m.weightKg !== undefined && m.weightKg !== null && m.weightKg > 0
+            ? Math.round(m.weightKg * 100) / 100
+            : null,
           m.source?.trim() || "health_connect",
         ],
       );
@@ -118,27 +130,42 @@ export async function getHealthSummary(
     try {
       const { data, error } = await ctx.supabase
         .from("daily_health_metrics")
-        .select("metric_date, steps, sleep_minutes, avg_heart_rate, active_calories, source, synced_at")
+        .select("*")
         .eq("user_id", ctx.userId)
         .gte("metric_date", startDate)
         .order("metric_date", { ascending: false });
       if (error) {
         console.error("[health] getHealthSummary failed:", error.message);
-        return { latest: null, days: [], avgSteps: 0, avgSleepMinutes: 0 };
+        return {
+          latest: null,
+          days: [],
+          avgSteps: 0,
+          avgSleepMinutes: 0,
+          avgCalories: 0,
+          latestWeightKg: null,
+        };
       }
       const days: DailyHealthMetric[] = (data ?? []).map((r) => ({
         date: String(r.metric_date),
         steps: Number(r.steps ?? 0),
         sleepMinutes: Number(r.sleep_minutes ?? 0),
-        avgHeartRate: r.avg_heart_rate !== null ? Number(r.avg_heart_rate) : null,
+        avgHeartRate: r.avg_heart_rate !== null && r.avg_heart_rate !== undefined ? Number(r.avg_heart_rate) : null,
         activeCalories: Number(r.active_calories ?? 0),
+        weightKg: r.weight_kg !== null && r.weight_kg !== undefined ? Number(r.weight_kg) : null,
         source: String(r.source ?? "health_connect"),
         syncedAt: String(r.synced_at ?? new Date().toISOString()),
       }));
       return buildSummary(days);
     } catch (err) {
       console.error("[health] getHealthSummary exception:", err);
-      return { latest: null, days: [], avgSteps: 0, avgSleepMinutes: 0 };
+      return {
+        latest: null,
+        days: [],
+        avgSteps: 0,
+        avgSleepMinutes: 0,
+        avgCalories: 0,
+        latestWeightKg: null,
+      };
     }
   }
 
@@ -149,10 +176,11 @@ export async function getHealthSummary(
       sleep_minutes: number;
       avg_heart_rate: number | null;
       active_calories: number;
+      weight_kg: string | number | null;
       source: string;
       synced_at: string | Date;
     }>(
-      `select metric_date, steps, sleep_minutes, avg_heart_rate, active_calories, source, synced_at
+      `select metric_date, steps, sleep_minutes, avg_heart_rate, active_calories, weight_kg, source, synced_at
        from public.daily_health_metrics
        where user_id = $1 and metric_date >= $2::date
        order by metric_date desc`,
@@ -167,6 +195,7 @@ export async function getHealthSummary(
       sleepMinutes: Number(r.sleep_minutes ?? 0),
       avgHeartRate: r.avg_heart_rate !== null ? Number(r.avg_heart_rate) : null,
       activeCalories: Number(r.active_calories ?? 0),
+      weightKg: r.weight_kg !== null && r.weight_kg !== undefined ? Number(r.weight_kg) : null,
       source: r.source,
       syncedAt:
         r.synced_at instanceof Date ? r.synced_at.toISOString() : String(r.synced_at),
@@ -177,18 +206,29 @@ export async function getHealthSummary(
 
 function buildSummary(days: DailyHealthMetric[]): HealthSummary {
   if (days.length === 0) {
-    return { latest: null, days: [], avgSteps: 0, avgSleepMinutes: 0 };
+    return {
+      latest: null,
+      days: [],
+      avgSteps: 0,
+      avgSleepMinutes: 0,
+      avgCalories: 0,
+      latestWeightKg: null,
+    };
   }
   const avgSteps = Math.round(days.reduce((s, d) => s + d.steps, 0) / days.length);
+  const avgCalories = Math.round(days.reduce((s, d) => s + d.activeCalories, 0) / days.length);
   const sleepDays = days.filter((d) => d.sleepMinutes > 0);
   const avgSleepMinutes =
     sleepDays.length > 0
       ? Math.round(sleepDays.reduce((s, d) => s + d.sleepMinutes, 0) / sleepDays.length)
       : 0;
+  const latestWeightKg = days.find((d) => d.weightKg !== null)?.weightKg ?? null;
   return {
     latest: days[0] ?? null,
     days,
     avgSteps,
     avgSleepMinutes,
+    avgCalories,
+    latestWeightKg,
   };
 }

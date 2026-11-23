@@ -10,6 +10,7 @@ import {
   updateV2Settings,
   useStreakFreeze,
 } from "@/lib/data/v2-settings";
+import { upsertDailyHealthMetrics } from "@/lib/data/health";
 import { breakdownGoalIntoTasks } from "@/lib/domain/smart-breakdown";
 import { revalidateWorkspace } from "./shared";
 import type { ActionState } from "./types";
@@ -120,6 +121,39 @@ export async function updateV2SettingsAction(input: {
     await updateV2Settings(input);
     revalidateWorkspace();
     return { success: "Settings updated." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function saveManualHealthMetricAction(input: {
+  date: string;
+  steps: number;
+  activeCalories: number;
+  sleepHours: number;
+  weightKg: number | null;
+}): Promise<ActionState> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
+    return { error: "Chọn ngày hợp lệ (YYYY-MM-DD)." };
+  }
+  try {
+    await upsertDailyHealthMetrics({
+      metrics: [
+        {
+          date: input.date,
+          steps: Math.max(0, Math.round(input.steps)),
+          activeCalories: Math.max(0, Math.round(input.activeCalories)),
+          sleepMinutes: Math.max(0, Math.round(input.sleepHours * 60)),
+          weightKg:
+            input.weightKg !== null && Number.isFinite(input.weightKg) && input.weightKg > 0
+              ? input.weightKg
+              : null,
+          source: "manual",
+        },
+      ],
+    });
+    revalidateWorkspace();
+    return { success: `Đã lưu chỉ số sức khỏe ngày ${input.date}.` };
   } catch (error) {
     return { error: friendlyDbError(error) };
   }

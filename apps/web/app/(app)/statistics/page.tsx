@@ -16,11 +16,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/ui/stat-card";
 import { BarChart } from "@/components/charts/bar-chart";
-import { formatDate, formatMinutes } from "@/lib/data/format";
+import { formatDate, formatMinutes, todayIso } from "@/lib/data/format";
 import { getHealthSummary } from "@/lib/data/health";
 import { getStatistics } from "@/lib/data/stats";
 import { getWorkspace } from "@/lib/data/workspace";
 import { cn } from "@/lib/utils";
+import { HealthLogCard } from "./health-log-card";
 
 export const dynamic = "force-dynamic";
 
@@ -460,59 +461,7 @@ export default async function StatisticsPage({
       )}
 
       <section className="mt-4">
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle>Health &amp; Readiness (Mi Band 10 · Health Connect)</CardTitle>
-              <p className="mt-1 text-[12px] text-muted">
-                {health.latest
-                  ? `Last synced (${health.latest.date}): ${health.latest.steps.toLocaleString()} steps · ${formatMinutes(health.latest.sleepMinutes)} sleep.`
-                  : "Connect Mi Fitness -> Health Connect in FocusGate Android to sync steps, sleep, heart rate, and calories."}
-              </p>
-            </div>
-            <span className="text-[11px] text-muted">
-              {health.days.length} day{health.days.length === 1 ? "" : "s"} synced
-            </span>
-          </CardHeader>
-          {health.latest ? (
-            <CardContent className="pt-3">
-              <div className="grid gap-3 sm:grid-cols-4">
-                <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
-                  <p className="text-[11px] text-muted">Latest steps</p>
-                  <p className="mt-1 font-display text-[22px] leading-none">
-                    {health.latest.steps.toLocaleString()}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">
-                    Avg {health.avgSteps.toLocaleString()}/day
-                  </p>
-                </div>
-                <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
-                  <p className="text-[11px] text-muted">Sleep duration</p>
-                  <p className="mt-1 font-display text-[22px] leading-none">
-                    {formatMinutes(health.latest.sleepMinutes)}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">
-                    Avg {formatMinutes(health.avgSleepMinutes)}/night
-                  </p>
-                </div>
-                <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
-                  <p className="text-[11px] text-muted">Avg heart rate</p>
-                  <p className="mt-1 font-display text-[22px] leading-none">
-                    {health.latest.avgHeartRate ? `${health.latest.avgHeartRate} bpm` : "—"}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">From Mi Band / Health Connect</p>
-                </div>
-                <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
-                  <p className="text-[11px] text-muted">Active calories</p>
-                  <p className="mt-1 font-display text-[22px] leading-none">
-                    {health.latest.activeCalories} kcal
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">Daily movement</p>
-                </div>
-              </div>
-            </CardContent>
-          ) : null}
-        </Card>
+        <HealthLogCard health={health} todayDate={todayIso(timezone)} />
       </section>
 
       <p className="mt-6 text-[10.5px] text-muted">
