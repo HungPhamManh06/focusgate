@@ -36,6 +36,7 @@ import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { AddPlanTask } from "./add-plan-task";
 import { PlanTaskRow } from "./plan-task-row";
+import { V2PlannerTools } from "./v2-planner-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -502,6 +503,15 @@ export default async function PlannerPage() {
           </div>
         </>
       )}
+
+      <V2PlannerTools
+        todayDate={today}
+        yesterdayDate={new Date(new Date(`${today}T12:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10)}
+        tomorrowDate={new Date(new Date(`${today}T12:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10)}
+        totalTasks={plan?.tasks.length ?? 0}
+        completedTasks={plan?.tasks.filter((t) => Boolean(t.completedAt)).length ?? 0}
+        focusMinutes={plan?.progress.focusDone ?? 0}
+      />
     </div>
   );
 }

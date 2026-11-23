@@ -274,14 +274,22 @@ class AppUsageMonitorService : Service() {
 
         val unlockedByPlan = AgentPreferences.isPlanUnlocked(this) &&
             !AgentPreferences.isCurrentlyBedtime(this)
-        val isBlocked = !unlockedByPlan && PolicyEvaluator.isBlocked(
+        val settingsGuardHit = !unlockedByPlan &&
+            AgentPreferences.isSettingsGuardEnabled(this) &&
+            current in SETTINGS_GUARD_PACKAGES
+        val whitelistBlockHit = !unlockedByPlan &&
+            AgentPreferences.isWhitelistFocusMode(this) &&
+            AgentPreferences.isActiveFocusRunning(this) &&
+            !PolicyEvaluator.isEssential(current, deviceEssential) &&
+            !exemptPackages.contains(current)
+        val isBlocked = settingsGuardHit || whitelistBlockHit || (!unlockedByPlan && PolicyEvaluator.isBlocked(
             packageName = current,
             blockedPackages = blockedPackages,
             exemptPackages = exemptPackages,
             emergencyActive = emergencyActive,
             ownPackage = packageName,
             deviceEssential = deviceEssential,
-        )
+        ))
 
         if (!isBlocked) {
             hideOverlay()
@@ -554,6 +562,10 @@ class AppUsageMonitorService : Service() {
         private const val FAILURE_NOTIFY_INTERVAL_MS = 30_000L
         private const val ESSENTIAL_REFRESH_MS = 60_000L
         private const val SUPPRESS_AFTER_EXIT_MS = 2_000L
+        private val SETTINGS_GUARD_PACKAGES = setOf(
+            "com.android.settings",
+            "com.miui.securitycenter",
+        )
 
         @Volatile
         var isRunning: Boolean = false

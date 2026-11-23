@@ -71,6 +71,7 @@ import com.focusgate.app.policy.RemotePlanSnapshot
 import com.focusgate.app.service.AppUsageMonitorService
 import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
+import com.focusgate.app.util.FocusSoundscapePlayer
 import com.focusgate.app.util.PermissionChecks
 import com.focusgate.app.util.PlanSyncManager
 import com.focusgate.app.util.ProtectionWatchdog
@@ -144,6 +145,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var syncError by remember { mutableStateOf<String?>(null) }
     var bedtimeEnabled by remember { mutableStateOf(AgentPreferences.isBedtimeEnabled(context)) }
     var strictNoEmergency by remember { mutableStateOf(AgentPreferences.isStrictNoEmergency(context)) }
+    var settingsGuardEnabled by remember { mutableStateOf(AgentPreferences.isSettingsGuardEnabled(context)) }
+    var soundscapePlaying by remember { mutableStateOf(FocusSoundscapePlayer.isPlaying()) }
+    var earnedMinutesBalance by remember { mutableStateOf(AgentPreferences.getEarnedMinutesBalance(context)) }
 
     fun syncPlanFromWeb() {
         if (AgentPreferences.getAccessToken(context) == null || planSyncBusy) return
@@ -155,6 +159,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                 planSnapshot = snapshot
                 planUnlocked = snapshot.unlocked
                 signedInEmail = AgentPreferences.getUserEmail(context)
+                earnedMinutesBalance = AgentPreferences.getEarnedMinutesBalance(context)
             } catch (e: Exception) {
                 syncError = e.message ?: "Could not sync plan."
             } finally {
@@ -291,7 +296,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         if (signedInEmail != null) {
             while (true) {
                 syncPlanFromWeb()
-                delay(25_000L)
+                delay(10_000L)
             }
         }
     }
@@ -861,6 +866,86 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                     AgentPreferences.setBedtimeEnabled(context, enabled)
                                 },
                             )
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Settings anti-tamper guard")
+                                Text(
+                                    if (settingsGuardEnabled) "Blocks System Settings while tasks are locked" else "Off",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = settingsGuardEnabled,
+                                onCheckedChange = { enabled ->
+                                    settingsGuardEnabled = enabled
+                                    AgentPreferences.setSettingsGuardEnabled(context, enabled)
+                                },
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Focus Soundscape (Brown Noise)")
+                                Text(
+                                    if (soundscapePlaying) "Playing ambient focus audio" else "Off",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = soundscapePlaying,
+                                onCheckedChange = {
+                                    soundscapePlaying = FocusSoundscapePlayer.toggle()
+                                },
+                            )
+                        }
+                        if (signedInEmail != null) {
+                            Spacer(Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    "Earned Time: ${earnedMinutesBalance}m",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                OutlinedButton(
+                                    enabled = !planSyncBusy && earnedMinutesBalance >= 10,
+                                    onClick = {
+                                        planSyncBusy = true
+                                        syncError = null
+                                        scope.launch {
+                                            try {
+                                                val snap = withContext(Dispatchers.IO) {
+                                                    PlanSyncManager.activateUnlockPassAndSync(context, 10)
+                                                }
+                                                planSnapshot = snap
+                                                planUnlocked = snap.unlocked
+                                                earnedMinutesBalance = AgentPreferences.getEarnedMinutesBalance(context)
+                                            } catch (t: Throwable) {
+                                                syncError = t.message ?: "Unlock pass failed"
+                                            } finally {
+                                                planSyncBusy = false
+                                            }
+                                        }
+                                    },
+                                ) {
+                                    Text("Use 10m Pass")
+                                }
+                            }
                         }
                     }
                 }

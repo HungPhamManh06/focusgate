@@ -9,6 +9,7 @@ import {
   type TaskInput,
 } from "@/lib/data/tasks";
 import { friendlyDbError } from "@/lib/data/errors";
+import { grantEarnedTime } from "@/lib/data/v2-settings";
 import {
   dateInputToIso,
   taskFormSchema,
@@ -83,11 +84,16 @@ export async function updateTaskAction(
 export async function completeTaskAction(taskId: string): Promise<ActionState> {
   try {
     const result = await completeTask(taskId);
+    try {
+      await grantEarnedTime(5, "task_completed");
+    } catch {
+      // Non-fatal if v2 RPC is not yet migrated.
+    }
     revalidateWorkspace();
     return {
       success: result.viaPlan
-        ? "Task completed with verified focus time."
-        : "Task completed.",
+        ? "Task completed with verified focus time (+5m Earned Time)."
+        : "Task completed (+5m Earned Time).",
     };
   } catch (error) {
     return { error: friendlyDbError(error) };

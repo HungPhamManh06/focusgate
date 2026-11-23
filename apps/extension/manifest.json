@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "FocusGate Blocker",
+  "version": "1.0.0",
+  "description": "Block distracting websites until your FocusGate Today's Plan is complete.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "https://focusgate-blue.vercel.app/*",
+    "https://dyfdeceiszmxozdqugon.supabase.co/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "FocusGate"
+  }
+}

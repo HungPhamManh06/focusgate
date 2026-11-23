@@ -32,6 +32,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FocusSoundscape } from "@/components/focus-soundscape";
 import { ProgressRing } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -474,6 +475,8 @@ export function FocusTimer({
             </>
           )}
         </div>
+
+        <FocusSoundscape />
 
         <p className="mt-5 flex items-center gap-1.5 text-[11px] text-muted">
           <Clock3 className="size-3" />

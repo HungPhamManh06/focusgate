@@ -14,6 +14,11 @@ data class RemotePolicySnapshot(
     val lockActive: Boolean,
     val blockedPackages: Set<String>,
     val allowedPackages: Set<String>,
+    val earnedMinutesBalance: Int = 0,
+    val whitelistFocusMode: Boolean = false,
+    val activeFocusRunning: Boolean = false,
+    val bedtimeStart: String? = null,
+    val bedtimeEnd: String? = null,
 )
 
 data class RemoteDeviceRegistration(
@@ -76,12 +81,24 @@ object RemotePolicySync {
             ?.mapNotNull { (it as? String)?.trim()?.takeIf(String::isNotEmpty) }
             ?.toSet()
             ?: emptySet()
+        val earnedMinutesBalance = (obj["earnedMinutesBalance"] as? Number)?.toInt() ?: 0
+        val whitelistFocusMode = (obj["whitelistFocusMode"] as? Boolean) ?: false
+        val activeFocusObj = obj["activeFocusSession"] as? Map<*, *>
+        val activeFocusRunning = (activeFocusObj?.get("status") as? String) == "running"
+        val scheduleObj = obj["effectiveSchedule"] as? Map<*, *>
+        val bedtimeStart = scheduleObj?.get("bedtimeStart") as? String
+        val bedtimeEnd = scheduleObj?.get("bedtimeEnd") as? String
 
         return RemotePolicySnapshot(
             pulledAtUtc = pulledAtUtc,
             lockActive = lockActive,
             blockedPackages = blocked,
             allowedPackages = allowed,
+            earnedMinutesBalance = earnedMinutesBalance,
+            whitelistFocusMode = whitelistFocusMode,
+            activeFocusRunning = activeFocusRunning,
+            bedtimeStart = bedtimeStart,
+            bedtimeEnd = bedtimeEnd,
         )
     }
 
@@ -477,6 +494,36 @@ class RemoteAgentSyncClient(
             refreshToken = refreshToken,
             email = email,
         )
+    }
+
+    fun activateUnlockPass(
+        apiBaseUrl: String,
+        accessToken: String,
+        minutes: Int = 10,
+    ): Int {
+        val conn = (URL("${apiBaseUrl.trimEnd('/')}/api/agent/unlock-pass").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        try {
+            conn.outputStream.use { out ->
+                out.write("""{"minutes":$minutes}""".toByteArray(Charsets.UTF_8))
+            }
+            val code = conn.responseCode
+            val body = readResponseBody(conn, code)
+            if (code == 401) throw UnauthorizedApiException()
+            if (code !in 200..299) {
+                throw IOException(parseErrorMessage(body, "Unlock pass failed ($code)"))
+            }
+            val obj = RemotePolicySync.parseJsonObject(body)
+            return (obj["earnedMinutesBalance"] as? Number)?.toInt() ?: 0
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun parsePlanSnapshot(body: String): RemotePlanSnapshot {

@@ -12,6 +12,7 @@ import {
   removePlanTask,
 } from "@/lib/data/planner";
 import { friendlyDbError } from "@/lib/data/errors";
+import { grantEarnedTime } from "@/lib/data/v2-settings";
 import { taskKinds } from "@/lib/validation";
 import { revalidateWorkspace } from "./shared";
 import type { ActionState } from "./types";
@@ -140,8 +141,13 @@ export async function activatePlanAction(planId: string): Promise<ActionState> {
 export async function completePlanTaskAction(planTaskId: string): Promise<ActionState> {
   try {
     await completePlanTask(planTaskId);
+    try {
+      await grantEarnedTime(5, "plan_task_completed");
+    } catch {
+      // Non-fatal if v2 RPC is not yet migrated.
+    }
     revalidateWorkspace();
-    return { success: "Task completed with verified focus time." };
+    return { success: "Task completed (+5m Earned Time)." };
   } catch (error) {
     return { error: friendlyDbError(error) };
   }

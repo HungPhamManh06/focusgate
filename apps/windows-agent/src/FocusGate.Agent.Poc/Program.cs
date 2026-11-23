@@ -35,6 +35,8 @@ internal static class Program
             AgentMode.Tray => RunTray(options),
             AgentMode.Status => PrintStatus(options),
             AgentMode.Register => RunRegister(options),
+            AgentMode.InstallStartup => RunInstallStartup(true),
+            AgentMode.UninstallStartup => RunInstallStartup(false),
             _ => 2,
         };
     }
@@ -229,7 +231,7 @@ internal static class Program
                 ["lockActive"] = policy.LockActive,
             });
 
-            Console.WriteLine($"Registered device '{reg.Name}' ({reg.DeviceId})");
+        Console.WriteLine($"Registered device '{reg.Name}' ({reg.DeviceId})");
             Console.WriteLine($"Policy: {(policy.LockActive ? "Lock Active" : "Unlocked")} ({policy.BlockedProcesses.Count} blocked rules)");
             return 0;
         }
@@ -242,6 +244,21 @@ internal static class Program
             Console.Error.WriteLine($"Registration failed: {ex.Message}");
             return 1;
         }
+    }
+
+    private static int RunInstallStartup(bool install)
+    {
+        if (install)
+        {
+            StartupRegistrar.Install();
+            Console.WriteLine("Installed FocusGate Agent auto-start on Windows sign-in.");
+        }
+        else
+        {
+            StartupRegistrar.Uninstall();
+            Console.WriteLine("Removed FocusGate Agent auto-start.");
+        }
+        return 0;
     }
 
     private static string Trim(string? value, int max)

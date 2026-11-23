@@ -29,6 +29,8 @@ import {
 import { getTodayPlan } from "@/lib/data/planner";
 import { getWallet } from "@/lib/data/rewards";
 import { getWorkspace } from "@/lib/data/workspace";
+import { getV2Settings } from "@/lib/data/v2-settings";
+import { EarnedTimeCard } from "./earned-time-card";
 import { SpendForm } from "./spend-form";
 
 export const dynamic = "force-dynamic";
@@ -54,10 +56,11 @@ function humanize(value: string): string {
 }
 
 export default async function WalletPage() {
-  const [workspace, wallet, plan] = await Promise.all([
+  const [workspace, wallet, plan, v2] = await Promise.all([
     getWorkspace(),
     getWallet(),
     getTodayPlan(),
+    getV2Settings(),
   ]);
   const { timezone } = workspace.profile;
 
@@ -144,6 +147,12 @@ export default async function WalletPage() {
           </Link>
         </div>
       )}
+
+      <EarnedTimeCard
+        earnedMinutesBalance={v2.earnedMinutesBalance}
+        streakFreezeCount={v2.streakFreezeCount}
+        unlockPassUntil={v2.unlockPassUntil}
+      />
 
       <section className="mt-4 grid gap-3 sm:grid-cols-3">
         <StatCard

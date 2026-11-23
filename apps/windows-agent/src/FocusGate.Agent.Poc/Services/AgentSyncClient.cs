@@ -10,11 +10,23 @@ public sealed record DeviceRegistrationResult(
     string Platform,
     string Status);
 
+public sealed record ActiveFocusSummary(
+    string Id,
+    string? TaskTitle,
+    string Status);
+
 public sealed record AgentPolicySnapshot(
     DateTimeOffset PulledAtUtc,
     bool LockActive,
     IReadOnlyList<string> BlockedProcesses,
-    IReadOnlyList<string> AllowedProcesses);
+    IReadOnlyList<string> AllowedProcesses,
+    bool WhitelistFocusMode = false,
+    int EarnedMinutesBalance = 0,
+    ActiveFocusSummary? ActiveFocusSession = null);
+
+public sealed record DiscoveredAppUpload(
+    string Identifier,
+    string DisplayName);
 
 public sealed record UsageEventUpload(
     string ClientEventId,
@@ -173,6 +185,63 @@ public sealed class AgentSyncClient : IDisposable
             ? refreshEl.GetString()
             : null;
         return new SupabaseAuthResult(accessToken, refreshToken);
+    }
+
+    public async Task PushDiscoveredAppsAsync(
+        string apiBaseUrl,
+        string accessToken,
+        string deviceId,
+        IReadOnlyList<DiscoveredAppUpload> apps,
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri = NormalizeBaseUrl(apiBaseUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/api/agent/apps"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = JsonContent.Create(new
+        {
+            deviceId,
+            platform = "windows",
+            apps,
+        });
+
+        using var response = await _http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"App discovery upload failed ({(int)response.StatusCode}): {body}",
+                null,
+                response.StatusCode);
+        }
+    }
+
+    public async Task<int> ActivateUnlockPassAsync(
+        string apiBaseUrl,
+        string accessToken,
+        int minutes = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri = NormalizeBaseUrl(apiBaseUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/api/agent/unlock-pass"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = JsonContent.Create(new { minutes });
+
+        using var response = await _http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Unlock pass failed ({(int)response.StatusCode}): {body}",
+                null,
+                response.StatusCode);
+        }
+
+        using var doc = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken);
+        return doc.RootElement.TryGetProperty("earnedMinutesBalance", out var el) && el.TryGetInt32(out var bal)
+            ? bal
+            : 0;
     }
 
     private static Uri NormalizeBaseUrl(string apiBaseUrl)

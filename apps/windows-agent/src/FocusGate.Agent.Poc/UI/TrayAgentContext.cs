@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using FocusGate.Agent.Poc.Models;
+using FocusGate.Agent.Poc.Monitors;
 using FocusGate.Agent.Poc.Services;
 
 namespace FocusGate.Agent.Poc.UI;
@@ -43,9 +44,20 @@ public sealed class TrayAgentContext : ApplicationContext
         _policyItem = new ToolStripMenuItem("Policy: Not pulled yet") { Enabled = false };
 
         var syncNowItem = new ToolStripMenuItem("Sync policy now", null, async (_, _) => await SyncPolicyAsync());
+        var unlockPassItem = new ToolStripMenuItem("Use 10m Earned Time Pass", null, async (_, _) => await UseUnlockPassAsync());
+        var startupItem = new ToolStripMenuItem("Auto-start with Windows")
+        {
+            Checked = StartupRegistrar.IsInstalled(),
+            CheckOnClick = true,
+        };
+        startupItem.Click += (_, _) =>
+        {
+            if (startupItem.Checked) StartupRegistrar.Install();
+            else StartupRegistrar.Uninstall();
+        };
         var showStatusItem = new ToolStripMenuItem("Show status", null, (_, _) => ShowStatusDialog());
         var openLogsItem = new ToolStripMenuItem("Open logs folder", null, (_, _) => OpenLogsFolder());
-        var exitItem = new ToolStripMenuItem("Exit", null, (_, _) => ExitThread());
+        var exitItem = new ToolStripMenuItem("Exit", null, (_, _) => ConfirmExit());
 
         var menu = new ContextMenuStrip();
         menu.Items.AddRange([
@@ -53,6 +65,8 @@ public sealed class TrayAgentContext : ApplicationContext
             _policyItem,
             new ToolStripSeparator(),
             syncNowItem,
+            unlockPassItem,
+            startupItem,
             showStatusItem,
             openLogsItem,
             new ToolStripSeparator(),
@@ -68,7 +82,7 @@ public sealed class TrayAgentContext : ApplicationContext
         };
         _trayIcon.DoubleClick += (_, _) => ShowStatusDialog();
 
-        _syncTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
+        _syncTimer = new System.Windows.Forms.Timer { Interval = 15_000 };
         _syncTimer.Tick += async (_, _) => await SyncPolicyAsync();
 
         LoadInitialCredentials();
@@ -144,6 +158,22 @@ public sealed class TrayAgentContext : ApplicationContext
                     ["duplicates"] = uploaded.Duplicates,
                 });
             }
+
+            var apps = ProcessMonitor.EnumerateInteractive()
+                .GroupBy(p => p.ProcessName, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new DiscoveredAppUpload(
+                    $"{g.Key}.exe",
+                    g.Key))
+                .Take(40)
+                .ToList();
+            if (apps.Count > 0)
+            {
+                await _syncClient.PushDiscoveredAppsAsync(
+                    _credentials.ApiBaseUrl,
+                    _credentials.AccessToken,
+                    _credentials.DeviceId,
+                    apps);
+            }
         }
         catch (Exception ex)
         {
@@ -191,6 +221,42 @@ public sealed class TrayAgentContext : ApplicationContext
             FileName = _logger.LogDirectory,
             UseShellExecute = true,
         });
+    }
+
+    private async Task UseUnlockPassAsync()
+    {
+        if (_credentials is null)
+        {
+            MessageBox.Show("Register this device first.", "FocusGate", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        try
+        {
+            var remaining = await _syncClient.ActivateUnlockPassAsync(
+                _credentials.ApiBaseUrl,
+                _credentials.AccessToken,
+                10);
+            await SyncPolicyAsync();
+            MessageBox.Show($"10m Unlock Pass activated! Remaining Earned Time: {remaining}m.", "FocusGate", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not activate Unlock Pass: {ex.Message}", "FocusGate", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ConfirmExit()
+    {
+        if (_lastPolicy?.LockActive == true)
+        {
+            var answer = MessageBox.Show(
+                "FocusGate Lock is currently active. Are you sure you want to exit the agent?",
+                "FocusGate",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (answer != DialogResult.Yes) return;
+        }
+        ExitThread();
     }
 
     protected override void ExitThreadCore()

@@ -7,7 +7,8 @@ import {
   localDateInTimezone,
   unwrapSupabase,
 } from "@/lib/supabase/data-client";
-import type { DayPoint, Statistics } from "./types";
+import type { DayPoint, HourlyPoint, Statistics } from "./types";
+import { getV2Settings } from "./v2-settings";
 
 interface DayRow {
   day: string;
@@ -16,11 +17,25 @@ interface DayRow {
   entertainment_seconds: number;
 }
 
-function computeStreaks(days: DayPoint[]): { currentStreak: number; bestStreak: number } {
+function localHourInTimezone(timezone: string, date: Date): number {
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    hour12: false,
+    timeZone: timezone,
+  }).format(date);
+  const parsed = Number.parseInt(formatted, 10);
+  return Number.isFinite(parsed) ? parsed % 24 : 0;
+}
+
+function computeStreaks(
+  days: DayPoint[],
+  frozenDates: ReadonlyArray<string> = [],
+): { currentStreak: number; bestStreak: number } {
+  const frozenSet = new Set(frozenDates);
   let best = 0;
   let running = 0;
   for (const day of days) {
-    if (day.focusMinutes > 0 || day.tasksCompleted > 0) {
+    if (day.focusMinutes > 0 || day.tasksCompleted > 0 || frozenSet.has(day.date)) {
       running += 1;
       if (running > best) best = running;
     } else {
@@ -30,7 +45,7 @@ function computeStreaks(days: DayPoint[]): { currentStreak: number; bestStreak: 
   let current = 0;
   for (let i = days.length - 1; i >= 0; i -= 1) {
     const day = days[i]!;
-    if (day.focusMinutes > 0 || day.tasksCompleted > 0) {
+    if (day.focusMinutes > 0 || day.tasksCompleted > 0 || frozenSet.has(day.date)) {
       current += 1;
     } else if (i === days.length - 1) {
       // Today may still be in progress; check consecutive streak ending yesterday.
@@ -65,7 +80,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       new Date(`${startDayKey}T00:00:00Z`).getTime() - 86_400_000,
     ).toISOString();
 
-    const [focusRes, taskRes, usageRes] = await Promise.all([
+    const [focusRes, taskRes, usageRes, v2] = await Promise.all([
       ctx.supabase
         .from("focus_sessions")
         .select("started_at, credited_minutes, is_valid, tasks(category)")
@@ -82,6 +97,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
         .select("started_at, duration_seconds, was_blocked")
         .eq("user_id", ctx.userId)
         .gte("started_at", cutoffIso),
+      getV2Settings(),
     ]);
 
     const focusRows = unwrapSupabase(focusRes) as Array<{
@@ -109,8 +125,14 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     let sessionCount = 0;
     let validCount = 0;
     const categoryTotals = new Map<string, number>();
+    const hourlyBuckets: HourlyPoint[] = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      focusMinutes: 0,
+      blockedAttempts: 0,
+    }));
     for (const row of focusRows) {
-      const day = localDateInTimezone(timezone, new Date(row.started_at));
+      const started = new Date(row.started_at);
+      const day = localDateInTimezone(timezone, started);
       if (day < startDayKey) continue;
       sessionCount += 1;
       if (row.is_valid) {
@@ -118,6 +140,8 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
         focusMinutes += row.credited_minutes;
         const bucket = dayMap.get(day);
         if (bucket) bucket.focus += row.credited_minutes;
+        const h = localHourInTimezone(timezone, started);
+        hourlyBuckets[h]!.focusMinutes += row.credited_minutes;
         const catObj = Array.isArray(row.tasks) ? row.tasks[0] : row.tasks;
         const category = catObj?.category ?? "free_focus";
         categoryTotals.set(category, (categoryTotals.get(category) ?? 0) + row.credited_minutes);
@@ -142,9 +166,14 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     let entertainmentSeconds = 0;
     let blockedAttempts = 0;
     for (const row of usageRows) {
-      const day = localDateInTimezone(timezone, new Date(row.started_at));
+      const started = new Date(row.started_at);
+      const day = localDateInTimezone(timezone, started);
       if (day < startDayKey) continue;
-      if (row.was_blocked) blockedAttempts += 1;
+      if (row.was_blocked) {
+        blockedAttempts += 1;
+        const h = localHourInTimezone(timezone, started);
+        hourlyBuckets[h]!.blockedAttempts += 1;
+      }
       entertainmentSeconds += row.duration_seconds;
       const bucket = dayMap.get(day);
       if (bucket) bucket.usageSeconds += row.duration_seconds;
@@ -170,10 +199,14 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       if (!best || day.focusMinutes > best.focusMinutes) return day;
       return best;
     }, null);
-    const { currentStreak, bestStreak } = computeStreaks(days);
+    const { currentStreak, bestStreak } = computeStreaks(days, v2.frozenDates);
     const categoryBreakdown = Array.from(categoryTotals.entries())
       .map(([category, minutes]) => ({ category, minutes }))
       .sort((a, b) => b.minutes - a.minutes);
+    const peakHourBucket = hourlyBuckets.reduce<HourlyPoint | null>(
+      (best, cur) => (!best || cur.focusMinutes > best.focusMinutes ? cur : best),
+      null,
+    );
 
     return {
       days,
@@ -188,6 +221,11 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       currentStreak,
       bestStreak,
       categoryBreakdown,
+      hourlyBreakdown: hourlyBuckets,
+      peakFocusHour:
+        peakHourBucket && peakHourBucket.focusMinutes > 0 ? peakHourBucket.hour : null,
+      frozenDates: v2.frozenDates,
+      streakFreezeCount: v2.streakFreezeCount,
       validRate: sessionCount > 0 ? Math.round((validCount / sessionCount) * 100) : 0,
       bestDay: bestDay && bestDay.focusMinutes > 0 ? bestDay : null,
     };

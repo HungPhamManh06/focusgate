@@ -376,6 +376,47 @@ export default async function StatisticsPage({
             <Card>
               <CardHeader>
                 <div>
+                  <CardTitle>Peak Focus Hours (24h)</CardTitle>
+                  <p className="mt-1 text-[12px] text-muted">
+                    {stats.peakFocusHour !== null && stats.peakFocusHour !== undefined
+                      ? `Your peak focus hour is ${String(stats.peakFocusHour).padStart(2, "0")}:00 – ${String((stats.peakFocusHour + 1) % 24).padStart(2, "0")}:00.`
+                      : "Complete focus sessions to discover your peak focus hours."}
+                  </p>
+                </div>
+                <span className="text-[11px] text-muted">
+                  Streak Freezes: {stats.streakFreezeCount ?? 0}
+                </span>
+              </CardHeader>
+              <CardContent className="pt-3">
+                <div className="grid grid-cols-12 gap-1.5 sm:grid-cols-24">
+                  {(stats.hourlyBreakdown ?? []).map((bucket) => {
+                    const intensity =
+                      bucket.focusMinutes >= 60
+                        ? "bg-accent text-white"
+                        : bucket.focusMinutes > 0
+                          ? "bg-accent/40 text-ink"
+                          : bucket.blockedAttempts > 0
+                            ? "bg-danger-soft text-danger"
+                            : "bg-surface-2 text-muted";
+                    return (
+                      <div
+                        key={bucket.hour}
+                        title={`${String(bucket.hour).padStart(2, "0")}:00 · ${bucket.focusMinutes}m focus · ${bucket.blockedAttempts} blocked`}
+                        className={`flex flex-col items-center justify-center rounded-md py-1.5 text-[10px] font-medium ${intensity}`}
+                      >
+                        <span>{String(bucket.hour).padStart(2, "0")}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="mt-4">
+            <Card>
+              <CardHeader>
+                <div>
                   <CardTitle>Daily breakdown</CardTitle>
                   <p className="mt-1 text-[12px] text-muted">
                     Focus, finished tasks and paid entertainment.

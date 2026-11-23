@@ -6,19 +6,23 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatDurationSeconds, formatTime } from "@/lib/data/format";
 import { listBlockRules, listDevices, listRecentUsageEvents } from "@/lib/data/devices";
+import { getV2Settings, listDiscoveredApps } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
 import { BlockRulesCard } from "./block-rules-card";
 import { DeviceRow } from "./device-row";
 import { RegisterDeviceForm } from "./register-device-form";
+import { V2ProfilesCard } from "./v2-profiles-card";
 
 export const dynamic = "force-dynamic";
 
 export default async function DevicesPage() {
-  const [workspace, devices, rules, usageEvents] = await Promise.all([
+  const [workspace, devices, rules, usageEvents, v2, discoveredApps] = await Promise.all([
     getWorkspace(),
     listDevices(),
     listBlockRules(),
     listRecentUsageEvents(10),
+    getV2Settings(),
+    listDiscoveredApps(),
   ]);
   const activeCount = devices.filter((device) => device.status === "active").length;
   const revokedCount = devices.length - activeCount;
@@ -101,6 +105,8 @@ export default async function DevicesPage() {
       <div className="mt-4">
         <BlockRulesCard devices={devices} rules={rules} />
       </div>
+
+      <V2ProfilesCard settings={v2} discoveredApps={discoveredApps} />
 
       {usageEvents.length > 0 ? (
         <div className="mt-4">

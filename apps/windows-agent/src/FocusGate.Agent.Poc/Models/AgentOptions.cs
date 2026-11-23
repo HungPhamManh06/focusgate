@@ -19,6 +19,8 @@ public enum AgentMode
     Tray,
     Status,
     Register,
+    InstallStartup,
+    UninstallStartup,
 }
 
 /// <summary>Command-line configuration for the PoC (no config file required).</summary>
@@ -106,6 +108,12 @@ public sealed class AgentOptions
                     break;
                 case "--password":
                     password = ReadValue(args, ref i, arg);
+                    break;
+                case "--install-startup":
+                    mode = AgentMode.InstallStartup;
+                    break;
+                case "--uninstall-startup":
+                    mode = AgentMode.UninstallStartup;
                     break;
                 default:
                     throw new ArgumentException($"Unknown argument: {arg}");

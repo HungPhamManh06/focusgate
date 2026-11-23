@@ -150,6 +150,12 @@ export interface DayPoint {
   tasksCompleted: number;
 }
 
+export interface HourlyPoint {
+  hour: number;
+  focusMinutes: number;
+  blockedAttempts: number;
+}
+
 export interface Statistics {
   days: DayPoint[];
   periodDays: number;
@@ -163,6 +169,10 @@ export interface Statistics {
   currentStreak?: number;
   bestStreak?: number;
   categoryBreakdown?: { category: string; minutes: number }[];
+  hourlyBreakdown?: HourlyPoint[];
+  peakFocusHour?: number | null;
+  frozenDates?: string[];
+  streakFreezeCount?: number;
   validRate: number;
   bestDay: DayPoint | null;
 }

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Blocked by FocusGate</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0d0f14;
+        color: #f4f4f6;
+        font-family: system-ui, -apple-system, sans-serif;
+        padding: 24px;
+      }
+      .card {
+        max-width: 460px;
+        width: 100%;
+        background: #151922;
+        border: 1px solid #262b38;
+        border-radius: 18px;
+        padding: 28px;
+      }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #6c92ff;
+        font-weight: 700;
+      }
+      h1 {
+        margin: 8px 0;
+        font-size: 28px;
+      }
+      p {
+        color: #9ca3af;
+        line-height: 1.5;
+        font-size: 14px;
+      }
+      .actions {
+        margin-top: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      button,
+      a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+      }
+      .primary {
+        background: #6c92ff;
+        color: #0b0d12;
+      }
+      .secondary {
+        background: #1f2430;
+        color: #f4f4f6;
+        border: 1px solid #2e3444;
+      }
+      #msg {
+        margin-top: 10px;
+        font-size: 13px;
+        color: #f87171;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="eyebrow">FocusGate</div>
+      <h1>Site locked</h1>
+      <p id="desc">This website is blocked until your planned tasks are finished.</p>
+      <div class="actions">
+        <a class="primary" href="https://focusgate-blue.vercel.app/planner">Back to Today&apos;s Plan</a>
+        <button id="unlock-pass-btn" class="secondary">Use 10m Earned Time Pass</button>
+      </div>
+      <div id="msg"></div>
+    </div>
+    <script src="blocked.js"></script>
+  </body>
+</html>

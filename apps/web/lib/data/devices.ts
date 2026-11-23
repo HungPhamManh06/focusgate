@@ -10,6 +10,7 @@ import {
   unwrapSupabase,
 } from "@/lib/supabase/data-client";
 import { toIso } from "./format";
+import { getV2Settings } from "./v2-settings";
 
 export type DevicePlatform = "windows" | "android" | "web";
 export type DeviceStatus = "active" | "revoked";
@@ -293,7 +294,10 @@ export async function getAgentPolicyForDevice(
 
     const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
     const today = localDateInTimezone(timezone);
-    const [, grantsRes, rulesRes, todayPlanRes] = await Promise.all([
+    const weekdayNum = new Date(`${today}T12:00:00Z`).getUTCDay();
+    const isWeekend = weekdayNum === 0 || weekdayNum === 6;
+
+    const [, grantsRes, rulesRes, todayPlanRes, v2, activeFocusRes] = await Promise.all([
       ctx.supabase
         .from("devices")
         .update({ last_seen_at: new Date().toISOString() })
@@ -317,6 +321,15 @@ export async function getAgentPolicyForDevice(
         .select("id")
         .eq("user_id", ctx.userId)
         .eq("plan_date", today)
+        .maybeSingle(),
+      getV2Settings(request),
+      ctx.supabase
+        .from("focus_sessions")
+        .select("id, status, tasks(title)")
+        .eq("user_id", ctx.userId)
+        .in("status", ["running", "paused"])
+        .order("started_at", { ascending: false })
+        .limit(1)
         .maybeSingle(),
     ]);
 
@@ -348,6 +361,17 @@ export async function getAgentPolicyForDevice(
       }
     }
 
+    const activeFocusRow = activeFocusRes.data as {
+      id: string;
+      status: string;
+      tasks: { title: string } | Array<{ title: string }> | null;
+    } | null;
+    const focusTask = activeFocusRow?.tasks
+      ? Array.isArray(activeFocusRow.tasks)
+        ? activeFocusRow.tasks[0]
+        : activeFocusRow.tasks
+      : null;
+
     const activeGrantMinutes = grantRows.reduce((sum, row) => sum + row.remaining_minutes, 0);
     const policy = computeAgentPolicySnapshot({
       activeGrantMinutes,
@@ -356,9 +380,30 @@ export async function getAgentPolicyForDevice(
         identifier: row.identifier,
         isEnabled: row.is_enabled,
       })),
+      unlockPassUntil: v2.unlockPassUntil,
+      whitelistFocusMode: v2.whitelistFocusMode,
+      allowedApps: v2.allowedApps,
+      allowedDomains: v2.allowedDomains,
+      blockedDomains: v2.blockedDomains,
+      activeFocusSession: activeFocusRow
+        ? {
+            id: activeFocusRow.id,
+            status: activeFocusRow.status,
+            taskTitle: focusTask?.title ?? null,
+          }
+        : null,
+      effectiveSchedule: {
+        isWeekend,
+        bedtimeStart: isWeekend ? v2.weekendBedtimeStart : v2.weekdayBedtimeStart,
+        bedtimeEnd: isWeekend ? v2.weekendBedtimeEnd : v2.weekdayBedtimeEnd,
+        relaxedMode: isWeekend && v2.weekendRelaxedMode,
+      },
+      earnedMinutesBalance: v2.earnedMinutesBalance,
     });
 
-    if (hasPlannedTasks) {
+    const hasUnlockPass =
+      Boolean(v2.unlockPassUntil) && new Date(v2.unlockPassUntil!).getTime() > Date.now();
+    if (hasPlannedTasks && !hasUnlockPass && !(isWeekend && v2.weekendRelaxedMode)) {
       policy.lockActive = !allPlanTasksCompleted;
     }
 

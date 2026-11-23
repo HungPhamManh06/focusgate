@@ -38,9 +38,16 @@ object PlanSyncManager {
         return withValidToken(context) { token ->
             val deviceId = ensureRegisteredDevice(context, token)
             val planSnapshot = client.fetchTodayPlan(AgentPreferences.DEFAULT_API_BASE_URL, token)
-            val policyUnlocked = runCatching {
-                !client.pullPolicy(AgentPreferences.DEFAULT_API_BASE_URL, token, deviceId).lockActive
-            }.getOrDefault(false)
+            val remotePolicy = runCatching {
+                client.pullPolicy(AgentPreferences.DEFAULT_API_BASE_URL, token, deviceId)
+            }.getOrNull()
+            val policyUnlocked = remotePolicy?.lockActive == false
+            if (remotePolicy != null) {
+                AgentPreferences.setEarnedMinutesBalance(context, remotePolicy.earnedMinutesBalance)
+                AgentPreferences.setWhitelistFocusMode(context, remotePolicy.whitelistFocusMode)
+                AgentPreferences.setActiveFocusRunning(context, remotePolicy.activeFocusRunning)
+                AgentPreferences.setBedtimeWindow(context, remotePolicy.bedtimeStart, remotePolicy.bedtimeEnd)
+            }
             val unlocked = planSnapshot.unlocked || policyUnlocked
             AgentPreferences.setPlanUnlocked(context, unlocked)
             AgentPreferences.setLastSyncAt(context, System.currentTimeMillis())
@@ -48,6 +55,14 @@ object PlanSyncManager {
             runCatching { pushPendingUsage(context, token, deviceId) }
             runCatching { pushLocalRules(context, token, deviceId) }
             planSnapshot.copy(unlocked = unlocked)
+        }
+    }
+
+    fun activateUnlockPassAndSync(context: Context, minutes: Int = 10): RemotePlanSnapshot {
+        return withValidToken(context) { token ->
+            val remaining = client.activateUnlockPass(AgentPreferences.DEFAULT_API_BASE_URL, token, minutes)
+            AgentPreferences.setEarnedMinutesBalance(context, remaining)
+            syncNow(context)
         }
     }
 

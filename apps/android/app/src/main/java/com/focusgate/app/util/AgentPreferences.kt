@@ -23,6 +23,12 @@ object AgentPreferences {
     private const val KEY_EMERGENCY_LAST_DATE = "emergency_last_date"
     private const val KEY_BEDTIME_ENABLED = "bedtime_enabled"
     private const val KEY_PLAN_SUMMARY_TEXT = "plan_summary_text"
+    private const val KEY_EARNED_MINUTES = "earned_minutes_balance"
+    private const val KEY_WHITELIST_FOCUS_MODE = "whitelist_focus_mode"
+    private const val KEY_ACTIVE_FOCUS_RUNNING = "active_focus_running"
+    private const val KEY_BEDTIME_START = "bedtime_start"
+    private const val KEY_BEDTIME_END = "bedtime_end"
+    private const val KEY_SETTINGS_GUARD_ENABLED = "settings_guard_enabled"
 
     const val DEFAULT_API_BASE_URL = "https://focusgate-blue.vercel.app"
     const val DEFAULT_SUPABASE_URL = "https://dyfdeceiszmxozdqugon.supabase.co"
@@ -147,8 +153,64 @@ object AgentPreferences {
 
     fun isCurrentlyBedtime(context: Context): Boolean {
         if (!isBedtimeEnabled(context)) return false
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        return hour >= 23 || hour < 6
+        val cal = Calendar.getInstance()
+        val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        val startMin = parseHhMm(getBedtimeStart(context), 23 * 60)
+        val endMin = parseHhMm(getBedtimeEnd(context), 6 * 60)
+        return if (startMin <= endMin) {
+            nowMinutes in startMin until endMin
+        } else {
+            nowMinutes >= startMin || nowMinutes < endMin
+        }
+    }
+
+    private fun parseHhMm(raw: String?, fallbackMinutes: Int): Int {
+        if (raw.isNullOrBlank()) return fallbackMinutes
+        val parts = raw.trim().split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: return fallbackMinutes
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        return (h.coerceIn(0, 23) * 60) + m.coerceIn(0, 59)
+    }
+
+    fun getBedtimeStart(context: Context): String =
+        prefs(context).getString(KEY_BEDTIME_START, "23:00") ?: "23:00"
+
+    fun getBedtimeEnd(context: Context): String =
+        prefs(context).getString(KEY_BEDTIME_END, "06:00") ?: "06:00"
+
+    fun setBedtimeWindow(context: Context, start: String?, end: String?) {
+        prefs(context).edit()
+            .putString(KEY_BEDTIME_START, start ?: "23:00")
+            .putString(KEY_BEDTIME_END, end ?: "06:00")
+            .apply()
+    }
+
+    fun getEarnedMinutesBalance(context: Context): Int =
+        prefs(context).getInt(KEY_EARNED_MINUTES, 0)
+
+    fun setEarnedMinutesBalance(context: Context, minutes: Int) {
+        prefs(context).edit().putInt(KEY_EARNED_MINUTES, minutes.coerceAtLeast(0)).apply()
+    }
+
+    fun isWhitelistFocusMode(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_WHITELIST_FOCUS_MODE, false)
+
+    fun setWhitelistFocusMode(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_WHITELIST_FOCUS_MODE, enabled).apply()
+    }
+
+    fun isActiveFocusRunning(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ACTIVE_FOCUS_RUNNING, false)
+
+    fun setActiveFocusRunning(context: Context, running: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ACTIVE_FOCUS_RUNNING, running).apply()
+    }
+
+    fun isSettingsGuardEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SETTINGS_GUARD_ENABLED, false)
+
+    fun setSettingsGuardEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SETTINGS_GUARD_ENABLED, enabled).apply()
     }
 
     fun getPlanSummaryText(context: Context): String =
