@@ -50,6 +50,7 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
     const allTasksTotal = tasks.length;
     const allTasksCompleted = tasks.filter((task) => task.status === "completed").length;
     const allCompleted = allTasksTotal > 0 && allTasksCompleted === allTasksTotal;
+    const unlocked = allTasksTotal > 0 ? allCompleted : activeGrantMinutes > 0;
     return {
       plan: {
         id: plan.id,
@@ -61,7 +62,7 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
         tasks,
       },
       activeGrantMinutes,
-      unlocked: activeGrantMinutes > 0 || allCompleted,
+      unlocked,
     };
   }
 
@@ -150,6 +151,7 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
   const allTasksTotal = tasks.length;
   const allTasksCompleted = tasks.filter((task) => task.status === "completed").length;
   const allCompleted = allTasksTotal > 0 && allTasksCompleted === allTasksTotal;
+  const unlocked = allTasksTotal > 0 ? allCompleted : activeGrantMinutes > 0;
 
   return {
     plan: {
@@ -162,7 +164,7 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
       tasks,
     },
     activeGrantMinutes,
-    unlocked: activeGrantMinutes > 0 || allCompleted,
+    unlocked,
   };
 }
 

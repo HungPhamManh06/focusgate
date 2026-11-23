@@ -327,6 +327,7 @@ export async function getAgentPolicyForDevice(
       is_enabled: boolean;
     }>;
 
+    let hasPlannedTasks = false;
     let allPlanTasksCompleted = false;
     const planId = (todayPlanRes.data as { id?: string } | null)?.id;
     if (planId) {
@@ -339,6 +340,7 @@ export async function getAgentPolicyForDevice(
         tasks: { status: string } | Array<{ status: string }>;
       }>;
       if (planTaskRows.length > 0) {
+        hasPlannedTasks = true;
         allPlanTasksCompleted = planTaskRows.every((row) => {
           const t = Array.isArray(row.tasks) ? row.tasks[0] : row.tasks;
           return t?.status === "completed";
@@ -356,8 +358,8 @@ export async function getAgentPolicyForDevice(
       })),
     });
 
-    if (allPlanTasksCompleted) {
-      policy.lockActive = false;
+    if (hasPlannedTasks) {
+      policy.lockActive = !allPlanTasksCompleted;
     }
 
     return { status: "ok", policy };
