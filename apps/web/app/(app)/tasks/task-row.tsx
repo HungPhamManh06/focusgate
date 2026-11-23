@@ -38,7 +38,7 @@ export function TaskRow({
   const [pending, startTransition] = useTransition();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const toast = useToast();
-  const rowStatus = formatTaskRowStatus(task, timezone);
+  const rowStatus = formatTaskRowStatus(task, timezone, locale);
   const { completed } = rowStatus;
   const needsFocusInActivePlan =
     planStatus === "active" &&

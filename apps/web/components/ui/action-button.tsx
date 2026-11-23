@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import type { ActionState } from "@/lib/actions/types";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Button, type ButtonProps } from "./button";
 import { ConfirmDialog } from "./confirm-dialog";
 import { useToast } from "./toast";
@@ -19,14 +20,17 @@ type Props = Omit<ButtonProps, "onClick"> & {
 export function ActionButton({
   action,
   confirmMessage,
-  confirmTitle = "Are you sure?",
-  confirmLabel = "Confirm",
+  confirmTitle,
+  confirmLabel,
   confirmVariant = "accent",
   pendingLabel,
   children,
   disabled,
   ...props
 }: Props) {
+  const isVi = useLocale() === "vi";
+  const resolvedConfirmTitle = confirmTitle ?? (isVi ? "Bạn có chắc chắn?" : "Are you sure?");
+  const resolvedConfirmLabel = confirmLabel ?? (isVi ? "Xác nhận" : "Confirm");
   const [pending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const toast = useToast();
@@ -38,7 +42,10 @@ export function ActionButton({
         if (result.error) toast.push("error", result.error);
         else if (result.success) toast.push("success", result.success);
       } catch {
-        toast.push("error", "The action could not be completed.");
+        toast.push(
+          "error",
+          isVi ? "Không thể hoàn thành thao tác." : "The action could not be completed.",
+        );
       } finally {
         setConfirmOpen(false);
       }
@@ -65,9 +72,9 @@ export function ActionButton({
           open={confirmOpen}
           onClose={() => setConfirmOpen(false)}
           onConfirm={execute}
-          title={confirmTitle}
+          title={resolvedConfirmTitle}
           description={confirmMessage}
-          confirmLabel={confirmLabel}
+          confirmLabel={resolvedConfirmLabel}
           confirmVariant={confirmVariant}
           pending={pending}
         />

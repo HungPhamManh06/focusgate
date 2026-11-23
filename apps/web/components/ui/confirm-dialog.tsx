@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Loader2, X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Button, buttonVariants, type ButtonProps } from "./button";
 
 export interface ConfirmDialogProps {
@@ -83,14 +84,18 @@ export function ConfirmDialog({
   onClose,
   onConfirm,
   title,
-  eyebrow = "Confirm action",
+  eyebrow,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   confirmVariant = "accent",
   pending = false,
   children,
 }: ConfirmDialogProps) {
+  const isVi = useLocale() === "vi";
+  const resolvedEyebrow = eyebrow ?? (isVi ? "Xác nhận thao tác" : "Confirm action");
+  const resolvedConfirmLabel = confirmLabel ?? (isVi ? "Xác nhận" : "Confirm");
+  const resolvedCancelLabel = cancelLabel ?? (isVi ? "Hủy" : "Cancel");
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useDialogAccessibility(open, onClose);
@@ -119,7 +124,7 @@ export function ConfirmDialog({
               {confirmVariant === "danger" ? (
                 <AlertTriangle className="size-3.5 text-danger" aria-hidden />
               ) : null}
-              {eyebrow}
+              {resolvedEyebrow}
             </p>
             <h2 id={titleId} className="mt-2 font-display text-[26px] leading-none">
               {title}
@@ -129,7 +134,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onClose}
             disabled={pending}
-            aria-label="Close dialog"
+            aria-label={isVi ? "Đóng hộp thoại" : "Close dialog"}
             className="flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
           >
             <X className="size-4" />
@@ -150,7 +155,7 @@ export function ConfirmDialog({
             disabled={pending}
             className={buttonVariants({ variant: "ghost", size: "md" })}
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </button>
           <Button
             type="button"
@@ -160,7 +165,7 @@ export function ConfirmDialog({
             autoFocus
           >
             {pending ? <Loader2 className="size-4 animate-spin" /> : null}
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </Button>
         </div>
       </div>

@@ -2,18 +2,20 @@
 
 import { Headphones, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "@/components/i18n/language-provider";
 import { cn } from "@/lib/utils";
 
 type SoundPreset = "off" | "brown" | "rain" | "lofi";
 
-const PRESETS: Array<{ id: SoundPreset; label: string }> = [
-  { id: "off", label: "Off" },
-  { id: "brown", label: "Brown Noise" },
-  { id: "rain", label: "Rain" },
-  { id: "lofi", label: "Ambient Pad" },
+const PRESETS: Array<{ id: SoundPreset; label: string; labelVi: string }> = [
+  { id: "off", label: "Off", labelVi: "Tắt" },
+  { id: "brown", label: "Brown Noise", labelVi: "Tiếng ồn nâu" },
+  { id: "rain", label: "Rain", labelVi: "Tiếng mưa" },
+  { id: "lofi", label: "Ambient Pad", labelVi: "Nhạc nền êm" },
 ];
 
 export function FocusSoundscape() {
+  const isVi = useLocale() === "vi";
   const [preset, setPreset] = useState<SoundPreset>("off");
   const [volume, setVolume] = useState(0.25);
   const ctxRef = useRef<AudioContext | null>(null);
@@ -149,7 +151,7 @@ export function FocusSoundscape() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
           <Headphones className="size-3.5 text-accent" />
-          <span>Focus Soundscape</span>
+          <span>{isVi ? "Âm thanh tập trung" : "Focus Soundscape"}</span>
         </div>
         <div className="flex items-center gap-2">
           {preset === "off" ? (
@@ -185,7 +187,7 @@ export function FocusSoundscape() {
                 : "border-line bg-surface text-muted hover:text-ink",
             )}
           >
-            {item.label}
+            {isVi ? item.labelVi : item.label}
           </button>
         ))}
       </div>

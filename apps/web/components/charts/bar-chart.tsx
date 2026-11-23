@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/components/i18n/language-provider";
 import { formatMinutes } from "@/lib/data/format";
 import { cn } from "@/lib/utils";
 
@@ -11,10 +12,10 @@ export interface BarPoint {
 
 export type BarChartUnit = "minutes" | "steps" | "kcal" | "kg10";
 
-function formatByUnit(value: number, unit: BarChartUnit): string {
+function formatByUnit(value: number, unit: BarChartUnit, isVi: boolean): string {
   switch (unit) {
     case "steps":
-      return `${value.toLocaleString()} steps`;
+      return `${value.toLocaleString()} ${isVi ? "bước" : "steps"}`;
     case "kcal":
       return `${value} kcal`;
     case "kg10":
@@ -29,7 +30,7 @@ export function BarChart({
   tone = "accent",
   unit = "minutes",
   formatValue,
-  emptyLabel = "No data in this period yet.",
+  emptyLabel,
   height = 176,
 }: {
   data: BarPoint[];
@@ -39,7 +40,10 @@ export function BarChart({
   emptyLabel?: string;
   height?: number;
 }) {
-  const renderValue = formatValue ?? ((value: number) => formatByUnit(value, unit));
+  const isVi = useLocale() === "vi";
+  const resolvedEmptyLabel =
+    emptyLabel ?? (isVi ? "Chưa có dữ liệu trong kỳ này." : "No data in this period yet.");
+  const renderValue = formatValue ?? ((value: number) => formatByUnit(value, unit, isVi));
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const max = Math.max(...data.map((point) => point.value), 1);
   const hasData = data.some((point) => point.value > 0);
@@ -53,7 +57,7 @@ export function BarChart({
         className="flex items-center justify-center rounded-xl border border-dashed border-line text-[12px] text-muted"
         style={{ height }}
       >
-        {emptyLabel}
+        {resolvedEmptyLabel}
       </div>
     );
   }
@@ -67,11 +71,13 @@ export function BarChart({
               {activePoint.label}: {renderValue(activePoint.value)}
             </span>
           ) : (
-            <>Peak {renderValue(max)}</>
+            <>
+              {isVi ? "Đỉnh" : "Peak"} {renderValue(max)}
+            </>
           )}
         </p>
         <p className="text-[10.5px] text-muted">
-          {scrollable ? "Scroll horizontally · 0" : "0"}
+          {scrollable ? (isVi ? "Cuộn ngang · 0" : "Scroll horizontally · 0") : "0"}
         </p>
       </div>
 

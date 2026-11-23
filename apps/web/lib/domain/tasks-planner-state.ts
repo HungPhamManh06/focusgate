@@ -12,7 +12,9 @@ export interface TaskRowStatusViewModel {
 export function formatTaskRowStatus(
   task: Pick<Task, "status" | "dueDate" | "completedAt">,
   timezone: string,
+  locale: "en" | "vi" = "en",
 ): TaskRowStatusViewModel {
+  const isVi = locale === "vi";
   const completed = task.status === "completed";
   if (completed) {
     return {
@@ -21,18 +23,19 @@ export function formatTaskRowStatus(
       showOverdue: false,
       dueLabel: null,
       completedLabel: task.completedAt
-        ? `Completed ${formatDate(task.completedAt, undefined, timezone)}`
-        : "Completed",
+        ? `${isVi ? "Hoàn thành" : "Completed"} ${formatDate(task.completedAt, undefined, timezone, locale)}`
+        : isVi ? "Hoàn thành" : "Completed",
     };
   }
 
-  const relative = relativeDue(task.dueDate, timezone);
-  const dueLabel = relative ?? (task.dueDate ? formatDate(task.dueDate, undefined, timezone) : null);
+  const relative = relativeDue(task.dueDate, timezone, locale);
+  const dueLabel =
+    relative ?? (task.dueDate ? formatDate(task.dueDate, undefined, timezone, locale) : null);
 
   return {
     completed: false,
     showPriorityBadge: true,
-    showOverdue: relative?.includes("overdue") ?? false,
+    showOverdue: relative ? (relative.includes("overdue") || relative.includes("Quá hạn")) : false,
     dueLabel,
     completedLabel: null,
   };

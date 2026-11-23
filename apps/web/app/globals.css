@@ -4,7 +4,7 @@
 
 @theme inline {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+  --font-display: "Newsreader Variable", ui-serif, Georgia, "Times New Roman", serif;
 
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
