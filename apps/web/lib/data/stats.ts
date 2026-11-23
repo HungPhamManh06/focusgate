@@ -53,7 +53,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
         .in("status", ["todo", "in_progress", "completed"]),
       ctx.supabase
         .from("usage_events")
-        .select("started_at, duration_seconds")
+        .select("started_at, duration_seconds, was_blocked")
         .eq("user_id", ctx.userId)
         .gte("started_at", cutoffIso),
     ]);
@@ -70,6 +70,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     const usageRows = unwrapSupabase(usageRes) as Array<{
       started_at: string;
       duration_seconds: number;
+      was_blocked: boolean;
     }>;
 
     const dayMap = new Map<string, { focus: number; tasks: number; usageSeconds: number }>();
@@ -108,9 +109,11 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     }
 
     let entertainmentSeconds = 0;
+    let blockedAttempts = 0;
     for (const row of usageRows) {
       const day = localDateInTimezone(timezone, new Date(row.started_at));
       if (day < startDayKey) continue;
+      if (row.was_blocked) blockedAttempts += 1;
       entertainmentSeconds += row.duration_seconds;
       const bucket = dayMap.get(day);
       if (bucket) bucket.usageSeconds += row.duration_seconds;
@@ -146,6 +149,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       openTasks,
       completionRate: totalDecided > 0 ? Math.round((completedTasks / totalDecided) * 100) : 0,
       entertainmentMinutes: Math.round(entertainmentSeconds / 60),
+      blockedAttempts,
       validRate: sessionCount > 0 ? Math.round((validCount / sessionCount) * 100) : 0,
       bestDay: bestDay && bestDay.focusMinutes > 0 ? bestDay : null,
     };

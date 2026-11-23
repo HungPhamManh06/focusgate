@@ -14,6 +14,7 @@ object AgentPreferences {
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_PLAN_UNLOCKED = "plan_unlocked"
     private const val KEY_LAST_SYNC_AT = "last_sync_at"
+    private const val KEY_LAST_SYNCED_USAGE_ID = "last_synced_usage_id"
 
     const val DEFAULT_API_BASE_URL = "https://focusgate-blue.vercel.app"
     const val DEFAULT_SUPABASE_URL = "https://dyfdeceiszmxozdqugon.supabase.co"
@@ -102,5 +103,12 @@ object AgentPreferences {
 
     fun setLastSyncAt(context: Context, timestampMs: Long) {
         prefs(context).edit().putLong(KEY_LAST_SYNC_AT, timestampMs).apply()
+    }
+
+    fun getLastSyncedUsageId(context: Context): Long =
+        prefs(context).getLong(KEY_LAST_SYNCED_USAGE_ID, 0L)
+
+    fun setLastSyncedUsageId(context: Context, usageId: Long) {
+        prefs(context).edit().putLong(KEY_LAST_SYNCED_USAGE_ID, usageId).apply()
     }
 }

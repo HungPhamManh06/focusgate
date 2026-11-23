@@ -167,6 +167,16 @@ export function TaskFormDialog({
                 must be backed by focused minutes.
               </p>
 
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-[12.5px] font-medium text-ink">
+                <input
+                  type="checkbox"
+                  name="isDailyHabit"
+                  defaultChecked={Boolean(task?.isDailyHabit)}
+                  className="size-4 accent-accent"
+                />
+                <span>Daily habit (repeat in today&apos;s plan)</span>
+              </label>
+
               <details
                 className="rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5"
                 open={Boolean(task?.description || task?.dueDate || (task && task.category !== "work"))}

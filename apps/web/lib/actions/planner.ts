@@ -8,6 +8,7 @@ import {
   completePlanTask,
   confirmPlan,
   ensureTodayPlan,
+  populateTodayHabits,
   removePlanTask,
 } from "@/lib/data/planner";
 import { friendlyDbError } from "@/lib/data/errors";
@@ -21,6 +22,19 @@ export async function createPlanAction(): Promise<ActionState> {
     await ensureTodayPlan();
     revalidateWorkspace();
     return { success: "Today's plan is ready." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function populateTodayHabitsAction(planId?: string | null): Promise<ActionState> {
+  try {
+    const targetPlanId = planId ?? (await ensureTodayPlan());
+    const added = await populateTodayHabits(targetPlanId);
+    revalidateWorkspace();
+    return added > 0
+      ? { success: `Loaded ${added} daily task${added === 1 ? "" : "s"} into today's plan.` }
+      : { success: "No new daily habits or previous plan tasks to load." };
   } catch (error) {
     return { error: friendlyDbError(error) };
   }

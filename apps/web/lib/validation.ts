@@ -69,6 +69,7 @@ export const taskFormSchema = z
     estimatedMinutes: z.coerce.number().int().min(5, "Estimate at least 5 minutes.").max(480),
     requiredFocusMinutes: z.coerce.number().int().min(0).max(480),
     dueDate: z.string().trim().optional(),
+    isDailyHabit: z.boolean().optional().default(false),
   })
   .refine((data) => data.requiredFocusMinutes <= data.estimatedMinutes, {
     message: "Required focus minutes cannot exceed the estimated duration.",

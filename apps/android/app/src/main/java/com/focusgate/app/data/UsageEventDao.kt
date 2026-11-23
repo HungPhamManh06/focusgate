@@ -15,4 +15,7 @@ interface UsageEventDao {
 
     @Query("SELECT * FROM usage_events ORDER BY startedAt DESC LIMIT :limit")
     suspend fun recent(limit: Int): List<UsageEvent>
+
+    @Query("SELECT * FROM usage_events WHERE id > :afterId AND endedAt IS NOT NULL ORDER BY id ASC LIMIT :limit")
+    suspend fun unsynced(afterId: Long, limit: Int): List<UsageEvent>
 }

@@ -33,6 +33,7 @@ export interface TaskInput {
   estimatedMinutes: number;
   requiredFocusMinutes: number;
   dueDate: string | null;
+  isDailyHabit?: boolean;
 }
 
 interface TaskRow {
@@ -45,6 +46,7 @@ interface TaskRow {
   estimated_minutes: number;
   required_focus_minutes: number;
   due_date: string | Date | null;
+  is_daily_habit: boolean;
   status: TaskStatus;
   completed_at: string | Date | null;
   created_at: string | Date;
@@ -61,6 +63,7 @@ function mapTask(row: TaskRow): Task {
     estimatedMinutes: row.estimated_minutes,
     requiredFocusMinutes: row.required_focus_minutes,
     dueDate: toIso(row.due_date),
+    isDailyHabit: Boolean(row.is_daily_habit),
     status: row.status,
     completedAt: toIso(row.completed_at),
     createdAt: toIso(row.created_at) ?? new Date().toISOString(),
@@ -68,7 +71,7 @@ function mapTask(row: TaskRow): Task {
 }
 
 const TASK_COLUMNS = `id, title, description, category, kind, priority,
-  estimated_minutes, required_focus_minutes, due_date, status, completed_at, created_at`;
+  estimated_minutes, required_focus_minutes, due_date, is_daily_habit, status, completed_at, created_at`;
 
 const STATUS_ORDER: Record<string, number> = {
   in_progress: 0,
@@ -234,6 +237,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
           estimated_minutes: input.estimatedMinutes,
           required_focus_minutes: input.requiredFocusMinutes,
           due_date: input.dueDate,
+          is_daily_habit: Boolean(input.isDailyHabit),
         })
         .select(TASK_COLUMNS)
         .single(),
@@ -246,9 +250,9 @@ export async function createTask(input: TaskInput): Promise<Task> {
     const result = await db.query<TaskRow>(
       `insert into public.tasks
         (user_id, title, description, category, kind, priority,
-         estimated_minutes, required_focus_minutes, due_date)
+         estimated_minutes, required_focus_minutes, due_date, is_daily_habit)
        values ($1, $2, $3, $4::public.task_category, $5::public.task_kind,
-               $6::public.task_priority, $7, $8, $9)
+               $6::public.task_priority, $7, $8, $9, $10)
        returning ${TASK_COLUMNS}`,
       [
         LOCAL_USER_ID,
@@ -260,6 +264,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
         input.estimatedMinutes,
         input.requiredFocusMinutes,
         input.dueDate,
+        Boolean(input.isDailyHabit),
       ],
     );
     const row = result.rows[0];
@@ -283,6 +288,7 @@ export async function updateTask(id: string, input: TaskInput): Promise<Task> {
           estimated_minutes: input.estimatedMinutes,
           required_focus_minutes: input.requiredFocusMinutes,
           due_date: input.dueDate,
+          is_daily_habit: Boolean(input.isDailyHabit),
         })
         .eq("id", id)
         .eq("user_id", ctx.userId)
@@ -298,7 +304,8 @@ export async function updateTask(id: string, input: TaskInput): Promise<Task> {
       `update public.tasks set
          title = $3, description = $4, category = $5::public.task_category,
          kind = $6::public.task_kind, priority = $7::public.task_priority,
-         estimated_minutes = $8, required_focus_minutes = $9, due_date = $10
+         estimated_minutes = $8, required_focus_minutes = $9, due_date = $10,
+         is_daily_habit = $11
        where id = $1 and user_id = $2
        returning ${TASK_COLUMNS}`,
       [
@@ -312,6 +319,7 @@ export async function updateTask(id: string, input: TaskInput): Promise<Task> {
         input.estimatedMinutes,
         input.requiredFocusMinutes,
         input.dueDate,
+        Boolean(input.isDailyHabit),
       ],
     );
     const row = result.rows[0];

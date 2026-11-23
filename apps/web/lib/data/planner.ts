@@ -583,3 +583,20 @@ export async function completePlanTask(planTaskId: string): Promise<void> {
     await db.query("select public.rpc_complete_plan_task($1)", [planTaskId]);
   });
 }
+
+export async function populateTodayHabits(planId: string): Promise<number> {
+  const ctx = await getSupabaseContext();
+  if (ctx) {
+    const res = await ctx.supabase.rpc("rpc_populate_today_habits", { p_plan_id: planId });
+    assertSupabaseOk(res);
+    return (res.data as { added?: number } | null)?.added ?? 0;
+  }
+
+  return withUser(async (db) => {
+    const res = await db.query<{ result: { added?: number } }>(
+      "select public.rpc_populate_today_habits($1) as result",
+      [planId],
+    );
+    return res.rows[0]?.result?.added ?? 0;
+  });
+}

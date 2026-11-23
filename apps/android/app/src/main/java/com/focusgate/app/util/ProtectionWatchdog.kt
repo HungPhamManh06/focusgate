@@ -65,6 +65,10 @@ class ProtectionWatchdogWorker(
             return Result.success()
         }
 
+        if (AgentPreferences.getAccessToken(context) != null) {
+            runCatching { PlanSyncManager.syncNow(context) }
+        }
+
         if (!AppUsageMonitorService.isRunning) {
             val restarted = runCatching {
                 ContextCompat.startForegroundService(

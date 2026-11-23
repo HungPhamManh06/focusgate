@@ -3,9 +3,11 @@ package com.focusgate.app.util
 import android.content.Context
 import android.os.Build
 import com.focusgate.app.BuildConfig
+import com.focusgate.app.data.FocusGateDatabase
 import com.focusgate.app.policy.RemoteAgentSyncClient
 import com.focusgate.app.policy.RemotePlanSnapshot
 import com.focusgate.app.policy.UnauthorizedApiException
+import kotlinx.coroutines.runBlocking
 
 object PlanSyncManager {
     private val client = RemoteAgentSyncClient()
@@ -40,8 +42,31 @@ object PlanSyncManager {
             val unlocked = planSnapshot.unlocked || policyUnlocked
             AgentPreferences.setPlanUnlocked(context, unlocked)
             AgentPreferences.setLastSyncAt(context, System.currentTimeMillis())
+            runCatching { pushPendingUsage(context, token, deviceId) }
             planSnapshot.copy(unlocked = unlocked)
         }
+    }
+
+    private fun pushPendingUsage(context: Context, token: String, deviceId: String) {
+        val dao = FocusGateDatabase.get(context).usageEventDao()
+        val lastId = AgentPreferences.getLastSyncedUsageId(context)
+        val pending = runBlocking { dao.unsynced(lastId, 50) }
+        if (pending.isEmpty()) return
+
+        val pm = context.packageManager
+        client.pushUsageBatch(
+            apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
+            accessToken = token,
+            deviceId = deviceId,
+            events = pending,
+            labelLookup = { pkg ->
+                runCatching {
+                    val info = pm.getApplicationInfo(pkg, 0)
+                    pm.getApplicationLabel(info).toString()
+                }.getOrNull()
+            },
+        )
+        AgentPreferences.setLastSyncedUsageId(context, pending.maxOf { it.id })
     }
 
     fun completeTaskAndSync(

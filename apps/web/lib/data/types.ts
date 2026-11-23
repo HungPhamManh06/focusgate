@@ -38,6 +38,7 @@ export interface Task {
   estimatedMinutes: number;
   requiredFocusMinutes: number;
   dueDate: string | null;
+  isDailyHabit?: boolean;
   status: TaskStatus;
   completedAt: string | null;
   createdAt: string;
@@ -158,6 +159,7 @@ export interface Statistics {
   openTasks: number;
   completionRate: number;
   entertainmentMinutes: number;
+  blockedAttempts?: number;
   validRate: number;
   bestDay: DayPoint | null;
 }

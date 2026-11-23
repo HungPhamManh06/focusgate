@@ -1,8 +1,13 @@
 package com.focusgate.app.policy
 
+import com.focusgate.app.data.UsageEvent
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 data class RemotePolicySnapshot(
     val pulledAtUtc: String,
@@ -387,6 +392,47 @@ class RemoteAgentSyncClient(
             throw IOException(parseErrorMessage(body, "Could not complete task ($code)"))
         }
         return parsePlanSnapshot(body)
+    }
+
+    fun pushUsageBatch(
+        apiBaseUrl: String,
+        accessToken: String,
+        deviceId: String,
+        events: List<UsageEvent>,
+        labelLookup: (String) -> String?,
+    ) {
+        if (events.isEmpty()) return
+        val base = apiBaseUrl.trimEnd('/')
+        val conn = (URL("$base/api/agent/usage").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+        }
+
+        val itemsJson = events.joinToString(",") { evt ->
+            val endedAt = evt.endedAt ?: evt.startedAt
+            val durationSeconds = ((endedAt - evt.startedAt) / 1000L).coerceIn(0L, 86_400L)
+            val clientEventId = "android-${deviceId.take(8)}-${evt.id}"
+            val label = labelLookup(evt.packageName) ?: evt.packageName
+            """{"clientEventId":${quoteJson(clientEventId)},"identifier":${quoteJson(evt.packageName)},"displayName":${quoteJson(label)},"startedAt":${quoteJson(formatIsoUtc(evt.startedAt))},"endedAt":${quoteJson(formatIsoUtc(endedAt))},"durationSeconds":$durationSeconds,"wasBlocked":${evt.blocked}}"""
+        }
+        val payload = """{"deviceId":${quoteJson(deviceId)},"events":[$itemsJson]}"""
+        conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+        val code = conn.responseCode
+        val body = readResponseBody(conn, code)
+        if (code == 401) throw UnauthorizedApiException()
+        if (code !in 200..299) {
+            throw IOException(parseErrorMessage(body, "Usage sync failed ($code)"))
+        }
+    }
+
+    private fun formatIsoUtc(epochMs: Long): String {
+        val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        fmt.timeZone = TimeZone.getTimeZone("UTC")
+        return fmt.format(Date(epochMs))
     }
 
     private fun parseAuthSession(body: String, fallbackEmail: String): SupabaseAuthSession {

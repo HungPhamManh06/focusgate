@@ -18,6 +18,7 @@ import {
   completePlanAction,
   confirmAndActivatePlanAction,
   createPlanAction,
+  populateTodayHabitsAction,
 } from "@/lib/actions/planner";
 import { claimRewardAction } from "@/lib/actions/rewards";
 import { ActionButton } from "@/components/ui/action-button";
@@ -150,9 +151,16 @@ export default async function PlannerPage() {
                 A plan turns intention into a gate: every must-do needs real focus, and finishing the
                 day is what unlocks your reward minutes.
               </p>
-              <div className="mt-6">
+              <div className="mt-6 flex flex-wrap gap-2.5">
                 <ActionButton action={createPlanAction} variant="accent" size="lg">
                   <Sparkles className="size-4" /> Create today&apos;s plan
+                </ActionButton>
+                <ActionButton
+                  action={populateTodayHabitsAction.bind(null, null)}
+                  variant="outline"
+                  size="lg"
+                >
+                  <History className="size-4" /> Load habits / copy yesterday
                 </ActionButton>
               </div>
             </div>
@@ -260,13 +268,20 @@ export default async function PlannerPage() {
 
               {plan.status === "draft" ? (
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <CardTitle>Add from backlog</CardTitle>
                       <p className="mt-1 text-[12px] text-muted">
                         {backlog.length} open task{backlog.length === 1 ? "" : "s"} not in this plan.
                       </p>
                     </div>
+                    <ActionButton
+                      action={populateTodayHabitsAction.bind(null, plan.id)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <History className="size-3.5" /> Load habits / yesterday
+                    </ActionButton>
                   </CardHeader>
                   <CardContent className="pt-4">
                     <AddPlanTask planId={plan.id} tasks={backlog} timezone={timezone} />

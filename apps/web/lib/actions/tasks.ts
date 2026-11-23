@@ -27,6 +27,7 @@ function toInput(values: TaskFormValues): TaskInput {
     estimatedMinutes: values.estimatedMinutes,
     requiredFocusMinutes: values.requiredFocusMinutes,
     dueDate: dateInputToIso(values.dueDate),
+    isDailyHabit: Boolean(values.isDailyHabit),
   };
 }
 
@@ -40,6 +41,7 @@ function readForm(formData: FormData) {
     estimatedMinutes: formData.get("estimatedMinutes") ?? 25,
     requiredFocusMinutes: formData.get("requiredFocusMinutes") ?? 20,
     dueDate: formData.get("dueDate") ?? "",
+    isDailyHabit: formData.get("isDailyHabit") === "on",
   };
 }
 

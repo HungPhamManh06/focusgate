@@ -107,7 +107,11 @@ export default async function StatisticsPage({
         <StatCard
           label="Entertainment"
           value={formatMinutes(stats.entertainmentMinutes)}
-          hint="Paid for with earned minutes"
+          hint={
+            (stats.blockedAttempts ?? 0) > 0
+              ? `${stats.blockedAttempts} blocked attempt${stats.blockedAttempts === 1 ? "" : "s"}`
+              : "Paid for with earned minutes"
+          }
           icon={TrendingDown}
           tone="warning"
         />
