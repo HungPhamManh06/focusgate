@@ -20,6 +20,30 @@ export function FocusSoundscape() {
   const gainRef = useRef<GainNode | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
+  const stopAllAudio = () => {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    if (gainRef.current) {
+      try {
+        gainRef.current.gain.value = 0;
+        gainRef.current.disconnect();
+      } catch {
+        // ignore
+      }
+      gainRef.current = null;
+    }
+    if (ctxRef.current) {
+      const ctx = ctxRef.current;
+      ctxRef.current = null;
+      try {
+        void ctx.suspend();
+        void ctx.close();
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   useEffect(() => {
     if (gainRef.current) {
       gainRef.current.gain.value = volume;
@@ -27,15 +51,14 @@ export function FocusSoundscape() {
   }, [volume]);
 
   useEffect(() => {
-    cleanupRef.current?.();
-    cleanupRef.current = null;
+    stopAllAudio();
 
     if (preset === "off") return;
 
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
 
-    const ctx = ctxRef.current ?? new AudioCtx();
+    const ctx = new AudioCtx();
     ctxRef.current = ctx;
     if (ctx.state === "suspended") {
       void ctx.resume();
@@ -117,8 +140,7 @@ export function FocusSoundscape() {
     }
 
     return () => {
-      cleanupRef.current?.();
-      cleanupRef.current = null;
+      stopAllAudio();
     };
   }, [preset]);
 
@@ -152,7 +174,10 @@ export function FocusSoundscape() {
           <button
             key={item.id}
             type="button"
-            onClick={() => setPreset(item.id)}
+            onClick={() => {
+              if (item.id === "off") stopAllAudio();
+              setPreset(item.id);
+            }}
             className={cn(
               "rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
               preset === item.id
