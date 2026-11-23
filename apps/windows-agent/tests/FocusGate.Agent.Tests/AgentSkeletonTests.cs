@@ -84,6 +84,31 @@ public sealed class AgentSkeletonTests : IDisposable
     }
 
     [Fact]
+    public void StructuredLogger_FallsBackWithoutThrowingWhenPrimaryLogIsLocked()
+    {
+        var logDir = Path.Combine(_tempDir, "locked-logs");
+        Directory.CreateDirectory(logDir);
+        var logger = new StructuredLogger(logDir);
+
+        // Simulate another process holding an exclusive lock on today's log file.
+        using var lockStream = new FileStream(
+            logger.CurrentLogFilePath,
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None);
+
+        var ex = Record.Exception(() => logger.Info("agent.heartbeat", "Fallback write test."));
+        Assert.Null(ex);
+
+        var fallbackPath = Path.Combine(
+            logDir,
+            $"agent-{DateTimeOffset.UtcNow:yyyy-MM-dd}-pid{Environment.ProcessId}.jsonl");
+        Assert.True(File.Exists(fallbackPath));
+        var fallbackLines = File.ReadAllLines(fallbackPath);
+        Assert.Single(fallbackLines);
+    }
+
+    [Fact]
     public async Task AgentSyncClient_RegistersDeviceAndPullsPolicy()
     {
         var seenRequests = new List<(HttpMethod Method, string PathAndQuery, string? Auth)>();

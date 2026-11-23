@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -62,11 +63,56 @@ public sealed class StructuredLogger
 
         var line = JsonSerializer.Serialize(entry, JsonOptions);
 
+        var payload = line + Environment.NewLine;
+
         lock (_gate)
         {
             Directory.CreateDirectory(_logDirectory);
-            File.AppendAllText(CurrentLogFilePath, line + Environment.NewLine);
+            var primaryPath = CurrentLogFilePath;
+            if (TryAppendLine(primaryPath, payload))
+            {
+                return;
+            }
+
+            // Another process may hold an exclusive lock on the shared daily log.
+            // Fall back to a per-process log file so logging never crashes the UI.
+            var fallbackPath = Path.Combine(
+                _logDirectory,
+                $"agent-{DateTimeOffset.UtcNow:yyyy-MM-dd}-pid{Environment.ProcessId}.jsonl");
+            TryAppendLine(fallbackPath, payload);
         }
+    }
+
+    private static bool TryAppendLine(string path, string payload)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                using var stream = new FileStream(
+                    path,
+                    FileMode.Append,
+                    FileAccess.Write,
+                    FileShare.ReadWrite);
+                using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                writer.Write(payload);
+                return true;
+            }
+            catch (IOException) when (attempt < 2)
+            {
+                Thread.Sleep(15 * (attempt + 1));
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     private sealed record LogEntry(
