@@ -130,6 +130,51 @@ public sealed class AgentSyncClient : IDisposable
         return result ?? throw new InvalidDataException("Empty usage upload response.");
     }
 
+    public async Task<SupabaseAuthResult> SignInWithPasswordAsync(
+        string supabaseUrl,
+        string anonKey,
+        string email,
+        string password,
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri = NormalizeBaseUrl(supabaseUrl);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            new Uri(baseUri, "/auth/v1/token?grant_type=password"));
+        request.Headers.TryAddWithoutValidation("apikey", anonKey);
+        request.Content = JsonContent.Create(new
+        {
+            email,
+            password,
+        });
+
+        using var response = await _http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Supabase sign-in failed ({(int)response.StatusCode}): {body}",
+                null,
+                response.StatusCode);
+        }
+
+        using var doc = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("access_token", out var accessTokenEl) ||
+            string.IsNullOrWhiteSpace(accessTokenEl.GetString()))
+        {
+            throw new InvalidDataException("Supabase sign-in response missing access_token.");
+        }
+
+        var accessToken = accessTokenEl.GetString()!;
+        var refreshToken = root.TryGetProperty("refresh_token", out var refreshEl)
+            ? refreshEl.GetString()
+            : null;
+        return new SupabaseAuthResult(accessToken, refreshToken);
+    }
+
     private static Uri NormalizeBaseUrl(string apiBaseUrl)
     {
         if (!Uri.TryCreate(apiBaseUrl.Trim(), UriKind.Absolute, out var uri) ||
@@ -149,3 +194,5 @@ public sealed class AgentSyncClient : IDisposable
         }
     }
 }
+
+public sealed record SupabaseAuthResult(string AccessToken, string? RefreshToken);

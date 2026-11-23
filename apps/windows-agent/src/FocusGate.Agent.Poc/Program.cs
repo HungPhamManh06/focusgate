@@ -175,10 +175,33 @@ internal static class Program
         var deviceName = string.IsNullOrWhiteSpace(options.DeviceName)
             ? Environment.MachineName
             : options.DeviceName.Trim();
-        var token = options.AccessToken ?? "local-dev-token";
 
         try
         {
+            string token;
+            string? refreshToken = null;
+            if (!string.IsNullOrWhiteSpace(options.AccessToken))
+            {
+                token = options.AccessToken;
+            }
+            else if (!string.IsNullOrWhiteSpace(options.Email) && !string.IsNullOrWhiteSpace(options.Password))
+            {
+                var auth = syncClient
+                    .SignInWithPasswordAsync(
+                        "https://dyfdeceiszmxozdqugon.supabase.co",
+                        "sb_publishable_TPpxronGIazapp2ylFORIw_ejce1q9C",
+                        options.Email.Trim(),
+                        options.Password)
+                    .GetAwaiter()
+                    .GetResult();
+                token = auth.AccessToken;
+                refreshToken = auth.RefreshToken;
+            }
+            else
+            {
+                token = "local-dev-token";
+            }
+
             var reg = syncClient
                 .RegisterDeviceAsync(options.ApiBaseUrl, token, deviceName, "0.1.0")
                 .GetAwaiter()
@@ -189,7 +212,7 @@ internal static class Program
                 DeviceId: reg.DeviceId,
                 DeviceName: reg.Name,
                 AccessToken: token,
-                RefreshToken: null,
+                RefreshToken: refreshToken,
                 RegisteredAtUtc: DateTimeOffset.UtcNow);
             store.Save(creds);
 

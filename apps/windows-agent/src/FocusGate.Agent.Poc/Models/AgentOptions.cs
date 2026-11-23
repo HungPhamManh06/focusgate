@@ -30,9 +30,11 @@ public sealed class AgentOptions
     public string PolicyPath { get; init; } = "poc-policy.json";
     public string DatabasePath { get; init; } =
         Path.Combine("agent-poc-data", "focusgate-poc.db");
-    public string ApiBaseUrl { get; init; } = "http://localhost:3000";
+    public string ApiBaseUrl { get; init; } = "https://focusgate-blue.vercel.app";
     public string? DeviceName { get; init; }
     public string? AccessToken { get; init; }
+    public string? Email { get; init; }
+    public string? Password { get; init; }
 
     public static AgentOptions Parse(string[] args)
     {
@@ -41,9 +43,11 @@ public sealed class AgentOptions
         var seconds = 20;
         var policy = "poc-policy.json";
         var database = Path.Combine("agent-poc-data", "focusgate-poc.db");
-        var apiUrl = Environment.GetEnvironmentVariable("FOCUSGATE_API_URL") ?? "http://localhost:3000";
+        var apiUrl = Environment.GetEnvironmentVariable("FOCUSGATE_API_URL") ?? "https://focusgate-blue.vercel.app";
         string? deviceName = null;
         string? accessToken = null;
+        string? email = null;
+        string? password = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -97,6 +101,12 @@ public sealed class AgentOptions
                 case "--token":
                     accessToken = ReadValue(args, ref i, arg);
                     break;
+                case "--email":
+                    email = ReadValue(args, ref i, arg);
+                    break;
+                case "--password":
+                    password = ReadValue(args, ref i, arg);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown argument: {arg}");
             }
@@ -112,6 +122,8 @@ public sealed class AgentOptions
             ApiBaseUrl = apiUrl,
             DeviceName = deviceName,
             AccessToken = accessToken,
+            Email = email,
+            Password = password,
         };
     }
 
@@ -134,8 +146,10 @@ public sealed class AgentOptions
               --tray                      Start the Phase 1.4 system tray agent shell.
               --register                  Register this device and store DPAPI credentials.
               --status                    Print DPAPI credential & registration status.
-              --api-url <url>             Web API origin (default http://localhost:3000).
-              --token <jwt>               Bearer token used with --register (optional in local mode).
+              --api-url <url>             Web API origin (default https://focusgate-blue.vercel.app).
+              --email <email>             Supabase account email used with --register.
+              --password <password>       Supabase account password used with --register.
+              --token <jwt>               Bearer token used with --register (optional if --email/--password set).
               --device-name <name>        Override local device name.
               -h, --help                  This text.
 
