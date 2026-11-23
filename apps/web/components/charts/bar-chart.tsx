@@ -9,20 +9,37 @@ export interface BarPoint {
   value: number;
 }
 
+export type BarChartUnit = "minutes" | "steps" | "kcal" | "kg10";
+
+function formatByUnit(value: number, unit: BarChartUnit): string {
+  switch (unit) {
+    case "steps":
+      return `${value.toLocaleString()} steps`;
+    case "kcal":
+      return `${value} kcal`;
+    case "kg10":
+      return `${(value / 10).toFixed(1)} kg`;
+    default:
+      return formatMinutes(value);
+  }
+}
+
 export function BarChart({
   data,
   tone = "accent",
+  unit = "minutes",
   formatValue,
   emptyLabel = "No data in this period yet.",
   height = 176,
 }: {
   data: BarPoint[];
   tone?: "accent" | "ink";
+  unit?: BarChartUnit;
   formatValue?: (value: number) => string;
   emptyLabel?: string;
   height?: number;
 }) {
-  const renderValue = formatValue ?? formatMinutes;
+  const renderValue = formatValue ?? ((value: number) => formatByUnit(value, unit));
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const max = Math.max(...data.map((point) => point.value), 1);
   const hasData = data.some((point) => point.value > 0);
@@ -85,7 +102,7 @@ export function BarChart({
                   >
                     <div
                       className={cn(
-                        "w-full rounded-t-[3px] transition-colors",
+                        "mx-auto w-full max-w-[48px] rounded-t-[3px] transition-colors",
                         point.value > 0
                           ? tone === "accent"
                             ? isActive

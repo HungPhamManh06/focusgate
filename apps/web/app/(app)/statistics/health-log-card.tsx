@@ -314,6 +314,15 @@ export function HealthLogCard({
             <BarChart
               data={chartPoints}
               tone={chartMetric === "weight" || chartMetric === "calories" ? "ink" : "accent"}
+              unit={
+                chartMetric === "steps"
+                  ? "steps"
+                  : chartMetric === "calories"
+                    ? "kcal"
+                    : chartMetric === "weight"
+                      ? "kg10"
+                      : "minutes"
+              }
               height={130}
               emptyLabel="Log health entries to see trends."
             />
