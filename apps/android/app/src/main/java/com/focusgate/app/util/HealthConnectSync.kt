@@ -9,7 +9,9 @@ import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.AggregateRequest
+import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -59,20 +61,28 @@ object HealthConnectSync {
             val day = today.minusDays(offset)
             val start = day.atStartOfDay(zone).toInstant()
             val end = day.plusDays(1).atStartOfDay(zone).toInstant()
+            val range = TimeRangeFilter.between(start, end)
 
-            val agg = client.aggregate(
-                AggregateRequest(
-                    metrics = metrics,
-                    timeRangeFilter = TimeRangeFilter.between(start, end),
-                ),
-            )
+            val agg = client.aggregate(AggregateRequest(metrics = metrics, timeRangeFilter = range))
 
-            val steps = if (STEPS_PERM in granted) (agg[StepsRecord.COUNT_TOTAL] ?: 0L).toInt() else 0
-            val sleepMinutes = if (SLEEP_PERM in granted) {
+            var steps = if (STEPS_PERM in granted) (agg[StepsRecord.COUNT_TOTAL] ?: 0L).toInt() else 0
+            if (steps == 0 && STEPS_PERM in granted) {
+                val rawSteps = client.readRecords(ReadRecordsRequest(StepsRecord::class, timeRangeFilter = range))
+                steps = rawSteps.records.sumOf { it.count }.toInt()
+            }
+
+            var sleepMinutes = if (SLEEP_PERM in granted) {
                 ((agg[SleepSessionRecord.SLEEP_DURATION_TOTAL]?.toMinutes()) ?: 0L).toInt()
             } else {
                 0
             }
+            if (sleepMinutes == 0 && SLEEP_PERM in granted) {
+                val rawSleep = client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, timeRangeFilter = range))
+                sleepMinutes = rawSleep.records.sumOf {
+                    Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0L)
+                }.toInt()
+            }
+
             val avgHr = if (HR_PERM in granted) agg[HeartRateRecord.BPM_AVG]?.toInt() else null
             val calories = if (CAL_PERM in granted) {
                 (agg[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0).toInt()
