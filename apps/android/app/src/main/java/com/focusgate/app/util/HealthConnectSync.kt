@@ -2,6 +2,7 @@ package com.focusgate.app.util
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -21,26 +22,35 @@ data class DailyHealthMetricUpload(
 )
 
 object HealthConnectSync {
-    val PERMISSIONS: Set<String> = setOf(
-        HealthPermission.getReadPermission(StepsRecord::class),
-        HealthPermission.getReadPermission(SleepSessionRecord::class),
-        HealthPermission.getReadPermission(HeartRateRecord::class),
-        HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
-    )
+    private val STEPS_PERM = HealthPermission.getReadPermission(StepsRecord::class)
+    private val SLEEP_PERM = HealthPermission.getReadPermission(SleepSessionRecord::class)
+    private val HR_PERM = HealthPermission.getReadPermission(HeartRateRecord::class)
+    private val CAL_PERM = HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class)
+
+    val PERMISSIONS: Set<String> = setOf(STEPS_PERM, SLEEP_PERM, HR_PERM, CAL_PERM)
 
     fun isAvailable(context: Context): Boolean =
         HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE
 
-    suspend fun hasAllPermissions(context: Context): Boolean {
+    suspend fun hasAnyPermission(context: Context): Boolean {
         if (!isAvailable(context)) return false
         val client = HealthConnectClient.getOrCreate(context)
         val granted = client.permissionController.getGrantedPermissions()
-        return granted.containsAll(PERMISSIONS)
+        return PERMISSIONS.any { it in granted }
     }
 
     suspend fun readLast7Days(context: Context): List<DailyHealthMetricUpload> {
-        if (!hasAllPermissions(context)) return emptyList()
+        if (!isAvailable(context)) return emptyList()
         val client = HealthConnectClient.getOrCreate(context)
+        val granted = client.permissionController.getGrantedPermissions()
+
+        val metrics = mutableSetOf<AggregateMetric<*>>()
+        if (STEPS_PERM in granted) metrics.add(StepsRecord.COUNT_TOTAL)
+        if (SLEEP_PERM in granted) metrics.add(SleepSessionRecord.SLEEP_DURATION_TOTAL)
+        if (HR_PERM in granted) metrics.add(HeartRateRecord.BPM_AVG)
+        if (CAL_PERM in granted) metrics.add(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)
+        if (metrics.isEmpty()) return emptyList()
+
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val results = mutableListOf<DailyHealthMetricUpload>()
@@ -52,20 +62,23 @@ object HealthConnectSync {
 
             val agg = client.aggregate(
                 AggregateRequest(
-                    metrics = setOf(
-                        StepsRecord.COUNT_TOTAL,
-                        SleepSessionRecord.SLEEP_DURATION_TOTAL,
-                        HeartRateRecord.BPM_AVG,
-                        ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
-                    ),
+                    metrics = metrics,
                     timeRangeFilter = TimeRangeFilter.between(start, end),
                 ),
             )
 
-            val steps = (agg[StepsRecord.COUNT_TOTAL] ?: 0L).toInt()
-            val sleepMinutes = ((agg[SleepSessionRecord.SLEEP_DURATION_TOTAL]?.toMinutes()) ?: 0L).toInt()
-            val avgHr = agg[HeartRateRecord.BPM_AVG]?.toInt()
-            val calories = (agg[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0).toInt()
+            val steps = if (STEPS_PERM in granted) (agg[StepsRecord.COUNT_TOTAL] ?: 0L).toInt() else 0
+            val sleepMinutes = if (SLEEP_PERM in granted) {
+                ((agg[SleepSessionRecord.SLEEP_DURATION_TOTAL]?.toMinutes()) ?: 0L).toInt()
+            } else {
+                0
+            }
+            val avgHr = if (HR_PERM in granted) agg[HeartRateRecord.BPM_AVG]?.toInt() else null
+            val calories = if (CAL_PERM in granted) {
+                (agg[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0).toInt()
+            } else {
+                0
+            }
 
             if (steps > 0 || sleepMinutes > 0 || avgHr != null || calories > 0) {
                 results.add(

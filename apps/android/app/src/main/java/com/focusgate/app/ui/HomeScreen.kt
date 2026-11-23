@@ -152,10 +152,11 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var soundscapePlaying by remember { mutableStateOf(FocusSoundscapePlayer.isPlaying()) }
     var earnedMinutesBalance by remember { mutableStateOf(AgentPreferences.getEarnedMinutesBalance(context)) }
     var healthGranted by remember { mutableStateOf(false) }
+    var healthStatusText by remember { mutableStateOf<String?>(null) }
     val healthAvailable = remember { HealthConnectSync.isAvailable(context) }
 
     LaunchedEffect(Unit) {
-        healthGranted = runCatching { HealthConnectSync.hasAllPermissions(context) }.getOrDefault(false)
+        healthGranted = runCatching { HealthConnectSync.hasAnyPermission(context) }.getOrDefault(false)
     }
 
     fun syncPlanFromWeb() {
@@ -180,9 +181,14 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     val healthPermissionLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract(),
     ) { granted ->
-        healthGranted = granted.containsAll(HealthConnectSync.PERMISSIONS)
+        healthGranted = granted.any { it in HealthConnectSync.PERMISSIONS }
         if (healthGranted) {
-            syncPlanFromWeb()
+            scope.launch {
+                healthStatusText = withContext(Dispatchers.IO) {
+                    runCatching { PlanSyncManager.syncHealthNow(context) }
+                        .getOrElse { it.message ?: "Health sync failed" }
+                }
+            }
         }
     }
 
@@ -973,9 +979,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 Column(Modifier.weight(1f)) {
                                     Text("Mi Band 10 · Health Connect")
                                     Text(
-                                        when {
+                                        healthStatusText ?: when {
                                             !healthAvailable -> "Install Health Connect on Android"
-                                            healthGranted -> "Connected · syncs steps, sleep & HR"
+                                            healthGranted -> "Connected · tap Sync Health to upload"
                                             else -> "Grant permission to sync Mi Fitness data"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
@@ -989,6 +995,21 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                         },
                                     ) {
                                         Text("Connect")
+                                    }
+                                } else if (healthAvailable && healthGranted) {
+                                    OutlinedButton(
+                                        enabled = !planSyncBusy,
+                                        onClick = {
+                                            scope.launch {
+                                                healthStatusText = "Syncing health..."
+                                                healthStatusText = withContext(Dispatchers.IO) {
+                                                    runCatching { PlanSyncManager.syncHealthNow(context) }
+                                                        .getOrElse { it.message ?: "Health sync failed" }
+                                                }
+                                            }
+                                        },
+                                    ) {
+                                        Text("Sync Health")
                                     }
                                 }
                             }
