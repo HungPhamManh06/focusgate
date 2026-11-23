@@ -54,7 +54,20 @@ object PlanSyncManager {
             updateWidgetState(context, planSnapshot, unlocked)
             runCatching { pushPendingUsage(context, token, deviceId) }
             runCatching { pushLocalRules(context, token, deviceId) }
+            runCatching { pushHealthMetricsIfPermitted(context, token, deviceId) }
             planSnapshot.copy(unlocked = unlocked)
+        }
+    }
+
+    private fun pushHealthMetricsIfPermitted(context: Context, token: String, deviceId: String) {
+        val metrics = runBlocking { HealthConnectSync.readLast7Days(context) }
+        if (metrics.isNotEmpty()) {
+            client.pushHealthMetrics(
+                apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
+                accessToken = token,
+                deviceId = deviceId,
+                metrics = metrics,
+            )
         }
     }
 

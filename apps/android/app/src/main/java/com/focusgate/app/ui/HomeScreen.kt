@@ -1,6 +1,8 @@
 package com.focusgate.app.ui
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.health.connect.client.PermissionController
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,6 +74,7 @@ import com.focusgate.app.service.AppUsageMonitorService
 import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.FocusSoundscapePlayer
+import com.focusgate.app.util.HealthConnectSync
 import com.focusgate.app.util.PermissionChecks
 import com.focusgate.app.util.PlanSyncManager
 import com.focusgate.app.util.ProtectionWatchdog
@@ -148,6 +151,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var settingsGuardEnabled by remember { mutableStateOf(AgentPreferences.isSettingsGuardEnabled(context)) }
     var soundscapePlaying by remember { mutableStateOf(FocusSoundscapePlayer.isPlaying()) }
     var earnedMinutesBalance by remember { mutableStateOf(AgentPreferences.getEarnedMinutesBalance(context)) }
+    var healthGranted by remember { mutableStateOf(false) }
+    val healthAvailable = remember { HealthConnectSync.isAvailable(context) }
+
+    LaunchedEffect(Unit) {
+        healthGranted = runCatching { HealthConnectSync.hasAllPermissions(context) }.getOrDefault(false)
+    }
 
     fun syncPlanFromWeb() {
         if (AgentPreferences.getAccessToken(context) == null || planSyncBusy) return
@@ -165,6 +174,15 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
             } finally {
                 planSyncBusy = false
             }
+        }
+    }
+
+    val healthPermissionLauncher = rememberLauncherForActivityResult(
+        contract = PermissionController.createRequestPermissionResultContract(),
+    ) { granted ->
+        healthGranted = granted.containsAll(HealthConnectSync.PERMISSIONS)
+        if (healthGranted) {
+            syncPlanFromWeb()
         }
     }
 
@@ -944,6 +962,34 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                     },
                                 ) {
                                     Text("Use 10m Pass")
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Mi Band 10 · Health Connect")
+                                    Text(
+                                        when {
+                                            !healthAvailable -> "Install Health Connect on Android"
+                                            healthGranted -> "Connected · syncs steps, sleep & HR"
+                                            else -> "Grant permission to sync Mi Fitness data"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (healthAvailable && !healthGranted) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            healthPermissionLauncher.launch(HealthConnectSync.PERMISSIONS)
+                                        },
+                                    ) {
+                                        Text("Connect")
+                                    }
                                 }
                             }
                         }
