@@ -67,13 +67,21 @@ function mapSettingsRow(row: Record<string, unknown> | null | undefined): V2Sett
 export async function getV2Settings(request?: Request): Promise<V2Settings> {
   const ctx = await getSupabaseContext(request);
   if (ctx) {
-    const { data, error } = await ctx.supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", ctx.userId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    return mapSettingsRow(data as Record<string, unknown> | null);
+    try {
+      const { data, error } = await ctx.supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", ctx.userId)
+        .maybeSingle();
+      if (error) {
+        console.error("[v2-settings] getV2Settings failed:", error.message);
+        return mapSettingsRow(null);
+      }
+      return mapSettingsRow(data as Record<string, unknown> | null);
+    } catch (err) {
+      console.error("[v2-settings] getV2Settings exception:", err);
+      return mapSettingsRow(null);
+    }
   }
 
   return withUser(async (db) => {
@@ -320,29 +328,37 @@ export async function upsertDiscoveredApps(
 export async function listDiscoveredApps(): Promise<DiscoveredAppRecord[]> {
   const ctx = await getSupabaseContext();
   if (ctx) {
-    const rows = unwrapSupabase(
-      await ctx.supabase
+    try {
+      const { data, error } = await ctx.supabase
         .from("device_discovered_apps")
         .select("id, device_id, identifier, display_name, platform, last_seen_at")
         .eq("user_id", ctx.userId)
         .order("display_name", { ascending: true })
-        .limit(150),
-    ) as Array<{
-      id: string;
-      device_id: string;
-      identifier: string;
-      display_name: string;
-      platform: string;
-      last_seen_at: string;
-    }>;
-    return rows.map((r) => ({
-      id: r.id,
-      deviceId: r.device_id,
-      identifier: r.identifier,
-      displayName: r.display_name,
-      platform: r.platform,
-      lastSeenAt: toIso(r.last_seen_at) ?? new Date().toISOString(),
-    }));
+        .limit(150);
+      if (error) {
+        console.error("[v2-settings] listDiscoveredApps failed:", error.message);
+        return [];
+      }
+      const rows = (data ?? []) as Array<{
+        id: string;
+        device_id: string;
+        identifier: string;
+        display_name: string;
+        platform: string;
+        last_seen_at: string;
+      }>;
+      return rows.map((r) => ({
+        id: r.id,
+        deviceId: r.device_id,
+        identifier: r.identifier,
+        displayName: r.display_name,
+        platform: r.platform,
+        lastSeenAt: toIso(r.last_seen_at) ?? new Date().toISOString(),
+      }));
+    } catch (err) {
+      console.error("[v2-settings] listDiscoveredApps exception:", err);
+      return [];
+    }
   }
 
   return withUser(async (db) => {
