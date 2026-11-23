@@ -2,6 +2,7 @@ package com.focusgate.app.ui
 
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -189,6 +190,14 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         .getOrElse { it.message ?: "Health sync failed" }
                 }
             }
+        } else {
+            healthStatusText = "No permissions granted. Opening Health Connect settings..."
+            runCatching {
+                context.startActivity(
+                    Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
         }
     }
 
@@ -297,6 +306,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         notificationsGranted = PermissionChecks.hasNotificationPermission(context)
         val prevEssential = deviceEssential
         scope.launch {
+            healthGranted = runCatching { HealthConnectSync.hasAnyPermission(context) }.getOrDefault(false)
             val outcome = withContext(Dispatchers.IO) { coordinator.auditCurrentPolicy() }
             applyOutcome(outcome)
             if (outcome.state.deviceEssential != prevEssential) {
@@ -991,7 +1001,19 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 if (healthAvailable && !healthGranted) {
                                     OutlinedButton(
                                         onClick = {
-                                            healthPermissionLauncher.launch(HealthConnectSync.PERMISSIONS)
+                                            healthStatusText = "Requesting Health Connect access..."
+                                            try {
+                                                healthPermissionLauncher.launch(HealthConnectSync.PERMISSIONS)
+                                            } catch (_: Throwable) {
+                                                runCatching {
+                                                    context.startActivity(
+                                                        Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS)
+                                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                                    )
+                                                }.onFailure {
+                                                    healthStatusText = "Could not open Health Connect: ${it.message}"
+                                                }
+                                            }
                                         },
                                     ) {
                                         Text("Connect")
