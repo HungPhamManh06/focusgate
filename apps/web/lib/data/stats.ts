@@ -18,6 +18,7 @@ interface DayRow {
 }
 
 function localHourInTimezone(timezone: string, date: Date): number {
+  if (Number.isNaN(date.getTime())) return 0;
   const formatted = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     hour12: false,
@@ -83,13 +84,13 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     const [focusRes, taskRes, usageRes, v2] = await Promise.all([
       ctx.supabase
         .from("focus_sessions")
-        .select("started_at, credited_minutes, is_valid, tasks(category)")
+        .select("started_at, credited_minutes, is_valid, task_id")
         .eq("user_id", ctx.userId)
         .eq("status", "completed")
         .gte("started_at", cutoffIso),
       ctx.supabase
         .from("tasks")
-        .select("status, completed_at")
+        .select("id, status, completed_at, category")
         .eq("user_id", ctx.userId)
         .in("status", ["todo", "in_progress", "completed"]),
       ctx.supabase
@@ -104,17 +105,24 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       started_at: string;
       credited_minutes: number;
       is_valid: boolean;
-      tasks: { category: string } | Array<{ category: string }> | null;
+      task_id: string | null;
     }>;
     const taskRows = unwrapSupabase(taskRes) as Array<{
+      id: string;
       status: string;
       completed_at: string | null;
+      category: string | null;
     }>;
     const usageRows = unwrapSupabase(usageRes) as Array<{
       started_at: string;
       duration_seconds: number;
       was_blocked: boolean;
     }>;
+
+    const taskCategoryById = new Map<string, string>();
+    for (const t of taskRows) {
+      if (t.id && t.category) taskCategoryById.set(t.id, t.category);
+    }
 
     const dayMap = new Map<string, { focus: number; tasks: number; usageSeconds: number }>();
     for (const key of dayKeys) {
@@ -142,8 +150,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
         if (bucket) bucket.focus += row.credited_minutes;
         const h = localHourInTimezone(timezone, started);
         hourlyBuckets[h]!.focusMinutes += row.credited_minutes;
-        const catObj = Array.isArray(row.tasks) ? row.tasks[0] : row.tasks;
-        const category = catObj?.category ?? "free_focus";
+        const category = (row.task_id ? taskCategoryById.get(row.task_id) : undefined) ?? "free_focus";
         categoryTotals.set(category, (categoryTotals.get(category) ?? 0) + row.credited_minutes);
       }
     }
