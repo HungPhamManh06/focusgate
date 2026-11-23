@@ -12,7 +12,7 @@ public sealed class DesktopAppForm : Form
     private readonly Func<Task> _onSyncNow;
     private readonly Action<EnforcementAction?> _onEnforcementChanged;
     private readonly Label _statusLabel;
-    private readonly ComboBox _enforceBox;
+    private readonly Button _enforceBtn;
     private readonly WebView2 _webView;
     private string? _lastBridgedToken;
     private bool _allowClose;
@@ -40,28 +40,31 @@ public sealed class DesktopAppForm : Form
         var topBar = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 48,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(0, 56),
             ColumnCount = 2,
             RowCount = 1,
             BackColor = Color.FromArgb(20, 18, 18),
-            Padding = new Padding(12, 6, 12, 6),
+            Padding = new Padding(14, 10, 14, 10),
         };
         topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         topBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        topBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        topBar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var leftPanel = new Panel
         {
             Dock = DockStyle.Fill,
+            MinimumSize = new Size(0, 34),
             Margin = Padding.Empty,
         };
 
         var logoBox = new PictureBox
         {
-            Image = FocusGateBrand.CreateLogoBitmap(24),
+            Image = FocusGateBrand.CreateLogoBitmap(28),
             SizeMode = PictureBoxSizeMode.Zoom,
-            Width = 22,
-            Height = 22,
+            Width = 24,
+            Height = 24,
             Dock = DockStyle.Left,
             Margin = new Padding(0, 4, 8, 4),
         };
@@ -86,51 +89,58 @@ public sealed class DesktopAppForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Dock = DockStyle.Fill,
+            Anchor = AnchorStyles.Right,
             BackColor = Color.Transparent,
-            Margin = Padding.Empty,
-            Padding = new Padding(8, 1, 0, 1),
+            Margin = new Padding(10, 0, 0, 0),
+            Padding = Padding.Empty,
         };
 
-        _enforceBox = new ComboBox
+        string FormatMode(EnforcementAction? mode) => mode switch
         {
-            DropDownStyle = ComboBoxStyle.DropDownList,
+            EnforcementAction.Terminate => "Block: Terminate ▾",
+            null => "Block: Off ▾",
+            _ => "Block: Overlay ▾",
+        };
+
+        _enforceBtn = new Button
+        {
+            Text = FormatMode(initialEnforcement),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlatStyle = FlatStyle.Flat,
-            Width = 152,
             BackColor = Color.FromArgb(36, 33, 34),
             ForeColor = Color.FromArgb(250, 247, 245),
             Font = new Font("Segoe UI", 9f),
-            Margin = new Padding(0, 3, 8, 3),
+            Padding = new Padding(10, 5, 10, 5),
+            Margin = new Padding(0, 0, 8, 0),
+            Cursor = Cursors.Hand,
         };
-        _enforceBox.Items.AddRange(["Block: Overlay", "Block: Terminate", "Block: Off"]);
-        _enforceBox.SelectedIndex = initialEnforcement switch
+        _enforceBtn.FlatAppearance.BorderSize = 1;
+        _enforceBtn.FlatAppearance.BorderColor = Color.FromArgb(62, 58, 60);
+
+        var modeMenu = new ContextMenuStrip();
+        void SelectMode(EnforcementAction? next)
         {
-            EnforcementAction.Terminate => 1,
-            null => 2,
-            _ => 0,
-        };
-        _enforceBox.SelectedIndexChanged += (_, _) =>
-        {
-            EnforcementAction? next = _enforceBox.SelectedIndex switch
-            {
-                0 => EnforcementAction.Overlay,
-                1 => EnforcementAction.Terminate,
-                _ => null,
-            };
+            _enforceBtn.Text = FormatMode(next);
             _onEnforcementChanged(next);
-        };
+        }
+        modeMenu.Items.Add("Block: Overlay", null, (_, _) => SelectMode(EnforcementAction.Overlay));
+        modeMenu.Items.Add("Block: Terminate", null, (_, _) => SelectMode(EnforcementAction.Terminate));
+        modeMenu.Items.Add("Block: Off", null, (_, _) => SelectMode(null));
+        _enforceBtn.Click += (_, _) => modeMenu.Show(_enforceBtn, new Point(0, _enforceBtn.Height));
 
         var syncBtn = new Button
         {
             Text = "Sync Now",
             AutoSize = true,
-            MinimumSize = new Size(88, 28),
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(220, 38, 38),
             ForeColor = Color.White,
             Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-            Padding = new Padding(8, 2, 8, 2),
-            Margin = new Padding(0, 1, 8, 1),
+            Padding = new Padding(12, 5, 12, 5),
+            Margin = new Padding(0, 0, 8, 0),
+            Cursor = Cursors.Hand,
         };
         syncBtn.FlatAppearance.BorderSize = 0;
         syncBtn.Click += async (_, _) => await _onSyncNow();
@@ -139,18 +149,19 @@ public sealed class DesktopAppForm : Form
         {
             Text = "Minimize to Tray",
             AutoSize = true,
-            MinimumSize = new Size(122, 28),
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(40, 37, 38),
             ForeColor = Color.FromArgb(240, 236, 234),
             Font = new Font("Segoe UI", 9f),
-            Padding = new Padding(8, 2, 8, 2),
-            Margin = new Padding(0, 1, 0, 1),
+            Padding = new Padding(12, 5, 12, 5),
+            Margin = Padding.Empty,
+            Cursor = Cursors.Hand,
         };
         hideBtn.FlatAppearance.BorderSize = 0;
         hideBtn.Click += (_, _) => Hide();
 
-        rightPanel.Controls.Add(_enforceBox);
+        rightPanel.Controls.Add(_enforceBtn);
         rightPanel.Controls.Add(syncBtn);
         rightPanel.Controls.Add(hideBtn);
 
