@@ -101,19 +101,23 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       getV2Settings(),
     ]);
 
-    const focusRows = unwrapSupabase(focusRes) as Array<{
+    if (focusRes.error) console.error("[stats] focus_sessions query failed:", focusRes.error.message);
+    if (taskRes.error) console.error("[stats] tasks query failed:", taskRes.error.message);
+    if (usageRes.error) console.error("[stats] usage_events query failed:", usageRes.error.message);
+
+    const focusRows = (focusRes.data ?? []) as Array<{
       started_at: string;
       credited_minutes: number;
       is_valid: boolean;
       task_id: string | null;
     }>;
-    const taskRows = unwrapSupabase(taskRes) as Array<{
+    const taskRows = (taskRes.data ?? []) as Array<{
       id: string;
       status: string;
       completed_at: string | null;
       category: string | null;
     }>;
-    const usageRows = unwrapSupabase(usageRes) as Array<{
+    const usageRows = (usageRes.data ?? []) as Array<{
       started_at: string;
       duration_seconds: number;
       was_blocked: boolean;
@@ -140,6 +144,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     }));
     for (const row of focusRows) {
       const started = new Date(row.started_at);
+      if (Number.isNaN(started.getTime())) continue;
       const day = localDateInTimezone(timezone, started);
       if (day < startDayKey) continue;
       sessionCount += 1;
@@ -161,7 +166,9 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       if (row.status === "todo" || row.status === "in_progress") {
         openTasks += 1;
       } else if (row.status === "completed" && row.completed_at) {
-        const day = localDateInTimezone(timezone, new Date(row.completed_at));
+        const completed = new Date(row.completed_at);
+        if (Number.isNaN(completed.getTime())) continue;
+        const day = localDateInTimezone(timezone, completed);
         if (day >= startDayKey) {
           completedTasks += 1;
           const bucket = dayMap.get(day);
@@ -174,6 +181,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     let blockedAttempts = 0;
     for (const row of usageRows) {
       const started = new Date(row.started_at);
+      if (Number.isNaN(started.getTime())) continue;
       const day = localDateInTimezone(timezone, started);
       if (day < startDayKey) continue;
       if (row.was_blocked) {
