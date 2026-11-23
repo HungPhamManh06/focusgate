@@ -81,7 +81,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       new Date(`${startDayKey}T00:00:00Z`).getTime() - 86_400_000,
     ).toISOString();
 
-    const [focusRes, taskRes, usageRes, v2] = await Promise.all([
+    const [focusRes, taskRes, usageRes, rulesRes, v2] = await Promise.all([
       ctx.supabase
         .from("focus_sessions")
         .select("started_at, credited_minutes, is_valid, task_id")
@@ -95,9 +95,14 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
         .in("status", ["todo", "in_progress", "completed"]),
       ctx.supabase
         .from("usage_events")
-        .select("started_at, duration_seconds, was_blocked")
+        .select("started_at, duration_seconds, was_blocked, grant_id, identifier")
         .eq("user_id", ctx.userId)
         .gte("started_at", cutoffIso),
+      ctx.supabase
+        .from("block_rules")
+        .select("identifier")
+        .eq("user_id", ctx.userId)
+        .eq("rule_type", "block"),
       getV2Settings(),
     ]);
 
@@ -121,7 +126,14 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       started_at: string;
       duration_seconds: number;
       was_blocked: boolean;
+      grant_id: string | null;
+      identifier: string;
     }>;
+    const blockedIdentifiers = new Set(
+      ((rulesRes.data ?? []) as Array<{ identifier: string }>).map((r) =>
+        r.identifier.trim().toLowerCase(),
+      ),
+    );
 
     const taskCategoryById = new Map<string, string>();
     for (const t of taskRows) {
@@ -188,7 +200,11 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
         blockedAttempts += 1;
         const h = localHourInTimezone(timezone, started);
         hourlyBuckets[h]!.blockedAttempts += 1;
+        continue;
       }
+      const isEntertainment =
+        row.grant_id !== null || blockedIdentifiers.has(row.identifier.trim().toLowerCase());
+      if (!isEntertainment) continue;
       entertainmentSeconds += row.duration_seconds;
       const bucket = dayMap.get(day);
       if (bucket) bucket.usageSeconds += row.duration_seconds;
@@ -275,10 +291,20 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
          group by 1
        ),
        usage as (
-         select (started_at at time zone $2)::date as day,
-                coalesce(sum(duration_seconds), 0)::int as seconds
-         from public.usage_events
-         where user_id = $1
+         select (u.started_at at time zone $2)::date as day,
+                coalesce(sum(u.duration_seconds), 0)::int as seconds
+         from public.usage_events u
+         where u.user_id = $1
+           and not u.was_blocked
+           and (
+             u.grant_id is not null
+             or exists (
+               select 1 from public.block_rules r
+               where r.user_id = u.user_id
+                 and r.rule_type = 'block'
+                 and lower(trim(r.identifier)) = lower(trim(u.identifier))
+             )
+           )
          group by 1
        )
        select to_char(d.day, 'YYYY-MM-DD') as day,
@@ -324,9 +350,19 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
          ), 0)::int as completed_tasks,
          (select count(*) from public.tasks where user_id = $1 and status in ('todo','in_progress'))::int as open_tasks,
          coalesce((
-           select sum(duration_seconds) from public.usage_events
-           where user_id = $1
-             and (started_at at time zone $2)::date >= (now() at time zone $2)::date - ($3::int - 1)
+           select sum(u.duration_seconds) from public.usage_events u
+           where u.user_id = $1
+             and not u.was_blocked
+             and (
+               u.grant_id is not null
+               or exists (
+                 select 1 from public.block_rules r
+                 where r.user_id = u.user_id
+                   and r.rule_type = 'block'
+                   and lower(trim(r.identifier)) = lower(trim(u.identifier))
+               )
+             )
+             and (u.started_at at time zone $2)::date >= (now() at time zone $2)::date - ($3::int - 1)
          ), 0)::int as entertainment_seconds`,
       [LOCAL_USER_ID, timezone, period],
     );
