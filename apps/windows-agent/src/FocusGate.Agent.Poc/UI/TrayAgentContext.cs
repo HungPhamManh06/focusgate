@@ -86,7 +86,7 @@ public sealed class TrayAgentContext : ApplicationContext
 
         _trayIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Shield,
+            Icon = FocusGateBrand.AppIcon,
             Text = "FocusGate Agent",
             ContextMenuStrip = menu,
             Visible = true,

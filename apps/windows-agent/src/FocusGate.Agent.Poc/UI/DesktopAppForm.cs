@@ -34,67 +34,73 @@ public sealed class DesktopAppForm : Form
         Height = 820;
         MinimumSize = new Size(920, 620);
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.FromArgb(17, 19, 24);
-        Icon = SystemIcons.Shield;
+        BackColor = Color.FromArgb(18, 17, 17);
+        Icon = FocusGateBrand.AppIcon;
 
-        var topBar = new Panel
+        var topBar = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 42,
-            BackColor = Color.FromArgb(20, 23, 30),
+            Height = 48,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Color.FromArgb(20, 18, 18),
             Padding = new Padding(12, 6, 12, 6),
+        };
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        topBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+        var leftPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+        };
+
+        var logoBox = new PictureBox
+        {
+            Image = FocusGateBrand.CreateLogoBitmap(24),
+            SizeMode = PictureBoxSizeMode.Zoom,
+            Width = 22,
+            Height = 22,
+            Dock = DockStyle.Left,
+            Margin = new Padding(0, 4, 8, 4),
         };
 
         _statusLabel = new Label
         {
-            Text = "FocusGate PC · Initializing...",
-            ForeColor = Color.FromArgb(228, 232, 240),
+            Text = "  FocusGate PC · Initializing...",
+            ForeColor = Color.FromArgb(250, 247, 245),
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
             AutoSize = false,
+            AutoEllipsis = true,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
         };
 
+        leftPanel.Controls.Add(_statusLabel);
+        leftPanel.Controls.Add(logoBox);
+
         var rightPanel = new FlowLayoutPanel
         {
-            Dock = DockStyle.Right,
-            Width = 430,
-            FlowDirection = FlowDirection.RightToLeft,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
+            Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = new Padding(8, 1, 0, 1),
         };
-
-        var hideBtn = new Button
-        {
-            Text = "Minimize to Tray",
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(36, 40, 52),
-            ForeColor = Color.White,
-            Margin = new Padding(4, 2, 0, 2),
-        };
-        hideBtn.FlatAppearance.BorderSize = 0;
-        hideBtn.Click += (_, _) => Hide();
-
-        var syncBtn = new Button
-        {
-            Text = "Sync Now",
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(63, 102, 235),
-            ForeColor = Color.White,
-            Margin = new Padding(6, 2, 4, 2),
-        };
-        syncBtn.FlatAppearance.BorderSize = 0;
-        syncBtn.Click += async (_, _) => await _onSyncNow();
 
         _enforceBox = new ComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 135,
-            BackColor = Color.FromArgb(30, 34, 44),
-            ForeColor = Color.White,
-            Margin = new Padding(6, 3, 4, 2),
+            FlatStyle = FlatStyle.Flat,
+            Width = 152,
+            BackColor = Color.FromArgb(36, 33, 34),
+            ForeColor = Color.FromArgb(250, 247, 245),
+            Font = new Font("Segoe UI", 9f),
+            Margin = new Padding(0, 3, 8, 3),
         };
         _enforceBox.Items.AddRange(["Block: Overlay", "Block: Terminate", "Block: Off"]);
         _enforceBox.SelectedIndex = initialEnforcement switch
@@ -114,12 +120,42 @@ public sealed class DesktopAppForm : Form
             _onEnforcementChanged(next);
         };
 
-        rightPanel.Controls.Add(hideBtn);
-        rightPanel.Controls.Add(syncBtn);
-        rightPanel.Controls.Add(_enforceBox);
+        var syncBtn = new Button
+        {
+            Text = "Sync Now",
+            AutoSize = true,
+            MinimumSize = new Size(88, 28),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(220, 38, 38),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+            Padding = new Padding(8, 2, 8, 2),
+            Margin = new Padding(0, 1, 8, 1),
+        };
+        syncBtn.FlatAppearance.BorderSize = 0;
+        syncBtn.Click += async (_, _) => await _onSyncNow();
 
-        topBar.Controls.Add(_statusLabel);
-        topBar.Controls.Add(rightPanel);
+        var hideBtn = new Button
+        {
+            Text = "Minimize to Tray",
+            AutoSize = true,
+            MinimumSize = new Size(122, 28),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(40, 37, 38),
+            ForeColor = Color.FromArgb(240, 236, 234),
+            Font = new Font("Segoe UI", 9f),
+            Padding = new Padding(8, 2, 8, 2),
+            Margin = new Padding(0, 1, 0, 1),
+        };
+        hideBtn.FlatAppearance.BorderSize = 0;
+        hideBtn.Click += (_, _) => Hide();
+
+        rightPanel.Controls.Add(_enforceBox);
+        rightPanel.Controls.Add(syncBtn);
+        rightPanel.Controls.Add(hideBtn);
+
+        topBar.Controls.Add(leftPanel, 0, 0);
+        topBar.Controls.Add(rightPanel, 1, 0);
 
         _webView = new WebView2
         {
@@ -146,10 +182,10 @@ public sealed class DesktopAppForm : Form
         if (IsDisposed) return;
         if (InvokeRequired)
         {
-            BeginInvoke(() => _statusLabel.Text = text);
+            BeginInvoke(() => _statusLabel.Text = "  " + text);
             return;
         }
-        _statusLabel.Text = text;
+        _statusLabel.Text = "  " + text;
     }
 
     public void ForceClose()
