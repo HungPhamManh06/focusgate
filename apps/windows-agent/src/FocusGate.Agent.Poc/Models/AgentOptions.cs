@@ -17,6 +17,7 @@ public enum AgentMode
     Monitor,
     WindowProbe,
     Tray,
+    DesktopApp,
     Status,
     Register,
     InstallStartup,
@@ -40,7 +41,7 @@ public sealed class AgentOptions
 
     public static AgentOptions Parse(string[] args)
     {
-        var mode = AgentMode.Help;
+        var mode = args.Length == 0 ? AgentMode.DesktopApp : AgentMode.Help;
         var enforcement = EnforcementAction.Log;
         var seconds = 20;
         var policy = "poc-policy.json";
@@ -87,6 +88,9 @@ public sealed class AgentOptions
                     break;
                 case "--tray":
                     mode = AgentMode.Tray;
+                    break;
+                case "--app":
+                    mode = AgentMode.DesktopApp;
                     break;
                 case "--status":
                     mode = AgentMode.Status;

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using FocusGate.Agent.Poc.Models;
 using FocusGate.Agent.Poc.Monitors;
+using FocusGate.Agent.Poc.Native;
 using FocusGate.Agent.Poc.Services;
 
 namespace FocusGate.Agent.Poc.UI;
@@ -21,9 +22,15 @@ public sealed class TrayAgentContext : ApplicationContext
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _policyItem;
     private readonly System.Windows.Forms.Timer _syncTimer;
+    private readonly System.Windows.Forms.Timer _enforceTimer;
+    private readonly EnforcementEngine _enforcementEngine;
+    private BlockOverlayForm? _overlayForm;
 
     private AgentCredentials? _credentials;
     private AgentPolicySnapshot? _lastPolicy;
+    private DesktopAppForm? _desktopForm;
+    private EnforcementAction? _enforcementMode = EnforcementAction.Overlay;
+    private string? _lastBlockedKey;
 
     public TrayAgentContext(
         AgentOptions options,
@@ -31,7 +38,8 @@ public sealed class TrayAgentContext : ApplicationContext
         PolicyCacheStore policyCache,
         OfflineUsageQueue usageQueue,
         StructuredLogger logger,
-        AgentSyncClient syncClient)
+        AgentSyncClient syncClient,
+        bool showDesktopWindow = false)
     {
         _options = options;
         _credentialStore = credentialStore;
@@ -39,10 +47,12 @@ public sealed class TrayAgentContext : ApplicationContext
         _usageQueue = usageQueue;
         _logger = logger;
         _syncClient = syncClient;
+        _enforcementEngine = new EnforcementEngine(new BlockPolicy());
 
         _statusItem = new ToolStripMenuItem("Status: Initializing...") { Enabled = false };
         _policyItem = new ToolStripMenuItem("Policy: Not pulled yet") { Enabled = false };
 
+        var openAppItem = new ToolStripMenuItem("Open FocusGate App", null, (_, _) => ShowDesktopWindow());
         var syncNowItem = new ToolStripMenuItem("Sync policy now", null, async (_, _) => await SyncPolicyAsync());
         var unlockPassItem = new ToolStripMenuItem("Use 10m Earned Time Pass", null, async (_, _) => await UseUnlockPassAsync());
         var startupItem = new ToolStripMenuItem("Auto-start with Windows")
@@ -64,6 +74,7 @@ public sealed class TrayAgentContext : ApplicationContext
             _statusItem,
             _policyItem,
             new ToolStripSeparator(),
+            openAppItem,
             syncNowItem,
             unlockPassItem,
             startupItem,
@@ -80,16 +91,28 @@ public sealed class TrayAgentContext : ApplicationContext
             ContextMenuStrip = menu,
             Visible = true,
         };
-        _trayIcon.DoubleClick += (_, _) => ShowStatusDialog();
+        _trayIcon.DoubleClick += (_, _) => ShowDesktopWindow();
 
         _syncTimer = new System.Windows.Forms.Timer { Interval = 15_000 };
         _syncTimer.Tick += async (_, _) => await SyncPolicyAsync();
 
+        _enforceTimer = new System.Windows.Forms.Timer { Interval = 600 };
+        _enforceTimer.Tick += (_, _) => EnforceForegroundWindow();
+
         LoadInitialCredentials();
         _lastPolicy = _policyCache.Load();
+        if (_lastPolicy is not null)
+        {
+            _enforcementEngine.UpdatePolicy(PolicyCacheStore.ToBlockPolicy(_lastPolicy));
+        }
         UpdateMenuLabels();
         _syncTimer.Start();
+        _enforceTimer.Start();
         _ = SyncPolicyAsync();
+        if (showDesktopWindow)
+        {
+            ShowDesktopWindow();
+        }
     }
 
     private void LoadInitialCredentials()
@@ -138,6 +161,7 @@ public sealed class TrayAgentContext : ApplicationContext
                 _credentials.DeviceId);
             _lastPolicy = policy;
             _policyCache.Save(policy);
+            _enforcementEngine.UpdatePolicy(PolicyCacheStore.ToBlockPolicy(policy));
             _logger.Info("agent.policy_pulled", "Pulled policy snapshot from server.", new Dictionary<string, object?>
             {
                 ["deviceId"] = _credentials.DeviceId,
@@ -202,6 +226,129 @@ public sealed class TrayAgentContext : ApplicationContext
             ? "Policy: Syncing..."
             : $"Policy: {(_lastPolicy.LockActive ? "Lock Active" : "Unlocked")} ({_lastPolicy.PulledAtUtc.ToLocalTime():HH:mm:ss})";
         _trayIcon.Text = $"FocusGate Agent — {_credentials.DeviceName}";
+        _desktopForm?.UpdateStatusText(
+            $"FocusGate PC · {_credentials.DeviceName} · {(_lastPolicy is null ? "Syncing..." : _lastPolicy.LockActive ? $"Lock Active ({_lastPolicy.BlockedProcesses.Count} rules)" : "Unlocked")}");
+    }
+
+    private void ShowDesktopWindow()
+    {
+        if (_desktopForm is null || _desktopForm.IsDisposed)
+        {
+            _desktopForm = new DesktopAppForm(
+                _credentials?.ApiBaseUrl ?? _options.ApiBaseUrl,
+                _enforcementMode,
+                OnWebViewSessionTokenAsync,
+                SyncPolicyAsync,
+                next =>
+                {
+                    _enforcementMode = next;
+                    if (next is null) HideOverlay();
+                });
+        }
+        _desktopForm.Show();
+        if (_desktopForm.WindowState == FormWindowState.Minimized)
+        {
+            _desktopForm.WindowState = FormWindowState.Normal;
+        }
+        _desktopForm.Activate();
+        UpdateMenuLabels();
+    }
+
+    private async Task OnWebViewSessionTokenAsync(string accessToken, string? refreshToken)
+    {
+        try
+        {
+            if (_credentials is not null && _credentials.AccessToken == accessToken) return;
+            var apiUrl = _credentials?.ApiBaseUrl ?? _options.ApiBaseUrl;
+            var deviceName = _credentials?.DeviceName ?? _options.DeviceName ?? Environment.MachineName;
+            var reg = await _syncClient.RegisterDeviceAsync(apiUrl, accessToken, deviceName, "0.1.0");
+            _credentials = new AgentCredentials(
+                ApiBaseUrl: apiUrl,
+                DeviceId: reg.DeviceId,
+                DeviceName: reg.Name,
+                AccessToken: accessToken,
+                RefreshToken: refreshToken,
+                RegisteredAtUtc: DateTimeOffset.UtcNow);
+            _credentialStore.Save(_credentials);
+            await SyncPolicyAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn("agent.webview_bridge_failed", "Could not bridge WebView session.", new Dictionary<string, object?>
+            {
+                ["error"] = ex.Message,
+            });
+        }
+    }
+
+    private void HideOverlay()
+    {
+        if (_overlayForm is not null && !_overlayForm.IsDisposed)
+        {
+            _overlayForm.Close();
+            _overlayForm.Dispose();
+        }
+        _overlayForm = null;
+    }
+
+    private void EnforceForegroundWindow()
+    {
+        if (_enforcementMode is null || _lastPolicy is null || !_lastPolicy.LockActive)
+        {
+            HideOverlay();
+            _lastBlockedKey = null;
+            return;
+        }
+
+        var hwnd = NativeMethods.GetForegroundWindow();
+        var app = WindowInspector.Describe(hwnd);
+        if (app is null) return;
+
+        var decision = _enforcementEngine.Evaluate(app);
+        if (!decision.ShouldBlock)
+        {
+            HideOverlay();
+            _lastBlockedKey = null;
+            return;
+        }
+
+        var key = $"{app.ProcessId}:{app.ProcessName}";
+        if (_lastBlockedKey != key)
+        {
+            _lastBlockedKey = key;
+            _usageQueue.Enqueue(new UsageEventUpload(
+                ClientEventId: Guid.NewGuid().ToString("N"),
+                Identifier: $"{app.ProcessName}.exe",
+                DisplayName: app.ProcessName,
+                StartedAt: DateTimeOffset.UtcNow,
+                EndedAt: DateTimeOffset.UtcNow,
+                DurationSeconds: 1,
+                WasBlocked: true));
+        }
+
+        if (_enforcementMode == EnforcementAction.Terminate)
+        {
+            try
+            {
+                using var proc = Process.GetProcessById(app.ProcessId);
+                proc.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Ignore if process already exited or elevated.
+            }
+            return;
+        }
+
+        if (_enforcementMode == EnforcementAction.Overlay)
+        {
+            if (_overlayForm is null || _overlayForm.IsDisposed || !_overlayForm.Visible)
+            {
+                HideOverlay();
+                _overlayForm = new BlockOverlayForm(app, decision.Category ?? "blocked");
+                _overlayForm.Show();
+            }
+        }
     }
 
     private void ShowStatusDialog()
@@ -261,8 +408,12 @@ public sealed class TrayAgentContext : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        _enforceTimer.Stop();
+        _enforceTimer.Dispose();
         _syncTimer.Stop();
         _syncTimer.Dispose();
+        _desktopForm?.ForceClose();
+        HideOverlay();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         _logger.Info("agent.shutdown", "Tray agent exited cleanly.");

@@ -32,7 +32,8 @@ internal static class Program
             AgentMode.SelfTest => SelfTest.Run(options),
             AgentMode.Monitor => RunMonitor(options),
             AgentMode.WindowProbe => RunWindowProbe(),
-            AgentMode.Tray => RunTray(options),
+            AgentMode.Tray => RunTray(options, showDesktopWindow: false),
+            AgentMode.DesktopApp => RunTray(options, showDesktopWindow: true),
             AgentMode.Status => PrintStatus(options),
             AgentMode.Register => RunRegister(options),
             AgentMode.InstallStartup => RunInstallStartup(true),
@@ -129,7 +130,7 @@ internal static class Program
         }
     }
 
-    private static int RunTray(AgentOptions options)
+    private static int RunTray(AgentOptions options, bool showDesktopWindow = false)
     {
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
@@ -140,7 +141,7 @@ internal static class Program
         var usageQueue = new OfflineUsageQueue();
         var logger = new StructuredLogger();
         using var syncClient = new AgentSyncClient();
-        using var context = new TrayAgentContext(options, store, policyCache, usageQueue, logger, syncClient);
+        using var context = new TrayAgentContext(options, store, policyCache, usageQueue, logger, syncClient, showDesktopWindow);
         Application.Run(context);
         return 0;
     }
