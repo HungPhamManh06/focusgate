@@ -54,44 +54,7 @@ object PlanSyncManager {
             updateWidgetState(context, planSnapshot, unlocked)
             runCatching { pushPendingUsage(context, token, deviceId) }
             runCatching { pushLocalRules(context, token, deviceId) }
-            runCatching { pushHealthMetricsIfPermitted(context, token, deviceId) }
             planSnapshot.copy(unlocked = unlocked)
-        }
-    }
-
-    fun syncHealthNow(context: Context): String {
-        return withValidToken(context) { token ->
-            val deviceId = ensureRegisteredDevice(context, token)
-            if (!HealthConnectSync.isAvailable(context)) {
-                return@withValidToken "Health Connect unavailable on this device"
-            }
-            val hasPerm = runBlocking { HealthConnectSync.hasAnyPermission(context) }
-            if (!hasPerm) {
-                return@withValidToken "Health Connect permission not granted"
-            }
-            val metrics = runBlocking { HealthConnectSync.readLast7Days(context) }
-            if (metrics.isEmpty()) {
-                return@withValidToken "Connected, but Health Connect has 0 records from Mi Fitness yet"
-            }
-            client.pushHealthMetrics(
-                apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
-                accessToken = token,
-                deviceId = deviceId,
-                metrics = metrics,
-            )
-            "Synced ${metrics.size} day(s) (${metrics.first().steps} steps today)"
-        }
-    }
-
-    private fun pushHealthMetricsIfPermitted(context: Context, token: String, deviceId: String) {
-        val metrics = runBlocking { HealthConnectSync.readLast7Days(context) }
-        if (metrics.isNotEmpty()) {
-            client.pushHealthMetrics(
-                apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
-                accessToken = token,
-                deviceId = deviceId,
-                metrics = metrics,
-            )
         }
     }
 

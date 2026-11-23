@@ -526,48 +526,6 @@ class RemoteAgentSyncClient(
         }
     }
 
-    fun pushHealthMetrics(
-        apiBaseUrl: String,
-        accessToken: String,
-        deviceId: String,
-        metrics: List<com.focusgate.app.util.DailyHealthMetricUpload>,
-    ) {
-        if (metrics.isEmpty()) return
-        val itemsJson = metrics.joinToString(",") { m ->
-            buildString {
-                append("{")
-                append("\"date\":").append(quoteJson(m.date)).append(",")
-                append("\"steps\":").append(m.steps).append(",")
-                append("\"sleepMinutes\":").append(m.sleepMinutes).append(",")
-                if (m.avgHeartRate != null) {
-                    append("\"avgHeartRate\":").append(m.avgHeartRate).append(",")
-                }
-                append("\"activeCalories\":").append(m.activeCalories).append(",")
-                append("\"source\":\"health_connect\"")
-                append("}")
-            }
-        }
-        val payload = """{"deviceId":${quoteJson(deviceId)},"metrics":[$itemsJson]}"""
-        val conn = (URL("${apiBaseUrl.trimEnd('/')}/api/agent/health").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            doOutput = true
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Content-Type", "application/json")
-        }
-        try {
-            conn.outputStream.use { out -> out.write(payload.toByteArray(Charsets.UTF_8)) }
-            val code = conn.responseCode
-            if (code == 401) throw UnauthorizedApiException()
-            if (code !in 200..299) {
-                throw IOException(parseErrorMessage(readResponseBody(conn, code), "Health sync failed ($code)"))
-            }
-        } finally {
-            conn.disconnect()
-        }
-    }
-
     private fun parsePlanSnapshot(body: String): RemotePlanSnapshot {
         val obj = RemotePolicySync.parseJsonObject(body)
         val activeGrantMinutes = (obj["activeGrantMinutes"] as? Number)?.toInt() ?: 0

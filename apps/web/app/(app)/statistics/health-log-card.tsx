@@ -65,9 +65,9 @@ export function HealthLogCard({
     <Card>
       <CardHeader>
         <div>
-          <CardTitle>Health &amp; Readiness (Mi Band 10 · Manual &amp; Health Connect)</CardTitle>
+          <CardTitle>Health &amp; Readiness</CardTitle>
           <p className="mt-1 text-[12px] text-muted">
-            Log daily steps, calories, sleep hours, and weight — or sync automatically via Health Connect.
+            Log your daily steps, calories, sleep hours, and weight.
           </p>
         </div>
         <span className="text-[11px] text-muted">

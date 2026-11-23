@@ -1,9 +1,6 @@
 package com.focusgate.app.ui
 
 import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.PermissionController
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,7 +72,6 @@ import com.focusgate.app.service.AppUsageMonitorService
 import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.FocusSoundscapePlayer
-import com.focusgate.app.util.HealthConnectSync
 import com.focusgate.app.util.PermissionChecks
 import com.focusgate.app.util.PlanSyncManager
 import com.focusgate.app.util.ProtectionWatchdog
@@ -152,13 +148,6 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var settingsGuardEnabled by remember { mutableStateOf(AgentPreferences.isSettingsGuardEnabled(context)) }
     var soundscapePlaying by remember { mutableStateOf(FocusSoundscapePlayer.isPlaying()) }
     var earnedMinutesBalance by remember { mutableStateOf(AgentPreferences.getEarnedMinutesBalance(context)) }
-    var healthGranted by remember { mutableStateOf(false) }
-    var healthStatusText by remember { mutableStateOf<String?>(null) }
-    val healthAvailable = remember { HealthConnectSync.isAvailable(context) }
-
-    LaunchedEffect(Unit) {
-        healthGranted = runCatching { HealthConnectSync.hasAnyPermission(context) }.getOrDefault(false)
-    }
 
     fun syncPlanFromWeb() {
         if (AgentPreferences.getAccessToken(context) == null || planSyncBusy) return
@@ -175,28 +164,6 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                 syncError = e.message ?: "Could not sync plan."
             } finally {
                 planSyncBusy = false
-            }
-        }
-    }
-
-    val healthPermissionLauncher = rememberLauncherForActivityResult(
-        contract = PermissionController.createRequestPermissionResultContract(),
-    ) { granted ->
-        healthGranted = granted.any { it in HealthConnectSync.PERMISSIONS }
-        if (healthGranted) {
-            scope.launch {
-                healthStatusText = withContext(Dispatchers.IO) {
-                    runCatching { PlanSyncManager.syncHealthNow(context) }
-                        .getOrElse { it.message ?: "Health sync failed" }
-                }
-            }
-        } else {
-            healthStatusText = "No permissions granted. Opening Health Connect settings..."
-            runCatching {
-                context.startActivity(
-                    Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
             }
         }
     }
@@ -306,7 +273,6 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         notificationsGranted = PermissionChecks.hasNotificationPermission(context)
         val prevEssential = deviceEssential
         scope.launch {
-            healthGranted = runCatching { HealthConnectSync.hasAnyPermission(context) }.getOrDefault(false)
             val outcome = withContext(Dispatchers.IO) { coordinator.auditCurrentPolicy() }
             applyOutcome(outcome)
             if (outcome.state.deviceEssential != prevEssential) {
@@ -978,61 +944,6 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                     },
                                 ) {
                                     Text("Use 10m Pass")
-                                }
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("Mi Band 10 · Health Connect")
-                                    Text(
-                                        healthStatusText ?: when {
-                                            !healthAvailable -> "Install Health Connect on Android"
-                                            healthGranted -> "Connected · tap Sync Health to upload"
-                                            else -> "Grant permission to sync Mi Fitness data"
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                if (healthAvailable && !healthGranted) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            healthStatusText = "Requesting Health Connect access..."
-                                            try {
-                                                healthPermissionLauncher.launch(HealthConnectSync.PERMISSIONS)
-                                            } catch (_: Throwable) {
-                                                runCatching {
-                                                    context.startActivity(
-                                                        Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS)
-                                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                                    )
-                                                }.onFailure {
-                                                    healthStatusText = "Could not open Health Connect: ${it.message}"
-                                                }
-                                            }
-                                        },
-                                    ) {
-                                        Text("Connect")
-                                    }
-                                } else if (healthAvailable && healthGranted) {
-                                    OutlinedButton(
-                                        enabled = !planSyncBusy,
-                                        onClick = {
-                                            scope.launch {
-                                                healthStatusText = "Syncing health..."
-                                                healthStatusText = withContext(Dispatchers.IO) {
-                                                    runCatching { PlanSyncManager.syncHealthNow(context) }
-                                                        .getOrElse { it.message ?: "Health sync failed" }
-                                                }
-                                            }
-                                        },
-                                    ) {
-                                        Text("Sync Health")
-                                    }
                                 }
                             }
                         }
