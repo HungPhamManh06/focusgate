@@ -8,6 +8,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>FocusGate.Agent.Poc</RootNamespace>
     <AssemblyName>FocusGate</AssemblyName>
+    <ApplicationIcon>Assets\focusgate.ico</ApplicationIcon>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NoWarn>MSB3277</NoWarn>
     <InvariantGlobalization>true</InvariantGlobalization>
