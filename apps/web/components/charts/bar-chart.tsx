@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatMinutes } from "@/lib/data/format";
 import { cn } from "@/lib/utils";
 
 export interface BarPoint {
@@ -17,10 +18,11 @@ export function BarChart({
 }: {
   data: BarPoint[];
   tone?: "accent" | "ink";
-  formatValue: (value: number) => string;
+  formatValue?: (value: number) => string;
   emptyLabel?: string;
   height?: number;
 }) {
+  const renderValue = formatValue ?? formatMinutes;
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const max = Math.max(...data.map((point) => point.value), 1);
   const hasData = data.some((point) => point.value > 0);
@@ -45,10 +47,10 @@ export function BarChart({
         <p className="text-[10.5px] text-muted tabular-nums">
           {activePoint ? (
             <span className="font-medium text-ink">
-              {activePoint.label}: {formatValue(activePoint.value)}
+              {activePoint.label}: {renderValue(activePoint.value)}
             </span>
           ) : (
-            <>Peak {formatValue(max)}</>
+            <>Peak {renderValue(max)}</>
           )}
         </p>
         <p className="text-[10.5px] text-muted">
@@ -78,7 +80,7 @@ export function BarChart({
                     onFocus={() => setActiveIndex(index)}
                     onBlur={() => setActiveIndex(null)}
                     onClick={() => setActiveIndex(isActive ? null : index)}
-                    aria-label={`${point.label}: ${formatValue(point.value)}`}
+                    aria-label={`${point.label}: ${renderValue(point.value)}`}
                     className="group relative flex h-full flex-1 items-end focus:outline-none"
                   >
                     <div

@@ -159,7 +159,6 @@ export default async function StatisticsPage({
               <CardContent className="pt-5">
                 <BarChart
                   data={stats.days.map((day) => ({ label: day.label, value: day.focusMinutes }))}
-                  formatValue={(value) => formatMinutes(value)}
                   tone="accent"
                   height={192}
                 />
@@ -249,7 +248,6 @@ export default async function StatisticsPage({
               <CardContent className="pt-5">
                 <BarChart
                   data={stats.days.map((day) => ({ label: day.label, value: day.entertainmentMinutes }))}
-                  formatValue={(value) => formatMinutes(value)}
                   tone="ink"
                   height={140}
                   emptyLabel="No entertainment time logged in this period."
