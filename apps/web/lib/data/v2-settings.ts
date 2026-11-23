@@ -156,9 +156,40 @@ export async function updateV2Settings(
   const ctx = await getSupabaseContext();
   if (ctx) {
     assertSupabaseOk(
-      await ctx.supabase
-        .from("user_settings")
-        .upsert({ user_id: ctx.userId, ...patch }, { onConflict: "user_id" }),
+      await ctx.supabase.rpc("rpc_update_user_preferences", {
+        p_language: input.language ?? null,
+        p_daily_focus_goal_minutes:
+          input.dailyFocusGoalMinutes !== undefined
+            ? Math.max(15, Math.round(input.dailyFocusGoalMinutes))
+            : null,
+        p_daily_steps_goal:
+          input.dailyStepsGoal !== undefined
+            ? Math.max(1000, Math.round(input.dailyStepsGoal))
+            : null,
+        p_daily_sleep_goal_hours:
+          input.dailySleepGoalHours !== undefined
+            ? Math.max(4, Math.min(14, Math.round(input.dailySleepGoalHours * 10) / 10))
+            : null,
+        p_target_weight_kg:
+          input.targetWeightKg !== undefined &&
+          input.targetWeightKg !== null &&
+          input.targetWeightKg > 0
+            ? Math.round(input.targetWeightKg * 100) / 100
+            : null,
+        p_clear_target_weight:
+          input.targetWeightKg !== undefined &&
+          (input.targetWeightKg === null || input.targetWeightKg <= 0),
+        p_whitelist_focus_mode: input.whitelistFocusMode ?? null,
+        p_allowed_apps: input.allowedApps ?? null,
+        p_allowed_domains: input.allowedDomains ?? null,
+        p_blocked_domains: input.blockedDomains ?? null,
+        p_weekday_bedtime_start: input.weekdayBedtimeStart ?? null,
+        p_weekday_bedtime_end: input.weekdayBedtimeEnd ?? null,
+        p_weekend_bedtime_start: input.weekendBedtimeStart ?? null,
+        p_weekend_bedtime_end: input.weekendBedtimeEnd ?? null,
+        p_weekend_relaxed_mode: input.weekendRelaxedMode ?? null,
+        p_last_daily_review_date: input.lastDailyReviewDate ?? null,
+      }),
     );
     return;
   }
