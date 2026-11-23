@@ -9,6 +9,31 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+
+type HealthPeriodTab = "week" | "month" | "year";
+
+function formatPctDelta(current: number, previous: number | undefined): string {
+  if (previous === undefined || previous <= 0) return "No prior period";
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct === 0) return "0% vs prior";
+  return `${pct > 0 ? "+" : ""}${pct}% vs prior`;
+}
+
+function formatSleepDelta(currentMin: number, previousMin: number | undefined): string {
+  if (previousMin === undefined || previousMin <= 0) return "No prior period";
+  const diff = currentMin - previousMin;
+  if (diff === 0) return "Same as prior";
+  const sign = diff > 0 ? "+" : "-";
+  return `${sign}${formatMinutes(Math.abs(diff))} vs prior`;
+}
+
+function formatWeightDelta(currentKg: number | null, previousKg: number | null | undefined): string {
+  if (currentKg === null || previousKg === null || previousKg === undefined) return "No prior period";
+  const diff = Math.round((currentKg - previousKg) * 10) / 10;
+  if (diff === 0) return "0 kg vs prior";
+  return `${diff > 0 ? "+" : ""}${diff} kg vs prior`;
+}
 
 export function HealthLogCard({
   health,
@@ -19,11 +44,14 @@ export function HealthLogCard({
 }) {
   const [pending, startTransition] = useTransition();
   const toast = useToast();
+  const [tab, setTab] = useState<HealthPeriodTab>("week");
 
   const existingToday = health.days.find((d) => d.date === todayDate) ?? health.latest;
   const [date, setDate] = useState(todayDate);
   const [steps, setSteps] = useState(existingToday ? String(existingToday.steps) : "");
-  const [calories, setCalories] = useState(existingToday ? String(existingToday.activeCalories) : "");
+  const [calories, setCalories] = useState(
+    existingToday ? String(existingToday.activeCalories) : "",
+  );
   const [sleepHours, setSleepHours] = useState(
     existingToday && existingToday.sleepMinutes > 0
       ? String(Math.round((existingToday.sleepMinutes / 60) * 10) / 10)
@@ -61,68 +89,94 @@ export function HealthLogCard({
     });
   };
 
+  const activeComparison =
+    tab === "week" ? health.byWeek : tab === "month" ? health.byMonth : health.byYear;
+  const cur = activeComparison.current;
+  const prev = activeComparison.previous;
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-wrap gap-3">
         <div>
           <CardTitle>Health &amp; Readiness</CardTitle>
           <p className="mt-1 text-[12px] text-muted">
-            Log your daily steps, calories, sleep hours, and weight.
+            Log daily steps, calories, sleep hours, and weight, then compare by week, month, and year.
           </p>
         </div>
-        <span className="text-[11px] text-muted">
-          {health.days.length} day{health.days.length === 1 ? "" : "s"} logged
-        </span>
+
+        <div className="flex items-center gap-1 rounded-full border border-line bg-surface-2/60 p-1">
+          {(
+            [
+              { id: "week", label: "Week" },
+              { id: "month", label: "Month" },
+              { id: "year", label: "Year" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={cn(
+                "rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors",
+                tab === item.id
+                  ? "bg-ink text-canvas"
+                  : "text-muted hover:text-ink",
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-4 pt-3">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <Activity className="size-3.5 text-accent" /> Steps (Latest)
+              <Activity className="size-3.5 text-accent" /> Avg Steps ({cur.label})
             </p>
             <p className="mt-1 font-display text-[22px] leading-none">
-              {health.latest ? health.latest.steps.toLocaleString() : "—"}
+              {cur.daysLogged > 0 ? cur.avgSteps.toLocaleString() : "—"}
             </p>
             <p className="mt-1 text-[11px] text-muted">
-              Avg {health.avgSteps.toLocaleString()}/day
+              {formatPctDelta(cur.avgSteps, prev?.avgSteps)}
             </p>
           </div>
 
           <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <Flame className="size-3.5 text-warning" /> Calories (Latest)
+              <Flame className="size-3.5 text-warning" /> Avg Calories ({cur.label})
             </p>
             <p className="mt-1 font-display text-[22px] leading-none">
-              {health.latest ? `${health.latest.activeCalories} kcal` : "—"}
+              {cur.daysLogged > 0 ? `${cur.avgCalories} kcal` : "—"}
             </p>
             <p className="mt-1 text-[11px] text-muted">
-              Avg {health.avgCalories} kcal/day
+              {formatPctDelta(cur.avgCalories, prev?.avgCalories)}
             </p>
           </div>
 
           <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <Moon className="size-3.5 text-accent" /> Sleep (Latest)
+              <Moon className="size-3.5 text-accent" /> Avg Sleep ({cur.label})
             </p>
             <p className="mt-1 font-display text-[22px] leading-none">
-              {health.latest && health.latest.sleepMinutes > 0
-                ? formatMinutes(health.latest.sleepMinutes)
-                : "—"}
+              {cur.avgSleepMinutes > 0 ? formatMinutes(cur.avgSleepMinutes) : "—"}
             </p>
             <p className="mt-1 text-[11px] text-muted">
-              Avg {formatMinutes(health.avgSleepMinutes)}/night
+              {formatSleepDelta(cur.avgSleepMinutes, prev?.avgSleepMinutes)}
             </p>
           </div>
 
           <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <Scale className="size-3.5 text-success" /> Weight (Latest)
+              <Scale className="size-3.5 text-success" /> Avg Weight ({cur.label})
             </p>
             <p className="mt-1 font-display text-[22px] leading-none">
-              {health.latestWeightKg !== null ? `${health.latestWeightKg} kg` : "—"}
+              {cur.avgWeightKg !== null ? `${cur.avgWeightKg} kg` : "—"}
             </p>
-            <p className="mt-1 text-[11px] text-muted">Body weight tracking</p>
+            <p className="mt-1 text-[11px] text-muted">
+              {formatWeightDelta(cur.avgWeightKg, prev?.avgWeightKg)}
+            </p>
           </div>
         </div>
 
@@ -193,8 +247,51 @@ export function HealthLogCard({
           </Button>
         </form>
 
+        {activeComparison.buckets.length > 0 ? (
+          <div className="overflow-x-auto">
+            <p className="mb-1.5 text-[11px] font-medium text-muted">
+              Period comparison ({tab})
+            </p>
+            <table className="w-full min-w-[520px] text-left text-[11.5px]">
+              <thead>
+                <tr className="border-b border-line text-[10px] uppercase tracking-[0.08em] text-muted">
+                  <th className="py-2 pr-3 font-medium">Period</th>
+                  <th className="py-2 pr-3 text-right font-medium">Days</th>
+                  <th className="py-2 pr-3 text-right font-medium">Avg Steps</th>
+                  <th className="py-2 pr-3 text-right font-medium">Avg Calories</th>
+                  <th className="py-2 pr-3 text-right font-medium">Avg Sleep</th>
+                  <th className="py-2 text-right font-medium">Avg Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeComparison.buckets.slice(0, 12).map((b) => (
+                  <tr key={b.key} className="border-b border-line/70 last:border-0">
+                    <td className="py-2 pr-3 font-medium text-ink">{b.label}</td>
+                    <td className="py-2 pr-3 text-right text-muted">{b.daysLogged}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {b.avgSteps > 0 ? b.avgSteps.toLocaleString() : "—"}
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {b.avgCalories > 0 ? `${b.avgCalories} kcal` : "—"}
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {b.avgSleepMinutes > 0 ? formatMinutes(b.avgSleepMinutes) : "—"}
+                    </td>
+                    <td className="py-2 text-right tabular-nums">
+                      {b.avgWeightKg !== null ? `${b.avgWeightKg} kg` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
         {health.days.length > 0 ? (
           <div className="overflow-x-auto">
+            <p className="mb-1.5 text-[11px] font-medium text-muted">
+              Daily entries (click a row to edit)
+            </p>
             <table className="w-full min-w-[480px] text-left text-[11.5px]">
               <thead>
                 <tr className="border-b border-line text-[10px] uppercase tracking-[0.08em] text-muted">
