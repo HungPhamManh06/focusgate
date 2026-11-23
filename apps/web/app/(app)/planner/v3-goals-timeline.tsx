@@ -9,6 +9,7 @@ import {
   setPlanTaskScheduleAction,
 } from "@/lib/actions/v2";
 import type { GoalRecord, PlanScheduleItem } from "@/lib/data/v3-features";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,7 @@ export function V3GoalsTimeline({
   goals: GoalRecord[];
   schedules: PlanScheduleItem[];
 }) {
+  const isVi = useLocale() === "vi";
   const [pending, startTransition] = useTransition();
   const toast = useToast();
 
@@ -79,18 +81,20 @@ export function V3GoalsTimeline({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock3 className="size-4 text-accent" />
-            Daily Time-Blocking
+            {isVi ? "Phân bổ khung giờ trong ngày" : "Daily Time-Blocking"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 pt-2">
           {schedules.length === 0 ? (
             <p className="text-[12px] text-muted">
-              Add tasks to today&apos;s plan first to assign time blocks.
+              {isVi
+                ? "Hãy thêm nhiệm vụ vào kế hoạch hôm nay trước để gán khung giờ."
+                : "Add tasks to today's plan first to assign time blocks."}
             </p>
           ) : (
             <form onSubmit={handleSaveSchedule} className="grid gap-2 sm:grid-cols-[1fr_95px_95px_auto] sm:items-end">
               <label className="block text-[11px]">
-                <span className="text-muted">Task</span>
+                <span className="text-muted">{isVi ? "Nhiệm vụ" : "Task"}</span>
                 <select
                   value={selectedTaskId}
                   onChange={(e) => setSelectedTaskId(e.target.value)}
@@ -104,7 +108,7 @@ export function V3GoalsTimeline({
                 </select>
               </label>
               <label className="block text-[11px]">
-                <span className="text-muted">Start</span>
+                <span className="text-muted">{isVi ? "Bắt đầu" : "Start"}</span>
                 <Input
                   type="time"
                   value={startTime}
@@ -113,7 +117,7 @@ export function V3GoalsTimeline({
                 />
               </label>
               <label className="block text-[11px]">
-                <span className="text-muted">End</span>
+                <span className="text-muted">{isVi ? "Kết thúc" : "End"}</span>
                 <Input
                   type="time"
                   value={endTime}
@@ -122,7 +126,7 @@ export function V3GoalsTimeline({
                 />
               </label>
               <Button type="submit" variant="accent" size="sm" disabled={pending} className="h-9">
-                Assign
+                {isVi ? "Gán giờ" : "Assign"}
               </Button>
             </form>
           )}
@@ -158,7 +162,7 @@ export function V3GoalsTimeline({
                       })
                     }
                   >
-                    Clear
+                    {isVi ? "Xóa" : "Clear"}
                   </Button>
                 </div>
               ))}
@@ -171,33 +175,33 @@ export function V3GoalsTimeline({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="size-4 text-accent" />
-            Weekly &amp; Monthly Goals
+            {isVi ? "Mục tiêu Tuần & Tháng" : "Weekly & Monthly Goals"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 pt-2">
           <form onSubmit={handleCreateGoal} className="grid gap-2 sm:grid-cols-[1fr_95px_75px_85px_auto] sm:items-end">
             <label className="block text-[11px]">
-              <span className="text-muted">Goal</span>
+              <span className="text-muted">{isVi ? "Mục tiêu" : "Goal"}</span>
               <Input
                 value={goalTitle}
                 onChange={(e) => setGoalTitle(e.target.value)}
-                placeholder="e.g. Học 15h Tiếng Anh"
+                placeholder={isVi ? "VD: Học 15h Tiếng Anh" : "e.g. Study English 15h"}
                 className="mt-1"
               />
             </label>
             <label className="block text-[11px]">
-              <span className="text-muted">Period</span>
+              <span className="text-muted">{isVi ? "Chu kỳ" : "Period"}</span>
               <select
                 value={periodType}
                 onChange={(e) => setPeriodType(e.target.value === "monthly" ? "monthly" : "weekly")}
                 className="mt-1 h-9 w-full rounded-xl border border-line bg-surface px-2 text-[12px] text-ink"
               >
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
+                <option value="weekly">{isVi ? "Tuần" : "Weekly"}</option>
+                <option value="monthly">{isVi ? "Tháng" : "Monthly"}</option>
               </select>
             </label>
             <label className="block text-[11px]">
-              <span className="text-muted">Target</span>
+              <span className="text-muted">{isVi ? "Chỉ tiêu" : "Target"}</span>
               <Input
                 type="number"
                 min={1}
@@ -207,21 +211,23 @@ export function V3GoalsTimeline({
               />
             </label>
             <label className="block text-[11px]">
-              <span className="text-muted">Unit</span>
+              <span className="text-muted">{isVi ? "Đơn vị" : "Unit"}</span>
               <Input
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                placeholder="hours"
+                placeholder={isVi ? "giờ" : "hours"}
                 className="mt-1"
               />
             </label>
             <Button type="submit" variant="accent" size="sm" disabled={pending || !goalTitle.trim()} className="h-9">
-              <Plus className="size-3.5" /> Add
+              <Plus className="size-3.5" /> {isVi ? "Thêm" : "Add"}
             </Button>
           </form>
 
           {goals.length === 0 ? (
-            <p className="text-[12px] text-muted">No weekly or monthly goals yet.</p>
+            <p className="text-[12px] text-muted">
+              {isVi ? "Chưa có mục tiêu tuần hoặc tháng nào." : "No weekly or monthly goals yet."}
+            </p>
           ) : (
             <div className="space-y-2.5 border-t border-line pt-3">
               {goals.map((g) => {
@@ -232,7 +238,8 @@ export function V3GoalsTimeline({
                       <div className="min-w-0">
                         <p className="truncate text-[12.5px] font-medium text-ink">{g.title}</p>
                         <p className="text-[11px] text-muted">
-                          {g.periodType} · {g.currentValue}/{g.targetValue} {g.unit} ({pct}%)
+                          {isVi ? (g.periodType === "weekly" ? "Tuần" : "Tháng") : g.periodType} ·{" "}
+                          {g.currentValue}/{g.targetValue} {g.unit} ({pct}%)
                         </p>
                       </div>
                       <div className="flex items-center gap-1">

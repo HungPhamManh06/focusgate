@@ -5,16 +5,17 @@ import { useMemo, useState, useTransition } from "react";
 import { addPlanTaskAction } from "@/lib/actions/planner";
 import { formatDate, formatMinutes, relativeDue } from "@/lib/data/format";
 import type { Task, TaskKind } from "@/lib/data/types";
-import { kindLabels } from "@/components/domain/labels";
+import { useLocale } from "@/components/i18n/language-provider";
+import { getKindLabel } from "@/components/domain/labels";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
-const quickKinds: Array<{ kind: TaskKind; shortLabel: string }> = [
-  { kind: "must_do", shortLabel: "+ Must-do" },
-  { kind: "should_do", shortLabel: "+ Should-do" },
-  { kind: "bonus", shortLabel: "+ Bonus" },
+const quickKinds: Array<{ kind: TaskKind; shortLabel: string; shortLabelVi: string }> = [
+  { kind: "must_do", shortLabel: "+ Must-do", shortLabelVi: "+ Bắt buộc" },
+  { kind: "should_do", shortLabel: "+ Should-do", shortLabelVi: "+ Nên làm" },
+  { kind: "bonus", shortLabel: "+ Bonus", shortLabelVi: "+ Thưởng" },
 ];
 
 export function AddPlanTask({
@@ -26,6 +27,8 @@ export function AddPlanTask({
   tasks: Task[];
   timezone?: string;
 }) {
+  const locale = useLocale();
+  const isVi = locale === "vi";
   const [query, setQuery] = useState("");
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -55,7 +58,9 @@ export function AddPlanTask({
   if (tasks.length === 0) {
     return (
       <p className="text-[12px] leading-relaxed text-muted">
-        Every open task is already in this plan. Create more from the Tasks screen.
+        {isVi
+          ? "Mọi nhiệm vụ đang mở đều đã có trong kế hoạch này. Tạo thêm ở màn hình Nhiệm vụ."
+          : "Every open task is already in this plan. Create more from the Tasks screen."}
       </p>
     );
   }
@@ -69,8 +74,8 @@ export function AddPlanTask({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter open backlog tasks…"
-            aria-label="Filter backlog tasks"
+            placeholder={isVi ? "Lọc nhiệm vụ trong hàng chờ…" : "Filter open backlog tasks…"}
+            aria-label={isVi ? "Lọc nhiệm vụ trong hàng chờ" : "Filter backlog tasks"}
             className="h-9 pl-8 text-[12px]"
           />
         </div>
@@ -78,15 +83,15 @@ export function AddPlanTask({
 
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-dashed border-line px-4 py-5 text-center text-[12px] text-muted">
-          No backlog tasks match &ldquo;{query}&rdquo;.
+          {isVi ? `Không có nhiệm vụ nào khớp "${query}".` : `No backlog tasks match "${query}".`}
         </p>
       ) : (
         <div className="max-h-[340px] divide-y divide-line overflow-y-auto rounded-xl border border-line bg-surface">
           {filtered.map((task) => {
-            const relDue = relativeDue(task.dueDate, timezone);
+            const relDue = relativeDue(task.dueDate, timezone, locale);
             const dueText =
-              relDue ?? (task.dueDate ? formatDate(task.dueDate, undefined, timezone) : null);
-            const overdue = relDue?.includes("overdue") ?? false;
+              relDue ?? (task.dueDate ? formatDate(task.dueDate, undefined, timezone, locale) : null);
+            const overdue = relDue ? (relDue.includes("overdue") || relDue.includes("Quá hạn")) : false;
 
             return (
               <div
@@ -96,16 +101,22 @@ export function AddPlanTask({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <p className="text-[12.5px] font-medium text-ink">{task.title}</p>
-                    {task.priority === "urgent" ? <Badge tone="danger">Urgent</Badge> : null}
-                    {task.priority === "high" ? <Badge tone="warning">High</Badge> : null}
+                    {task.priority === "urgent" ? (
+                      <Badge tone="danger">{isVi ? "Khẩn cấp" : "Urgent"}</Badge>
+                    ) : null}
+                    {task.priority === "high" ? (
+                      <Badge tone="warning">{isVi ? "Cao" : "High"}</Badge>
+                    ) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
-                    <span>Default: {kindLabels[task.kind]}</span>
+                    <span>
+                      {isVi ? "Mặc định:" : "Default:"} {getKindLabel(task.kind, locale)}
+                    </span>
                     <span aria-hidden>·</span>
                     <span>
                       {task.requiredFocusMinutes > 0
-                        ? `${formatMinutes(task.requiredFocusMinutes)} focus`
-                        : "0m focus"}
+                        ? `${formatMinutes(task.requiredFocusMinutes)} ${isVi ? "tập trung" : "focus"}`
+                        : isVi ? "0m tập trung" : "0m focus"}
                     </span>
                     {dueText ? (
                       <>
@@ -140,7 +151,7 @@ export function AddPlanTask({
                         ) : (
                           <Plus className="size-3" />
                         )}
-                        {option.shortLabel.replace("+ ", "")}
+                        {(isVi ? option.shortLabelVi : option.shortLabel).replace("+ ", "")}
                       </button>
                     );
                   })}

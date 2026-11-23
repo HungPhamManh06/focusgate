@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { saveManualHealthMetricAction } from "@/lib/actions/v2";
 import { formatMinutes } from "@/lib/data/format";
 import type { HealthSummary } from "@/lib/data/health";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,26 +16,28 @@ import { cn } from "@/lib/utils";
 type HealthPeriodTab = "week" | "month" | "year";
 type HealthChartMetric = "steps" | "sleep" | "calories" | "weight";
 
-function formatPctDelta(current: number, previous: number | undefined): string {
-  if (previous === undefined || previous <= 0) return "No prior period";
+function formatPctDelta(current: number, previous: number | undefined, isVi: boolean): string {
+  if (previous === undefined || previous <= 0) return isVi ? "Chưa có kỳ trước" : "No prior period";
   const pct = Math.round(((current - previous) / previous) * 100);
-  if (pct === 0) return "0% vs prior";
-  return `${pct > 0 ? "+" : ""}${pct}% vs prior`;
+  if (pct === 0) return isVi ? "0% so với kỳ trước" : "0% vs prior";
+  return `${pct > 0 ? "+" : ""}${pct}% ${isVi ? "so với kỳ trước" : "vs prior"}`;
 }
 
-function formatSleepDelta(currentMin: number, previousMin: number | undefined): string {
-  if (previousMin === undefined || previousMin <= 0) return "No prior period";
+function formatSleepDelta(currentMin: number, previousMin: number | undefined, isVi: boolean): string {
+  if (previousMin === undefined || previousMin <= 0) return isVi ? "Chưa có kỳ trước" : "No prior period";
   const diff = currentMin - previousMin;
-  if (diff === 0) return "Same as prior";
+  if (diff === 0) return isVi ? "Bằng kỳ trước" : "Same as prior";
   const sign = diff > 0 ? "+" : "-";
-  return `${sign}${formatMinutes(Math.abs(diff))} vs prior`;
+  return `${sign}${formatMinutes(Math.abs(diff))} ${isVi ? "so với kỳ trước" : "vs prior"}`;
 }
 
-function formatWeightDelta(currentKg: number | null, previousKg: number | null | undefined): string {
-  if (currentKg === null || previousKg === null || previousKg === undefined) return "No prior period";
+function formatWeightDelta(currentKg: number | null, previousKg: number | null | undefined, isVi: boolean): string {
+  if (currentKg === null || previousKg === null || previousKg === undefined) {
+    return isVi ? "Chưa có kỳ trước" : "No prior period";
+  }
   const diff = Math.round((currentKg - previousKg) * 10) / 10;
-  if (diff === 0) return "0 kg vs prior";
-  return `${diff > 0 ? "+" : ""}${diff} kg vs prior`;
+  if (diff === 0) return isVi ? "0 kg so với kỳ trước" : "0 kg vs prior";
+  return `${diff > 0 ? "+" : ""}${diff} kg ${isVi ? "so với kỳ trước" : "vs prior"}`;
 }
 
 export function HealthLogCard({
@@ -46,6 +49,7 @@ export function HealthLogCard({
   todayDate: string;
   focusDays?: ReadonlyArray<{ date: string; focusMinutes: number }>;
 }) {
+  const isVi = useLocale() === "vi";
   const [pending, startTransition] = useTransition();
   const toast = useToast();
   const [tab, setTab] = useState<HealthPeriodTab>("week");
@@ -147,18 +151,20 @@ export function HealthLogCard({
     <Card>
       <CardHeader className="flex-wrap gap-3">
         <div>
-          <CardTitle>Health &amp; Readiness</CardTitle>
+          <CardTitle>{isVi ? "Sức khỏe & Thể trạng" : "Health & Readiness"}</CardTitle>
           <p className="mt-1 text-[12px] text-muted">
-            Log daily steps, calories, sleep hours, and weight, then compare by week, month, and year.
+            {isVi
+              ? "Nhập bước chân, calo, số giờ ngủ và cân nặng hằng ngày rồi so sánh theo tuần, tháng, năm."
+              : "Log daily steps, calories, sleep hours, and weight, then compare by week, month, and year."}
           </p>
         </div>
 
         <div className="flex items-center gap-1 rounded-full border border-line bg-surface-2/60 p-1">
           {(
             [
-              { id: "week", label: "Week" },
-              { id: "month", label: "Month" },
-              { id: "year", label: "Year" },
+              { id: "week", label: isVi ? "Tuần" : "Week" },
+              { id: "month", label: isVi ? "Tháng" : "Month" },
+              { id: "year", label: isVi ? "Năm" : "Year" },
             ] as const
           ).map((item) => (
             <button
@@ -182,49 +188,49 @@ export function HealthLogCard({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <Activity className="size-3.5 text-accent" /> Avg Steps ({cur.label})
+              <Activity className="size-3.5 text-accent" /> {isVi ? "TB Bước chân" : "Avg Steps"} ({cur.label})
             </p>
             <p className="mt-1 font-display text-[22px] leading-none">
               {cur.daysLogged > 0 ? cur.avgSteps.toLocaleString() : "—"}
             </p>
             <p className="mt-1 text-[11px] text-muted">
-              {formatPctDelta(cur.avgSteps, prev?.avgSteps)}
+              {formatPctDelta(cur.avgSteps, prev?.avgSteps, isVi)}
             </p>
           </div>
 
           <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <Flame className="size-3.5 text-warning" /> Avg Calories ({cur.label})
+              <Flame className="size-3.5 text-warning" /> {isVi ? "TB Calo" : "Avg Calories"} ({cur.label})
             </p>
             <p className="mt-1 font-display text-[22px] leading-none">
               {cur.daysLogged > 0 ? `${cur.avgCalories} kcal` : "—"}
             </p>
             <p className="mt-1 text-[11px] text-muted">
-              {formatPctDelta(cur.avgCalories, prev?.avgCalories)}
+              {formatPctDelta(cur.avgCalories, prev?.avgCalories, isVi)}
             </p>
           </div>
 
           <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <Moon className="size-3.5 text-accent" /> Avg Sleep ({cur.label})
+              <Moon className="size-3.5 text-accent" /> {isVi ? "TB Giấc ngủ" : "Avg Sleep"} ({cur.label})
             </p>
             <p className="mt-1 font-display text-[22px] leading-none">
               {cur.avgSleepMinutes > 0 ? formatMinutes(cur.avgSleepMinutes) : "—"}
             </p>
             <p className="mt-1 text-[11px] text-muted">
-              {formatSleepDelta(cur.avgSleepMinutes, prev?.avgSleepMinutes)}
+              {formatSleepDelta(cur.avgSleepMinutes, prev?.avgSleepMinutes, isVi)}
             </p>
           </div>
 
           <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <Scale className="size-3.5 text-success" /> Avg Weight ({cur.label})
+              <Scale className="size-3.5 text-success" /> {isVi ? "TB Cân nặng" : "Avg Weight"} ({cur.label})
             </p>
             <p className="mt-1 font-display text-[22px] leading-none">
               {cur.avgWeightKg !== null ? `${cur.avgWeightKg} kg` : "—"}
             </p>
             <p className="mt-1 text-[11px] text-muted">
-              {formatWeightDelta(cur.avgWeightKg, prev?.avgWeightKg)}
+              {formatWeightDelta(cur.avgWeightKg, prev?.avgWeightKg, isVi)}
             </p>
           </div>
         </div>
@@ -234,7 +240,7 @@ export function HealthLogCard({
           className="grid gap-2.5 rounded-xl border border-line bg-surface-2/40 p-3 sm:grid-cols-6 sm:items-end"
         >
           <label className="block text-[11px]">
-            <span className="text-muted">Date</span>
+            <span className="text-muted">{isVi ? "Ngày" : "Date"}</span>
             <Input
               type="date"
               value={date}
@@ -244,7 +250,7 @@ export function HealthLogCard({
             />
           </label>
           <label className="block text-[11px]">
-            <span className="text-muted">Steps</span>
+            <span className="text-muted">{isVi ? "Bước chân" : "Steps"}</span>
             <Input
               type="number"
               min={0}
@@ -255,7 +261,7 @@ export function HealthLogCard({
             />
           </label>
           <label className="block text-[11px]">
-            <span className="text-muted">Calories (kcal)</span>
+            <span className="text-muted">{isVi ? "Calo (kcal)" : "Calories (kcal)"}</span>
             <Input
               type="number"
               min={0}
@@ -266,7 +272,7 @@ export function HealthLogCard({
             />
           </label>
           <label className="block text-[11px]">
-            <span className="text-muted">Sleep (hours)</span>
+            <span className="text-muted">{isVi ? "Giấc ngủ (giờ)" : "Sleep (hours)"}</span>
             <Input
               type="number"
               min={0}
@@ -279,7 +285,7 @@ export function HealthLogCard({
             />
           </label>
           <label className="block text-[11px]">
-            <span className="text-muted">Weight (kg)</span>
+            <span className="text-muted">{isVi ? "Cân nặng (kg)" : "Weight (kg)"}</span>
             <Input
               type="number"
               min={20}
@@ -292,7 +298,7 @@ export function HealthLogCard({
             />
           </label>
           <Button type="submit" variant="accent" size="sm" disabled={pending} className="h-9">
-            <Plus className="size-3.5" /> Save day
+            <Plus className="size-3.5" /> {isVi ? "Lưu ngày" : "Save day"}
           </Button>
         </form>
 
@@ -300,15 +306,16 @@ export function HealthLogCard({
           <div className="rounded-xl border border-line bg-surface-2/30 p-3.5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11.5px] font-medium text-ink">
-                Health trend ({tab})
+                {isVi ? "Xu hướng sức khỏe" : "Health trend"} (
+                {isVi ? (tab === "week" ? "tuần" : tab === "month" ? "tháng" : "năm") : tab})
               </p>
               <div className="flex flex-wrap gap-1">
                 {(
                   [
-                    { id: "steps", label: "Steps" },
-                    { id: "calories", label: "Calories" },
-                    { id: "sleep", label: "Sleep" },
-                    { id: "weight", label: "Weight (×0.1kg)" },
+                    { id: "steps", label: isVi ? "Bước chân" : "Steps" },
+                    { id: "calories", label: isVi ? "Calo" : "Calories" },
+                    { id: "sleep", label: isVi ? "Giấc ngủ" : "Sleep" },
+                    { id: "weight", label: isVi ? "Cân nặng (×0.1kg)" : "Weight (×0.1kg)" },
                   ] as const
                 ).map((m) => (
                   <button
@@ -340,14 +347,22 @@ export function HealthLogCard({
                       : "minutes"
               }
               height={130}
-              emptyLabel="Log health entries to see trends."
+              emptyLabel={isVi ? "Nhập chỉ số sức khỏe để xem xu hướng." : "Log health entries to see trends."}
             />
             {avgFocusWellSlept !== null || avgFocusShortSlept !== null ? (
               <p className="mt-2.5 text-[11px] text-muted">
-                Focus vs Sleep correlation:{" "}
-                {avgFocusWellSlept !== null ? `≥7h sleep averages ${formatMinutes(avgFocusWellSlept)} focus/day` : ""}
+                {isVi ? "Tương quan Tập trung & Giấc ngủ:" : "Focus vs Sleep correlation:"}{" "}
+                {avgFocusWellSlept !== null
+                  ? isVi
+                    ? `ngủ ≥7h tập trung TB ${formatMinutes(avgFocusWellSlept)}/ngày`
+                    : `≥7h sleep averages ${formatMinutes(avgFocusWellSlept)} focus/day`
+                  : ""}
                 {avgFocusWellSlept !== null && avgFocusShortSlept !== null ? " · " : ""}
-                {avgFocusShortSlept !== null ? `<7h sleep averages ${formatMinutes(avgFocusShortSlept)} focus/day` : ""}
+                {avgFocusShortSlept !== null
+                  ? isVi
+                    ? `ngủ <7h tập trung TB ${formatMinutes(avgFocusShortSlept)}/ngày`
+                    : `<7h sleep averages ${formatMinutes(avgFocusShortSlept)} focus/day`
+                  : ""}
                 .
               </p>
             ) : null}
@@ -357,17 +372,18 @@ export function HealthLogCard({
         {activeComparison.buckets.length > 0 ? (
           <div className="overflow-x-auto">
             <p className="mb-1.5 text-[11px] font-medium text-muted">
-              Period comparison ({tab})
+              {isVi ? "So sánh theo kỳ" : "Period comparison"} (
+              {isVi ? (tab === "week" ? "tuần" : tab === "month" ? "tháng" : "năm") : tab})
             </p>
             <table className="w-full min-w-[520px] text-left text-[11.5px]">
               <thead>
                 <tr className="border-b border-line text-[10px] uppercase tracking-[0.08em] text-muted">
-                  <th className="py-2 pr-3 font-medium">Period</th>
-                  <th className="py-2 pr-3 text-right font-medium">Days</th>
-                  <th className="py-2 pr-3 text-right font-medium">Avg Steps</th>
-                  <th className="py-2 pr-3 text-right font-medium">Avg Calories</th>
-                  <th className="py-2 pr-3 text-right font-medium">Avg Sleep</th>
-                  <th className="py-2 text-right font-medium">Avg Weight</th>
+                  <th className="py-2 pr-3 font-medium">{isVi ? "Kỳ" : "Period"}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{isVi ? "Số ngày" : "Days"}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{isVi ? "TB Bước" : "Avg Steps"}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{isVi ? "TB Calo" : "Avg Calories"}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{isVi ? "TB Ngủ" : "Avg Sleep"}</th>
+                  <th className="py-2 text-right font-medium">{isVi ? "TB Cân nặng" : "Avg Weight"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -397,16 +413,16 @@ export function HealthLogCard({
         {health.days.length > 0 ? (
           <div className="overflow-x-auto">
             <p className="mb-1.5 text-[11px] font-medium text-muted">
-              Daily entries (click a row to edit)
+              {isVi ? "Nhật ký từng ngày (bấm vào dòng để sửa)" : "Daily entries (click a row to edit)"}
             </p>
             <table className="w-full min-w-[480px] text-left text-[11.5px]">
               <thead>
                 <tr className="border-b border-line text-[10px] uppercase tracking-[0.08em] text-muted">
-                  <th className="py-2 pr-3 font-medium">Date</th>
-                  <th className="py-2 pr-3 text-right font-medium">Steps</th>
-                  <th className="py-2 pr-3 text-right font-medium">Calories</th>
-                  <th className="py-2 pr-3 text-right font-medium">Sleep</th>
-                  <th className="py-2 text-right font-medium">Weight</th>
+                  <th className="py-2 pr-3 font-medium">{isVi ? "Ngày" : "Date"}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{isVi ? "Bước chân" : "Steps"}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{isVi ? "Calo" : "Calories"}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{isVi ? "Giấc ngủ" : "Sleep"}</th>
+                  <th className="py-2 text-right font-medium">{isVi ? "Cân nặng" : "Weight"}</th>
                 </tr>
               </thead>
               <tbody>

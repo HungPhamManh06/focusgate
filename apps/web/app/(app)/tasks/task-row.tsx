@@ -11,10 +11,11 @@ import {
 } from "@/lib/actions/tasks";
 import { formatMinutes } from "@/lib/data/format";
 import type { PlanStatus, PlanTask, Task } from "@/lib/data/types";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import { categoryLabels, kindLabels } from "@/components/domain/labels";
+import { getCategoryLabel, getKindLabel } from "@/components/domain/labels";
 import { formatTaskRowStatus } from "@/lib/domain/tasks-planner-state";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "./task-form-dialog";
@@ -32,6 +33,8 @@ export function TaskRow({
   planStatus?: PlanStatus | null;
   planTask?: PlanTask | null;
 }) {
+  const locale = useLocale();
+  const isVi = locale === "vi";
   const [pending, startTransition] = useTransition();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const toast = useToast();
@@ -85,7 +88,9 @@ export function TaskRow({
         disabled={pending || needsFocusInActivePlan}
         title={
           needsFocusInActivePlan && planTask
-            ? `Needs ${formatMinutes(planTask.requiredFocusMinutes - planTask.focusDone)} more focus first`
+            ? isVi
+              ? `Cần thêm ${formatMinutes(planTask.requiredFocusMinutes - planTask.focusDone)} tập trung trước`
+              : `Needs ${formatMinutes(planTask.requiredFocusMinutes - planTask.focusDone)} more focus first`
             : undefined
         }
         aria-label={completed ? `Reopen ${task.title}` : `Complete ${task.title}`}
@@ -116,14 +121,14 @@ export function TaskRow({
             {task.title}
           </p>
           {rowStatus.showPriorityBadge && task.priority === "urgent" ? (
-            <Badge tone="danger">Urgent</Badge>
+            <Badge tone="danger">{isVi ? "Khẩn cấp" : "Urgent"}</Badge>
           ) : null}
           {rowStatus.showPriorityBadge && task.priority === "high" ? (
-            <Badge tone="warning">High</Badge>
+            <Badge tone="warning">{isVi ? "Cao" : "High"}</Badge>
           ) : null}
           {planTask ? (
             <Badge tone="accent">
-              In today&apos;s plan · {kindLabels[planTask.kind]}
+              {isVi ? "Trong kế hoạch hôm nay" : "In today's plan"} · {getKindLabel(planTask.kind, locale)}
             </Badge>
           ) : null}
         </div>
@@ -133,20 +138,25 @@ export function TaskRow({
         ) : null}
 
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
-          <span>{categoryLabels[task.category] ?? task.category}</span>
+          <span>{getCategoryLabel(task.category, locale)}</span>
           <span aria-hidden>·</span>
-          <span>{task.estimatedMinutes}m estimate</span>
+          <span>
+            {isVi ? `ước tính ${task.estimatedMinutes}m` : `${task.estimatedMinutes}m estimate`}
+          </span>
           {planTask && planTask.requiredFocusMinutes > 0 ? (
             <>
               <span aria-hidden>·</span>
               <span>
-                {formatMinutes(planTask.focusDone)}/{formatMinutes(planTask.requiredFocusMinutes)} focus
+                {formatMinutes(planTask.focusDone)}/{formatMinutes(planTask.requiredFocusMinutes)}{" "}
+                {isVi ? "tập trung" : "focus"}
               </span>
             </>
           ) : task.requiredFocusMinutes > 0 ? (
             <>
               <span aria-hidden>·</span>
-              <span>{task.requiredFocusMinutes}m focus</span>
+              <span>
+                {task.requiredFocusMinutes}m {isVi ? "tập trung" : "focus"}
+              </span>
             </>
           ) : null}
           {rowStatus.completedLabel ? (
@@ -171,7 +181,7 @@ export function TaskRow({
             href={`/focus?taskId=${task.id}`}
             className="inline-flex h-8 items-center gap-1 rounded-lg border border-accent/35 bg-accent-soft px-2.5 text-[12px] font-medium text-accent transition-colors hover:bg-accent hover:text-white"
           >
-            Focus <ArrowRight className="size-3.5" />
+            {isVi ? "Tập trung" : "Focus"} <ArrowRight className="size-3.5" />
           </Link>
         ) : canAddToTodayPlan ? (
           <button
@@ -181,7 +191,7 @@ export function TaskRow({
             className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface-2/70 px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:border-accent/40 hover:bg-accent-soft hover:text-accent disabled:opacity-50"
           >
             <Plus className="size-3.5" />
-            <span className="hidden sm:inline">Today</span>
+            <span className="hidden sm:inline">{isVi ? "Hôm nay" : "Today"}</span>
           </button>
         ) : null}
         <div className="flex items-center gap-0.5 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
@@ -202,16 +212,24 @@ export function TaskRow({
         open={confirmDeleteOpen}
         onClose={() => setConfirmDeleteOpen(false)}
         onConfirm={remove}
-        eyebrow="Delete task"
-        title="Remove this task?"
+        eyebrow={isVi ? "Xóa nhiệm vụ" : "Delete task"}
+        title={isVi ? "Xóa nhiệm vụ này?" : "Remove this task?"}
         description={
-          <>
-            You are about to permanently delete{" "}
-            <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span>. This action
-            cannot be undone.
-          </>
+          isVi ? (
+            <>
+              Bạn sắp xóa vĩnh viễn{" "}
+              <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span>. Hành động
+              này không thể hoàn tác.
+            </>
+          ) : (
+            <>
+              You are about to permanently delete{" "}
+              <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span>. This action
+              cannot be undone.
+            </>
+          )
         }
-        confirmLabel="Delete task"
+        confirmLabel={isVi ? "Xóa nhiệm vụ" : "Delete task"}
         confirmVariant="danger"
         pending={pending}
       />

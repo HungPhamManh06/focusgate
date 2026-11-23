@@ -15,7 +15,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label, Select, Textarea } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/toast";
-import { kindLabels } from "@/components/domain/labels";
+import { useLocale } from "@/components/i18n/language-provider";
+import { getKindLabel } from "@/components/domain/labels";
 import { cn } from "@/lib/utils";
 
 export function PlanTaskRow({
@@ -25,6 +26,8 @@ export function PlanTaskRow({
   task: PlanTask;
   planStatus: PlanStatus;
 }) {
+  const locale = useLocale();
+  const isVi = locale === "vi";
   const [pending, startTransition] = useTransition();
   const [amendOpen, setAmendOpen] = useState(false);
   const [amendKind, setAmendKind] = useState<TaskKind>(
@@ -123,8 +126,10 @@ export function PlanTaskRow({
           <p className={cn("text-[14px] font-medium", done && "text-muted line-through")}>
             {task.title}
           </p>
-          {task.priority === "urgent" ? <Badge tone="danger">Urgent</Badge> : null}
-          {done ? <Badge tone="success">Done</Badge> : null}
+          {task.priority === "urgent" ? (
+            <Badge tone="danger">{isVi ? "Khẩn cấp" : "Urgent"}</Badge>
+          ) : null}
+          {done ? <Badge tone="success">{isVi ? "Xong" : "Done"}</Badge> : null}
         </div>
 
         <div className="mt-2 flex items-center gap-2">
@@ -134,20 +139,23 @@ export function PlanTaskRow({
             className="max-w-[210px]"
           />
           <span className="whitespace-nowrap text-[12px] text-muted">
-            {formatMinutes(task.focusDone)} / {formatMinutes(task.requiredFocusMinutes)} focus
+            {formatMinutes(task.focusDone)} / {formatMinutes(task.requiredFocusMinutes)}{" "}
+            {isVi ? "tập trung" : "focus"}
           </span>
         </div>
 
         {planStatus === "active" && !done && remainingFocus > 0 ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <p className="text-[12px] text-warning">
-              {formatMinutes(remainingFocus)} more verified focus needed to complete.
+              {isVi
+                ? `Cần thêm ${formatMinutes(remainingFocus)} tập trung hợp lệ để hoàn thành.`
+                : `${formatMinutes(remainingFocus)} more verified focus needed to complete.`}
             </p>
             <Link
               href={`/focus?taskId=${task.taskId}`}
               className="inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline"
             >
-              Focus <ArrowRight className="size-3.5" />
+              {isVi ? "Tập trung" : "Focus"} <ArrowRight className="size-3.5" />
             </Link>
           </div>
         ) : null}
@@ -162,9 +170,9 @@ export function PlanTaskRow({
             aria-label={`Change gate tier for ${task.title}`}
             className="h-7 rounded-lg border border-line bg-surface-2 px-2 text-[11px] font-medium text-ink-soft transition-colors hover:border-ink/25 focus:border-accent focus:outline-none"
           >
-            <option value="must_do">{kindLabels.must_do}</option>
-            <option value="should_do">{kindLabels.should_do}</option>
-            <option value="bonus">{kindLabels.bonus}</option>
+            <option value="must_do">{getKindLabel("must_do", locale)}</option>
+            <option value="should_do">{getKindLabel("should_do", locale)}</option>
+            <option value="bonus">{getKindLabel("bonus", locale)}</option>
           </select>
           <button
             type="button"
@@ -182,15 +190,22 @@ export function PlanTaskRow({
         open={confirmRemoveOpen}
         onClose={() => setConfirmRemoveOpen(false)}
         onConfirm={remove}
-        eyebrow="Draft plan"
-        title="Remove from today's plan?"
+        eyebrow={isVi ? "Kế hoạch nháp" : "Draft plan"}
+        title={isVi ? "Gỡ khỏi kế hoạch hôm nay?" : "Remove from today's plan?"}
         description={
-          <>
-            Remove <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span> from
-            today&apos;s plan? The task will remain in your backlog.
-          </>
+          isVi ? (
+            <>
+              Gỡ <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span> khỏi kế
+              hoạch hôm nay? Nhiệm vụ vẫn được giữ trong hàng chờ.
+            </>
+          ) : (
+            <>
+              Remove <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span> from
+              today&apos;s plan? The task will remain in your backlog.
+            </>
+          )
         }
-        confirmLabel="Remove from plan"
+        confirmLabel={isVi ? "Gỡ khỏi kế hoạch" : "Remove from plan"}
         confirmVariant="danger"
         pending={pending}
       />
@@ -206,12 +221,16 @@ export function PlanTaskRow({
               setAmendOpen(true);
             }}
             disabled={pending}
-            title="Amend commitment tier (logged in gate history)"
+            title={
+              isVi
+                ? "Điều chỉnh mức cam kết (được ghi vào lịch sử)"
+                : "Amend commitment tier (logged in gate history)"
+            }
             aria-label={`Amend ${task.title}`}
             className="inline-flex h-7 items-center gap-1 rounded-lg border border-line bg-surface-2/60 px-2 text-[10.5px] font-medium text-muted transition-colors hover:border-ink/20 hover:bg-surface-2 hover:text-ink"
           >
             <FileEdit className="size-3" />
-            <span className="hidden sm:inline">Amend</span>
+            <span className="hidden sm:inline">{isVi ? "Điều chỉnh" : "Amend"}</span>
           </button>
 
           {planStatus === "active" ? (
@@ -219,7 +238,13 @@ export function PlanTaskRow({
               type="button"
               onClick={complete}
               disabled={pending || !canComplete}
-              title={canComplete ? "Mark complete" : `Needs ${formatMinutes(remainingFocus)} more focus`}
+              title={
+                canComplete
+                  ? isVi ? "Đánh dấu hoàn thành" : "Mark complete"
+                  : isVi
+                    ? `Cần thêm ${formatMinutes(remainingFocus)} tập trung`
+                    : `Needs ${formatMinutes(remainingFocus)} more focus`
+              }
               aria-label={`Complete ${task.title}`}
               className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-success-soft hover:text-success disabled:cursor-not-allowed disabled:opacity-35"
             >
@@ -233,15 +258,26 @@ export function PlanTaskRow({
         open={amendOpen}
         onClose={() => setAmendOpen(false)}
         onConfirm={submitAmendment}
-        eyebrow="Audited plan amendment"
-        title="Amend committed task?"
+        eyebrow={isVi ? "Điều chỉnh có ghi nhận" : "Audited plan amendment"}
+        title={isVi ? "Điều chỉnh nhiệm vụ đã cam kết?" : "Amend committed task?"}
         description={
-          <>
-            Adjusting <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span> after
-            confirmation writes an immutable entry to today&apos;s Gate History.
-          </>
+          isVi ? (
+            <>
+              Thay đổi <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span> sau
+              khi chốt sẽ ghi một mục cố định vào Lịch sử cổng hôm nay.
+            </>
+          ) : (
+            <>
+              Adjusting <span className="font-medium text-ink">&ldquo;{task.title}&rdquo;</span> after
+              confirmation writes an immutable entry to today&apos;s Gate History.
+            </>
+          )
         }
-        confirmLabel={requiresAuditReason ? "Record exception & downgrade" : "Update tier"}
+        confirmLabel={
+          requiresAuditReason
+            ? isVi ? "Ghi ngoại lệ & hạ mức" : "Record exception & downgrade"
+            : isVi ? "Cập nhật mức" : "Update tier"
+        }
         confirmVariant="primary"
         pending={pending}
       >
@@ -253,31 +289,53 @@ export function PlanTaskRow({
           ) : null}
 
           <div>
-            <Label htmlFor={`amend-kind-${task.id}`}>New commitment tier</Label>
+            <Label htmlFor={`amend-kind-${task.id}`}>
+              {isVi ? "Mức cam kết mới" : "New commitment tier"}
+            </Label>
             <Select
               id={`amend-kind-${task.id}`}
               value={amendKind}
               onChange={(event) => setAmendKind(event.target.value as TaskKind)}
             >
-              {task.kind !== "must_do" ? <option value="must_do">Must-do (locks reward gate)</option> : null}
-              {task.kind !== "should_do" ? <option value="should_do">Should-do (does not block reward)</option> : null}
-              {task.kind !== "bonus" ? <option value="bonus">Bonus (+extra reward minutes)</option> : null}
+              {task.kind !== "must_do" ? (
+                <option value="must_do">
+                  {isVi ? "Bắt buộc (khóa cổng thưởng)" : "Must-do (locks reward gate)"}
+                </option>
+              ) : null}
+              {task.kind !== "should_do" ? (
+                <option value="should_do">
+                  {isVi ? "Nên làm (không chặn thưởng)" : "Should-do (does not block reward)"}
+                </option>
+              ) : null}
+              {task.kind !== "bonus" ? (
+                <option value="bonus">
+                  {isVi ? "Thưởng thêm (+phút thưởng)" : "Bonus (+extra reward minutes)"}
+                </option>
+              ) : null}
             </Select>
           </div>
 
           {requiresAuditReason ? (
             <div>
-              <Label htmlFor={`amend-reason-${task.id}`}>Reason for exception (required)</Label>
+              <Label htmlFor={`amend-reason-${task.id}`}>
+                {isVi ? "Lý do ngoại lệ (bắt buộc)" : "Reason for exception (required)"}
+              </Label>
               <Textarea
                 id={`amend-reason-${task.id}`}
                 value={amendReason}
                 onChange={(event) => setAmendReason(event.target.value)}
-                placeholder="e.g. Blocked by external dependency or unexpected urgent outage…"
+                placeholder={
+                  isVi
+                    ? "VD: Bị chặn bởi bên ngoài hoặc có sự cố khẩn cấp…"
+                    : "e.g. Blocked by external dependency or unexpected urgent outage…"
+                }
                 maxLength={300}
                 required
               />
               <p className="mt-1 text-[10.5px] text-muted">
-                Keep it honest — this reason appears in your permanent Gate History.
+                {isVi
+                  ? "Hãy trung thực — lý do này sẽ lưu vĩnh viễn trong Lịch sử cổng."
+                  : "Keep it honest — this reason appears in your permanent Gate History."}
               </p>
             </div>
           ) : null}

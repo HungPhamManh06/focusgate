@@ -63,7 +63,9 @@ export function buildMissionViewModel(
   plan: Plan | null,
   settings: RewardSettings,
   todayGrant?: Grant,
+  locale: "en" | "vi" = "en",
 ): MissionViewModel {
+  const isVi = locale === "vi";
   const phase = resolveMissionPhase(plan, todayGrant);
   const mustDoTotal = plan?.progress.mustDoTotal ?? 0;
   const mustDoCompleted = plan?.progress.mustDoCompleted ?? 0;
@@ -113,54 +115,76 @@ export function buildMissionViewModel(
     case "no_plan": {
       stageStates.plan = "current";
       currentStepNumber = "01";
-      currentStepLabel = "Plan";
-      headline = "Make today count.";
-      description =
-        "Start by choosing a few things that really matter today. Must-do tasks form your daily gate.";
-      statusLine = `Base reward: ${formatMinutes(settings.baseMinutes)} upon completion`;
+      currentStepLabel = isVi ? "Lập kế hoạch" : "Plan";
+      headline = isVi ? "Biến hôm nay thành một ngày giá trị." : "Make today count.";
+      description = isVi
+        ? "Bắt đầu bằng việc chọn vài việc thực sự quan trọng hôm nay. Nhiệm vụ Bắt buộc là cổng mở khóa của bạn."
+        : "Start by choosing a few things that really matter today. Must-do tasks form your daily gate.";
+      statusLine = isVi
+        ? `Thưởng cơ bản: ${formatMinutes(settings.baseMinutes)} khi hoàn thành`
+        : `Base reward: ${formatMinutes(settings.baseMinutes)} upon completion`;
       break;
     }
     case "draft_empty": {
       stageStates.plan = "current";
       currentStepNumber = "01";
-      currentStepLabel = "Plan";
-      headline = "No Must-do tasks yet.";
-      description =
-        "Choose at least one important task to establish today's commitment.";
+      currentStepLabel = isVi ? "Lập kế hoạch" : "Plan";
+      headline = isVi ? "Chưa có nhiệm vụ Bắt buộc." : "No Must-do tasks yet.";
+      description = isVi
+        ? "Chọn ít nhất một nhiệm vụ quan trọng để thiết lập cam kết hôm nay."
+        : "Choose at least one important task to establish today's commitment.";
       statusLine =
         plan && plan.tasks.length > 0
-          ? `0 Must-do tasks selected (${plan.tasks.length} optional task${plan.tasks.length === 1 ? "" : "s"} in draft)`
-          : "0 Must-do tasks selected";
+          ? isVi
+            ? `Đã chọn 0 Bắt buộc (${plan.tasks.length} việc tùy chọn trong bản nháp)`
+            : `0 Must-do tasks selected (${plan.tasks.length} optional task${plan.tasks.length === 1 ? "" : "s"} in draft)`
+          : isVi
+            ? "Chưa chọn nhiệm vụ Bắt buộc nào"
+            : "0 Must-do tasks selected";
       break;
     }
     case "draft_ready": {
       stageStates.plan = "completed";
       stageStates.commit = "current";
       currentStepNumber = "02";
-      currentStepLabel = "Commit";
-      headline = "Confirm today's contract.";
-      description =
-        "Your Must-do commitments are selected. Confirm the plan to lock the gate for today.";
-      statusLine = `${mustDoTotal} Must-do task${mustDoTotal === 1 ? "" : "s"} selected · ${
-        hasFocusTarget
-          ? `${formatMinutes(focusRequired)} focus target`
-          : "Focus target not set"
-      }`;
+      currentStepLabel = isVi ? "Cam kết" : "Commit";
+      headline = isVi ? "Chốt cam kết hôm nay." : "Confirm today's contract.";
+      description = isVi
+        ? "Các nhiệm vụ Bắt buộc đã được chọn. Xác nhận kế hoạch để khóa cổng cho ngày hôm nay."
+        : "Your Must-do commitments are selected. Confirm the plan to lock the gate for today.";
+      statusLine = isVi
+        ? `Đã chọn ${mustDoTotal} việc Bắt buộc · ${
+            hasFocusTarget
+              ? `Mục tiêu tập trung ${formatMinutes(focusRequired)}`
+              : "Chưa đặt mục tiêu tập trung"
+          }`
+        : `${mustDoTotal} Must-do task${mustDoTotal === 1 ? "" : "s"} selected · ${
+            hasFocusTarget
+              ? `${formatMinutes(focusRequired)} focus target`
+              : "Focus target not set"
+          }`;
       break;
     }
     case "confirmed": {
       stageStates.plan = "completed";
       stageStates.commit = "current";
       currentStepNumber = "02";
-      currentStepLabel = "Commit";
-      headline = "The gate is locked. Activate focus.";
-      description =
-        "Your daily contract is confirmed. Activate focus mode to begin logging verified sessions toward your reward.";
-      statusLine = `${mustDoTotal} Must-do task${mustDoTotal === 1 ? "" : "s"} locked · ${
-        hasFocusTarget
-          ? `${formatMinutes(focusRequired)} required focus`
-          : "Ready to complete in active mode"
-      }`;
+      currentStepLabel = isVi ? "Cam kết" : "Commit";
+      headline = isVi ? "Đã khóa cổng. Kích hoạt tập trung." : "The gate is locked. Activate focus.";
+      description = isVi
+        ? "Cam kết hôm nay đã được chốt. Kích hoạt chế độ tập trung để bắt đầu ghi nhận phiên hợp lệ."
+        : "Your daily contract is confirmed. Activate focus mode to begin logging verified sessions toward your reward.";
+      statusLine = isVi
+        ? `Đã khóa ${mustDoTotal} việc Bắt buộc · ${
+            hasFocusTarget
+              ? `Cần ${formatMinutes(focusRequired)} tập trung`
+              : "Sẵn sàng hoàn thành"
+          }`
+        : `${mustDoTotal} Must-do task${mustDoTotal === 1 ? "" : "s"} locked · ${
+            hasFocusTarget
+              ? `${formatMinutes(focusRequired)} required focus`
+              : "Ready to complete in active mode"
+          }`;
       break;
     }
     case "active_focus": {
@@ -171,19 +195,25 @@ export function buildMissionViewModel(
         stageStates.focus = "completed";
         stageStates.complete = "current";
         currentStepNumber = "04";
-        currentStepLabel = "Complete";
-        headline = "Finish your remaining Must-dos.";
-        description =
-          "Your focus requirement is met. Mark every remaining Must-do task complete in the planner to close the day.";
-        statusLine = `${mustDoCompleted} of ${mustDoTotal} Must-do tasks completed`;
+        currentStepLabel = isVi ? "Hoàn thành" : "Complete";
+        headline = isVi ? "Hoàn thành các việc Bắt buộc còn lại." : "Finish your remaining Must-dos.";
+        description = isVi
+          ? "Bạn đã đạt yêu cầu tập trung. Đánh dấu hoàn thành tất cả việc Bắt buộc trong Kế hoạch để chốt ngày."
+          : "Your focus requirement is met. Mark every remaining Must-do task complete in the planner to close the day.";
+        statusLine = isVi
+          ? `Đã xong ${mustDoCompleted} / ${mustDoTotal} việc Bắt buộc`
+          : `${mustDoCompleted} of ${mustDoTotal} Must-do tasks completed`;
       } else {
         stageStates.focus = "current";
         currentStepNumber = "03";
-        currentStepLabel = "Focus";
-        headline = "Protect your attention.";
-        description =
-          "Complete verified focus sessions to meet today's focus requirement and unlock task completion.";
-        statusLine = `${formatMinutes(focusDone)} / ${formatMinutes(focusRequired)} minutes completed`;
+        currentStepLabel = isVi ? "Tập trung" : "Focus";
+        headline = isVi ? "Bảo vệ sự tập trung của bạn." : "Protect your attention.";
+        description = isVi
+          ? "Hoàn thành các phiên tập trung hợp lệ để đạt mục tiêu và mở khóa hoàn thành nhiệm vụ."
+          : "Complete verified focus sessions to meet today's focus requirement and unlock task completion.";
+        statusLine = isVi
+          ? `Đã hoàn thành ${formatMinutes(focusDone)} / ${formatMinutes(focusRequired)}`
+          : `${formatMinutes(focusDone)} / ${formatMinutes(focusRequired)} minutes completed`;
       }
       break;
     }
@@ -193,11 +223,14 @@ export function buildMissionViewModel(
       stageStates.focus = "completed";
       stageStates.complete = "current";
       currentStepNumber = "04";
-      currentStepLabel = "Complete";
-      headline = "All commitments met. Close the day.";
-      description =
-        "Every Must-do task and verified focus target is complete. Close the day now to unlock your reward.";
-      statusLine = `${mustDoCompleted}/${mustDoTotal} Must-dos done · ${formatMinutes(focusDone)} verified focus`;
+      currentStepLabel = isVi ? "Hoàn thành" : "Complete";
+      headline = isVi ? "Đã đạt mọi cam kết. Chốt ngày thôi." : "All commitments met. Close the day.";
+      description = isVi
+        ? "Mọi việc Bắt buộc và mục tiêu tập trung đã xong. Chốt ngày ngay để mở khóa phần thưởng."
+        : "Every Must-do task and verified focus target is complete. Close the day now to unlock your reward.";
+      statusLine = isVi
+        ? `Xong ${mustDoCompleted}/${mustDoTotal} Bắt buộc · ${formatMinutes(focusDone)} tập trung hợp lệ`
+        : `${mustDoCompleted}/${mustDoTotal} Must-dos done · ${formatMinutes(focusDone)} verified focus`;
       break;
     }
     case "completed_unclaimed": {
@@ -207,11 +240,14 @@ export function buildMissionViewModel(
       stageStates.complete = "completed";
       stageStates.unlock = "current";
       currentStepNumber = "05";
-      currentStepLabel = "Unlock";
-      headline = "Your work has earned you time.";
-      description =
-        "Your daily gate is complete. Claim your reward to add leisure time to your wallet.";
-      statusLine = `Est. ${formatMinutes(estimatedReward)} earned · ready to claim`;
+      currentStepLabel = isVi ? "Mở khóa" : "Unlock";
+      headline = isVi ? "Nỗ lực của bạn đã đổi lấy thời gian." : "Your work has earned you time.";
+      description = isVi
+        ? "Cổng ngày hôm nay đã hoàn thành. Nhận thưởng để cộng thời gian giải trí vào ví."
+        : "Your daily gate is complete. Claim your reward to add leisure time to your wallet.";
+      statusLine = isVi
+        ? `Ước tính ${formatMinutes(estimatedReward)} · sẵn sàng nhận`
+        : `Est. ${formatMinutes(estimatedReward)} earned · ready to claim`;
       break;
     }
     case "completed_claimed": {
@@ -221,13 +257,18 @@ export function buildMissionViewModel(
       stageStates.complete = "completed";
       stageStates.unlock = "completed";
       currentStepNumber = "05";
-      currentStepLabel = "Unlock";
-      headline = "Today's gate is complete and rewarded.";
-      description =
-        "Your earned leisure time has been added to your Reward Wallet. Enjoy it deliberately.";
+      currentStepLabel = isVi ? "Mở khóa" : "Unlock";
+      headline = isVi ? "Hôm nay đã hoàn thành và nhận thưởng." : "Today's gate is complete and rewarded.";
+      description = isVi
+        ? "Thời gian giải trí đã được cộng vào Ví thưởng. Hãy tận hưởng một cách có chủ đích."
+        : "Your earned leisure time has been added to your Reward Wallet. Enjoy it deliberately.";
       statusLine = todayGrant
-        ? `Claimed ${formatMinutes(todayGrant.grantedMinutes)} · ${formatMinutes(todayGrant.remainingMinutes)} remaining`
-        : "Reward claimed";
+        ? isVi
+          ? `Đã nhận ${formatMinutes(todayGrant.grantedMinutes)} · còn ${formatMinutes(todayGrant.remainingMinutes)}`
+          : `Claimed ${formatMinutes(todayGrant.grantedMinutes)} · ${formatMinutes(todayGrant.remainingMinutes)} remaining`
+        : isVi
+          ? "Đã nhận thưởng"
+          : "Reward claimed";
       break;
     }
   }
@@ -236,31 +277,31 @@ export function buildMissionViewModel(
     {
       stepNumber: "01",
       key: "plan",
-      label: "Plan",
+      label: isVi ? "Kế hoạch" : "Plan",
       state: stageStates.plan,
     },
     {
       stepNumber: "02",
       key: "commit",
-      label: "Commit",
+      label: isVi ? "Cam kết" : "Commit",
       state: stageStates.commit,
     },
     {
       stepNumber: "03",
       key: "focus",
-      label: "Focus",
+      label: isVi ? "Tập trung" : "Focus",
       state: stageStates.focus,
     },
     {
       stepNumber: "04",
       key: "complete",
-      label: "Complete",
+      label: isVi ? "Hoàn thành" : "Complete",
       state: stageStates.complete,
     },
     {
       stepNumber: "05",
       key: "unlock",
-      label: "Unlock",
+      label: isVi ? "Mở khóa" : "Unlock",
       state: stageStates.unlock,
     },
   ];
@@ -288,29 +329,41 @@ export interface PlanProgressCardDisplay {
   tone: "default" | "accent" | "success" | "warning";
 }
 
-export function formatPlanProgressStat(plan: Plan | null): PlanProgressCardDisplay {
+export function formatPlanProgressStat(
+  plan: Plan | null,
+  locale: "en" | "vi" = "en",
+): PlanProgressCardDisplay {
+  const isVi = locale === "vi";
   if (!plan) {
     return {
-      value: "No plan",
-      hint: "Create today's plan to set your Must-do gate",
+      value: isVi ? "Chưa có kế hoạch" : "No plan",
+      hint: isVi
+        ? "Tạo kế hoạch hôm nay để đặt mục tiêu Bắt buộc"
+        : "Create today's plan to set your Must-do gate",
       tone: "default",
     };
   }
   const { mustDoTotal, mustDoCompleted } = plan.progress;
   if (mustDoTotal === 0) {
     return {
-      value: "No tasks selected",
+      value: isVi ? "Chưa chọn việc" : "No tasks selected",
       hint:
         plan.tasks.length > 0
-          ? `${plan.tasks.length} optional task${plan.tasks.length === 1 ? "" : "s"} in draft · add a Must-do`
-          : "Awaiting your first Must-do task",
+          ? isVi
+            ? `${plan.tasks.length} việc tùy chọn trong nháp · thêm việc Bắt buộc`
+            : `${plan.tasks.length} optional task${plan.tasks.length === 1 ? "" : "s"} in draft · add a Must-do`
+          : isVi
+            ? "Đang chờ nhiệm vụ Bắt buộc đầu tiên"
+            : "Awaiting your first Must-do task",
       tone: "warning",
     };
   }
   const percent = Math.round((mustDoCompleted / mustDoTotal) * 100);
   return {
     value: `${mustDoCompleted}/${mustDoTotal}`,
-    hint: `${percent}% of today's Must-do gate completed`,
+    hint: isVi
+      ? `Đã hoàn thành ${percent}% cổng Bắt buộc hôm nay`
+      : `${percent}% of today's Must-do gate completed`,
     tone: percent === 100 ? "success" : "default",
   };
 }
@@ -332,16 +385,22 @@ export interface OpenTasksStatDisplay {
  * (`Must-do`, `Should-do`, `Bonus`) derived from the authoritative open task
  * counts query so the breakdown always sums to `counts.open`.
  */
-export function formatOpenTasksStat(counts: OpenTasksCountsInput): OpenTasksStatDisplay {
+export function formatOpenTasksStat(
+  counts: OpenTasksCountsInput,
+  locale: "en" | "vi" = "en",
+): OpenTasksStatDisplay {
+  const isVi = locale === "vi";
   if (counts.open <= 0) {
     return {
-      value: "No open tasks",
-      hint: "Your task queue is empty · add a task →",
+      value: isVi ? "Không có việc mở" : "No open tasks",
+      hint: isVi ? "Hàng chờ trống · thêm nhiệm vụ →" : "Your task queue is empty · add a task →",
     };
   }
   return {
     value: String(counts.open),
-    hint: `${counts.mustDoOpen} Must-do · ${counts.shouldDoOpen} Should-do · ${counts.bonusOpen} Bonus →`,
+    hint: isVi
+      ? `${counts.mustDoOpen} Bắt buộc · ${counts.shouldDoOpen} Nên làm · ${counts.bonusOpen} Thưởng →`
+      : `${counts.mustDoOpen} Must-do · ${counts.shouldDoOpen} Should-do · ${counts.bonusOpen} Bonus →`,
   };
 }
 

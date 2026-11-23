@@ -6,9 +6,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { getTodayPlan } from "@/lib/data/planner";
 import { getTaskCounts, listTasks, type TaskFilters } from "@/lib/data/tasks";
+import { getV2Settings } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
 import type { PlanTask, TaskKind } from "@/lib/data/types";
-import { kindDescriptions, kindLabels } from "@/components/domain/labels";
+import { getKindLabel, kindDescriptions } from "@/components/domain/labels";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "./task-form-dialog";
 import { TaskRow } from "./task-row";
@@ -46,12 +47,22 @@ export default async function TasksPage({
 
   const filters: TaskFilters = { view, kind: kind ?? null, search: search ?? null };
 
-  const [workspace, tasks, counts, plan] = await Promise.all([
+  const [workspace, tasks, counts, plan, v2Settings] = await Promise.all([
     getWorkspace(),
     listTasks(filters),
     getTaskCounts(),
     getTodayPlan(),
+    getV2Settings().catch(() => null),
   ]);
+
+  const locale = v2Settings?.language ?? "en";
+  const isVi = locale === "vi";
+
+  const kindDescriptionsVi: Record<TaskKind, string> = {
+    must_do: "Được bảo vệ bởi phiên tập trung và bắt buộc hoàn thành để mở khóa ngày.",
+    should_do: "Đẩy tiến độ công việc sau khi đã lo xong các việc cốt lõi.",
+    bonus: "Nhiệm vụ tùy chọn giúp kiếm thêm phút thưởng.",
+  };
 
   const planTaskByTaskId = new Map<string, PlanTask>(
     (plan?.tasks ?? []).map((pt) => [pt.taskId, pt]),
@@ -65,17 +76,21 @@ export default async function TasksPage({
     .filter((group) => group.tasks.length > 0);
 
   const viewTabs = [
-    { value: "open", label: "Open" },
-    { value: "all", label: "All" },
-    { value: "done", label: "Done" },
+    { value: "open", label: isVi ? "Đang mở" : "Open" },
+    { value: "all", label: isVi ? "Tất cả" : "All" },
+    { value: "done", label: isVi ? "Đã xong" : "Done" },
   ] as const;
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-5 py-8 sm:px-8 sm:py-10">
       <PageHeader
-        eyebrow="Work queue"
-        title="Decide what matters."
-        description="Keep the list honest: must-dos are protected, should-dos move the day forward, bonuses earn extra time."
+        eyebrow={isVi ? "Danh sách nhiệm vụ" : "Work queue"}
+        title={isVi ? "Chọn việc thực sự quan trọng." : "Decide what matters."}
+        description={
+          isVi
+            ? "Giữ danh sách rõ ràng: việc Bắt buộc được khóa bảo vệ, việc Nên làm giúp tiến lên, việc Thưởng kiếm thêm thời gian."
+            : "Keep the list honest: must-dos are protected, should-dos move the day forward, bonuses earn extra time."
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {counts.open > 0 && (!plan || plan.tasks.length === 0) ? (
@@ -83,7 +98,8 @@ export default async function TasksPage({
                 href="/planner"
                 className={buttonVariants({ variant: "outline", size: "md" })}
               >
-                Build today&apos;s plan <ArrowRight className="size-4" />
+                {isVi ? "Lập kế hoạch hôm nay" : "Build today's plan"}{" "}
+                <ArrowRight className="size-4" />
               </Link>
             ) : null}
             <TaskFormDialog />
@@ -92,13 +108,13 @@ export default async function TasksPage({
       />
 
       <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11.5px] text-muted">
-        <span>{counts.total} total</span>
+        <span>{counts.total} {isVi ? "tổng" : "total"}</span>
         <span className="size-1 rounded-full bg-line" aria-hidden />
-        <span>{counts.open} open</span>
+        <span>{counts.open} {isVi ? "đang mở" : "open"}</span>
         <span className="size-1 rounded-full bg-line" aria-hidden />
-        <span>{counts.completed} completed</span>
+        <span>{counts.completed} {isVi ? "đã xong" : "completed"}</span>
         <span className="size-1 rounded-full bg-line" aria-hidden />
-        <span>{counts.mustDoOpen} must-do remaining</span>
+        <span>{counts.mustDoOpen} {isVi ? "việc Bắt buộc còn lại" : "must-do remaining"}</span>
       </div>
 
       <div className="mt-5 flex flex-col gap-3 rounded-[18px] border border-line bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -133,7 +149,7 @@ export default async function TasksPage({
                   : "border-transparent text-muted hover:text-ink",
               )}
             >
-              Any type
+              {isVi ? "Mọi loại" : "Any type"}
             </Link>
             {kinds.map((option) => (
               <Link
@@ -147,7 +163,7 @@ export default async function TasksPage({
                     : "border-transparent text-muted hover:text-ink",
                 )}
               >
-                {kindLabels[option]}
+                {getKindLabel(option, locale)}
               </Link>
             ))}
           </div>
@@ -162,19 +178,27 @@ export default async function TasksPage({
             {counts.total === 0 ? (
               <EmptyState
                 icon={ListTodo}
-                title="Your list is empty"
-                description="Add the first task. Start with one must-do — something the day genuinely depends on."
+                title={isVi ? "Danh sách đang trống" : "Your list is empty"}
+                description={
+                  isVi
+                    ? "Hãy thêm nhiệm vụ đầu tiên. Bắt đầu với một việc Bắt buộc mà ngày hôm nay thực sự phụ thuộc vào."
+                    : "Add the first task. Start with one must-do — something the day genuinely depends on."
+                }
                 action={<TaskFormDialog />}
                 className="border-0 bg-transparent shadow-none"
               />
             ) : (
               <EmptyState
                 icon={Search}
-                title="No tasks match this view"
-                description="Try another status, task type, or search phrase."
+                title={isVi ? "Không có nhiệm vụ phù hợp" : "No tasks match this view"}
+                description={
+                  isVi
+                    ? "Thử đổi trạng thái, loại nhiệm vụ hoặc từ khóa tìm kiếm."
+                    : "Try another status, task type, or search phrase."
+                }
                 action={
                   <Link href="/tasks" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                    Clear filters
+                    {isVi ? "Xóa bộ lọc" : "Clear filters"}
                   </Link>
                 }
                 className="border-0 bg-transparent shadow-none"
@@ -188,12 +212,16 @@ export default async function TasksPage({
                 <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
                   <div>
                     <h2 id={`group-${group.kind}`} className="text-[13px] font-semibold">
-                      {kindLabels[group.kind]}
+                      {getKindLabel(group.kind, locale)}
                     </h2>
-                    <p className="mt-0.5 text-[11px] text-muted">{kindDescriptions[group.kind]}</p>
+                    <p className="mt-0.5 text-[11px] text-muted">
+                      {isVi ? kindDescriptionsVi[group.kind] : kindDescriptions[group.kind]}
+                    </p>
                   </div>
                   <span className="shrink-0 text-[11px] text-muted">
-                    {group.tasks.length} task{group.tasks.length === 1 ? "" : "s"}
+                    {isVi
+                      ? `${group.tasks.length} nhiệm vụ`
+                      : `${group.tasks.length} task${group.tasks.length === 1 ? "" : "s"}`}
                   </span>
                 </div>
                 <Card className="overflow-hidden">

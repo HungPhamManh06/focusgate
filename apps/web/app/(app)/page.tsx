@@ -22,6 +22,7 @@ import { getRecentSessions, getTodayFocusSummary } from "@/lib/data/focus";
 import { getTodayPlan } from "@/lib/data/planner";
 import { getWallet } from "@/lib/data/rewards";
 import { getTaskCounts } from "@/lib/data/tasks";
+import { getV2Settings } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
 import {
   filterDueSoonTasks,
@@ -34,7 +35,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   // Fetch 5 upcoming tasks with due dates so that if 1 is promoted to "Your Next Move",
   // "Due Soon" can still display up to 4 distinct remaining deadlines.
-  const [workspace, plan, focus, wallet, upcomingRaw, sessions, counts] = await Promise.all([
+  const [workspace, plan, focus, wallet, upcomingRaw, sessions, counts, v2Settings] = await Promise.all([
     getWorkspace(),
     getTodayPlan(),
     getTodayFocusSummary(),
@@ -42,14 +43,18 @@ export default async function DashboardPage() {
     getUpcomingTasks(5),
     getRecentSessions(4),
     getTaskCounts(),
+    getV2Settings().catch(() => null),
   ]);
+
+  const locale = v2Settings?.language ?? "en";
+  const isVi = locale === "vi";
 
   const nextMove = await getNextMoveCandidate(plan);
   const dueSoonTasks = filterDueSoonTasks(upcomingRaw, nextMove?.task.id, 4);
 
   const { timezone, displayName } = workspace.profile;
   const firstName = displayName.split(/\s+/)[0] ?? displayName;
-  const dateLabel = new Intl.DateTimeFormat("en-GB", {
+  const dateLabel = new Intl.DateTimeFormat(isVi ? "vi-VN" : "en-GB", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -62,8 +67,8 @@ export default async function DashboardPage() {
       )
     : undefined;
 
-  const planStat = formatPlanProgressStat(plan);
-  const openTasksStat = formatOpenTasksStat(counts);
+  const planStat = formatPlanProgressStat(plan, locale);
+  const openTasksStat = formatOpenTasksStat(counts, locale);
 
   return (
     <div className="mx-auto w-full max-w-[1280px] overflow-x-hidden px-4 py-7 sm:px-8 sm:py-9 lg:px-10">
@@ -71,24 +76,34 @@ export default async function DashboardPage() {
       <LiveGreetingHeader
         firstName={firstName}
         initialDateLabel={dateLabel}
-        initialGreeting={greeting(timezone)}
-        description="Make today count. Finish what matters, focus deeply, and earn your time."
+        initialGreeting={greeting(timezone, locale)}
+        description={
+          isVi
+            ? "Biến hôm nay thành một ngày ý nghĩa. Hoàn thành việc quan trọng, tập trung sâu và nhận phần thưởng của bạn."
+            : "Make today count. Finish what matters, focus deeply, and earn your time."
+        }
       />
 
       {/* 2. Daily Overview — 3 focused stat cards */}
       <section
         className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-        aria-label="Daily overview"
+        aria-label={isVi ? "Tổng quan hôm nay" : "Daily overview"}
       >
         <StatCard
-          label="Focus today"
+          label={isVi ? "Tập trung hôm nay" : "Focus today"}
           value={formatMinutes(focus.minutes)}
           hint={
             plan && plan.progress.focusRequired > 0
-              ? `${focus.validSessions} valid session${focus.validSessions === 1 ? "" : "s"} · ${formatMinutes(plan.progress.focusDone)} of ${formatMinutes(plan.progress.focusRequired)} target`
+              ? isVi
+                ? `${focus.validSessions} phiên hợp lệ · ${formatMinutes(plan.progress.focusDone)} / ${formatMinutes(plan.progress.focusRequired)} mục tiêu`
+                : `${focus.validSessions} valid session${focus.validSessions === 1 ? "" : "s"} · ${formatMinutes(plan.progress.focusDone)} of ${formatMinutes(plan.progress.focusRequired)} target`
               : focus.sessions > 0
-                ? `${focus.validSessions} valid session${focus.validSessions === 1 ? "" : "s"} of ${focus.sessions} today`
-                : "No focus sessions logged today · target not set"
+                ? isVi
+                  ? `${focus.validSessions} phiên hợp lệ trên tổng ${focus.sessions} hôm nay`
+                  : `${focus.validSessions} valid session${focus.validSessions === 1 ? "" : "s"} of ${focus.sessions} today`
+                : isVi
+                  ? "Chưa có phiên tập trung nào hôm nay · chưa đặt mục tiêu"
+                  : "No focus sessions logged today · target not set"
           }
           icon={Timer}
           tone="accent"
@@ -100,7 +115,7 @@ export default async function DashboardPage() {
           className="group block h-full rounded-[18px] focus-visible:outline-2 focus-visible:outline-accent"
         >
           <StatCard
-            label="Open tasks"
+            label={isVi ? "Nhiệm vụ đang mở" : "Open tasks"}
             value={openTasksStat.value}
             hint={openTasksStat.hint}
             icon={ListTodo}
@@ -109,7 +124,7 @@ export default async function DashboardPage() {
         </Link>
 
         <StatCard
-          label="Plan progress"
+          label={isVi ? "Tiến độ kế hoạch" : "Plan progress"}
           value={planStat.value}
           hint={planStat.hint}
           icon={Target}
@@ -121,7 +136,7 @@ export default async function DashboardPage() {
       {/* 3. Main Content — Today's Mission (~66%) + Reward Wallet (~34%) */}
       <section
         className="mt-6 grid items-start gap-5 lg:grid-cols-[minmax(0,1.95fr)_minmax(340px,1fr)]"
-        aria-label="Today's mission and reward wallet"
+        aria-label={isVi ? "Nhiệm vụ hôm nay và ví thưởng" : "Today's mission and reward wallet"}
       >
         <DailyMissionCard
           plan={plan}
@@ -129,15 +144,16 @@ export default async function DashboardPage() {
           todayGrant={todayGrant}
           latestSession={sessions[0]}
           timezone={timezone}
+          locale={locale}
         />
 
-        <RewardWalletCard wallet={wallet} timezone={timezone} />
+        <RewardWalletCard wallet={wallet} timezone={timezone} locale={locale} />
       </section>
 
       {/* 4. Supporting Information — Left: Your Next Move + Due Soon | Right: Recent Focus (stretches on desktop) */}
       <section
         className="mt-6 grid gap-5 lg:grid-cols-2 lg:items-stretch"
-        aria-label="Next move, upcoming deadlines, and recent focus"
+        aria-label={isVi ? "Bước tiếp theo, hạn sắp tới và tập trung gần đây" : "Next move, upcoming deadlines, and recent focus"}
       >
         <div className="flex flex-col gap-5">
           <NextMoveCard
@@ -146,36 +162,43 @@ export default async function DashboardPage() {
             totalTasksCount={counts.total}
             completedTasksCount={counts.completed}
             timezone={timezone}
+            locale={locale}
           />
 
           <Card className="flex-1">
             <CardHeader>
               <div>
-                <CardTitle>Due soon</CardTitle>
+                <CardTitle>{isVi ? "Sắp đến hạn" : "Due soon"}</CardTitle>
                 <p className="mt-1 text-[13px] text-ink-soft">
-                  Other upcoming deadlines in your open work queue.
+                  {isVi
+                    ? "Các hạn chót sắp tới khác trong hàng chờ của bạn."
+                    : "Other upcoming deadlines in your open work queue."}
                 </p>
               </div>
               <Link
                 href="/tasks"
                 className="inline-flex items-center gap-1 text-[12.5px] font-medium text-accent hover:underline"
               >
-                View all tasks <ArrowRight className="size-3.5" />
+                {isVi ? "Xem tất cả nhiệm vụ" : "View all tasks"} <ArrowRight className="size-3.5" />
               </Link>
             </CardHeader>
             <CardContent className="pt-4">
               {dueSoonTasks.length === 0 ? (
                 <EmptyState
                   icon={ListTodo}
-                  title="Nothing due soon."
-                  description="You have no other outstanding tasks with an approaching deadline."
+                  title={isVi ? "Không có việc nào sắp đến hạn." : "Nothing due soon."}
+                  description={
+                    isVi
+                      ? "Bạn không có nhiệm vụ tồn đọng nào sắp đến hạn."
+                      : "You have no other outstanding tasks with an approaching deadline."
+                  }
                   className="px-5 py-7"
                 />
               ) : (
                 <ul className="divide-y divide-line">
                   {dueSoonTasks.map((task) => {
-                    const due = relativeDue(task.dueDate, timezone);
-                    const overdue = due?.includes("overdue") ?? false;
+                    const due = relativeDue(task.dueDate, timezone, locale);
+                    const overdue = due ? (due.includes("overdue") || due.includes("Quá hạn")) : false;
                     return (
                       <li
                         key={task.id}
@@ -186,16 +209,21 @@ export default async function DashboardPage() {
                             <p className="truncate text-[14px] font-medium text-ink">
                               {task.title}
                             </p>
-                            {overdue ? <Badge tone="danger">Overdue</Badge> : null}
+                            {overdue ? (
+                              <Badge tone="danger">{isVi ? "Quá hạn" : "Overdue"}</Badge>
+                            ) : null}
                           </div>
                           <p className="mt-1 text-[12.5px] text-ink-soft tabular-nums">
                             <span className={overdue ? "font-semibold text-danger" : "font-medium"}>
-                              {due ?? formatDate(task.dueDate, undefined, timezone)}
+                              {due ?? formatDate(task.dueDate, undefined, timezone, locale)}
                             </span>{" "}
-                            <span className="text-muted">·</span> {formatMinutes(task.estimatedMinutes)} est.
+                            <span className="text-muted">·</span>{" "}
+                            {isVi
+                              ? `ước tính ${formatMinutes(task.estimatedMinutes)}`
+                              : `${formatMinutes(task.estimatedMinutes)} est.`}
                           </p>
                         </div>
-                        <KindBadge kind={task.kind} />
+                        <KindBadge kind={task.kind} locale={locale} />
                       </li>
                     );
                   })}
@@ -208,16 +236,18 @@ export default async function DashboardPage() {
         <Card className="flex flex-col lg:h-full">
           <CardHeader>
             <div>
-              <CardTitle>Recent focus</CardTitle>
+              <CardTitle>{isVi ? "Tập trung gần đây" : "Recent focus"}</CardTitle>
               <p className="mt-1 text-[13px] text-ink-soft">
-                Your last verified and logged focus blocks.
+                {isVi
+                  ? "Các phiên tập trung gần nhất đã được xác thực."
+                  : "Your last verified and logged focus blocks."}
               </p>
             </div>
             <Link
               href="/statistics"
               className="inline-flex items-center gap-1 text-[12.5px] font-medium text-accent hover:underline"
             >
-              Statistics <ArrowRight className="size-3.5" />
+              {isVi ? "Thống kê" : "Statistics"} <ArrowRight className="size-3.5" />
             </Link>
           </CardHeader>
 
@@ -225,14 +255,18 @@ export default async function DashboardPage() {
             {sessions.length === 0 ? (
               <EmptyState
                 icon={Timer}
-                title="No focus sessions yet"
-                description="Start your first timed block on the Focus screen to build verified progress."
+                title={isVi ? "Chưa có phiên tập trung nào" : "No focus sessions yet"}
+                description={
+                  isVi
+                    ? "Bắt đầu phiên bấm giờ đầu tiên ở màn hình Tập trung để tích lũy tiến độ."
+                    : "Start your first timed block on the Focus screen to build verified progress."
+                }
                 action={
                   <Link
                     href="/focus"
                     className={buttonVariants({ variant: "outline", size: "sm" })}
                   >
-                    Open focus timer
+                    {isVi ? "Mở đồng hồ tập trung" : "Open focus timer"}
                   </Link>
                 }
                 className="px-5 py-8"
@@ -255,23 +289,28 @@ export default async function DashboardPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-medium text-ink">
-                        {session.taskTitle ?? "Free focus"}
+                        {session.taskTitle ?? (isVi ? "Tập trung tự do" : "Free focus")}
                       </p>
                       <p className="mt-0.5 text-[12.5px] text-ink-soft tabular-nums">
                         {formatDate(
                           session.startedAt,
                           { month: "short", day: "numeric" },
                           timezone,
+                          locale,
                         )}{" "}
-                        at {formatTime(session.startedAt, timezone)} ·{" "}
+                        {isVi ? "lúc" : "at"} {formatTime(session.startedAt, timezone)} ·{" "}
                         {formatMinutes(session.isValid ? session.creditedMinutes : session.actualMinutes)}
                         {session.isValid && session.creditedMinutes < session.actualMinutes
-                          ? ` credited (${formatMinutes(session.actualMinutes)} elapsed)`
+                          ? isVi
+                            ? ` được tính (${formatMinutes(session.actualMinutes)} thực tế)`
+                            : ` credited (${formatMinutes(session.actualMinutes)} elapsed)`
                           : ""}
                       </p>
                     </div>
                     <Badge tone={session.isValid ? "success" : "warning"}>
-                      {session.isValid ? "Valid" : "Below min"}
+                      {session.isValid
+                        ? isVi ? "Hợp lệ" : "Valid"
+                        : isVi ? "Dưới mức tối thiểu" : "Below min"}
                     </Badge>
                   </li>
                 ))}
@@ -280,11 +319,23 @@ export default async function DashboardPage() {
           </CardContent>
 
           <div className="mt-auto border-t border-line bg-surface-2/40 px-5 py-3.5 text-[12px] text-ink-soft sm:px-6">
-            Sessions require at least{" "}
-            <span className="font-semibold text-ink">
-              {formatMinutes(workspace.settings.minValidFocusMinutes)}
-            </span>{" "}
-            on the server clock to count toward a Must-do task.
+            {isVi ? (
+              <>
+                Mỗi phiên cần tối thiểu{" "}
+                <span className="font-semibold text-ink">
+                  {formatMinutes(workspace.settings.minValidFocusMinutes)}
+                </span>{" "}
+                theo đồng hồ máy chủ để được tính cho nhiệm vụ Bắt buộc.
+              </>
+            ) : (
+              <>
+                Sessions require at least{" "}
+                <span className="font-semibold text-ink">
+                  {formatMinutes(workspace.settings.minValidFocusMinutes)}
+                </span>{" "}
+                on the server clock to count toward a Must-do task.
+              </>
+            )}
           </div>
         </Card>
       </section>

@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { createBlockRuleAction } from "@/lib/actions/devices";
 import { updateV2SettingsAction } from "@/lib/actions/v2";
 import type { DiscoveredAppRecord, V2Settings } from "@/lib/data/v2-settings";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,7 @@ export function V2ProfilesCard({
   settings: V2Settings;
   discoveredApps: DiscoveredAppRecord[];
 }) {
+  const isVi = useLocale() === "vi";
   const [pending, startTransition] = useTransition();
   const toast = useToast();
 
@@ -78,14 +80,14 @@ export function V2ProfilesCard({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CalendarDays className="size-4 text-accent" />
-            Weekday / Weekend Profiles &amp; Focus Whitelist
+            {isVi ? "Lịch Ngày thường / Cuối tuần & Danh sách cho phép" : "Weekday / Weekend Profiles & Focus Whitelist"}
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-2">
           <form onSubmit={handleSave} className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-[12px]">
-                <span className="text-muted">Weekday Bedtime Start</span>
+                <span className="text-muted">{isVi ? "Giờ ngủ ngày thường (bắt đầu)" : "Weekday Bedtime Start"}</span>
                 <Input
                   type="time"
                   value={weekdayStart}
@@ -94,7 +96,7 @@ export function V2ProfilesCard({
                 />
               </label>
               <label className="block text-[12px]">
-                <span className="text-muted">Weekday Bedtime End</span>
+                <span className="text-muted">{isVi ? "Giờ dậy ngày thường (kết thúc)" : "Weekday Bedtime End"}</span>
                 <Input
                   type="time"
                   value={weekdayEnd}
@@ -103,7 +105,7 @@ export function V2ProfilesCard({
                 />
               </label>
               <label className="block text-[12px]">
-                <span className="text-muted">Weekend Bedtime Start</span>
+                <span className="text-muted">{isVi ? "Giờ ngủ cuối tuần (bắt đầu)" : "Weekend Bedtime Start"}</span>
                 <Input
                   type="time"
                   value={weekendStart}
@@ -112,7 +114,7 @@ export function V2ProfilesCard({
                 />
               </label>
               <label className="block text-[12px]">
-                <span className="text-muted">Weekend Bedtime End</span>
+                <span className="text-muted">{isVi ? "Giờ dậy cuối tuần (kết thúc)" : "Weekend Bedtime End"}</span>
                 <Input
                   type="time"
                   value={weekendEnd}
@@ -125,7 +127,9 @@ export function V2ProfilesCard({
             <label className="flex items-center justify-between rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-[12px]">
               <span className="flex items-center gap-2 font-medium">
                 <Shield className="size-3.5 text-accent" />
-                Whitelist-Only Mode while Focus Timer runs
+                {isVi
+                  ? "Chế độ Chỉ cho phép Whitelist khi chạy đồng hồ Tập trung"
+                  : "Whitelist-Only Mode while Focus Timer runs"}
               </span>
               <input
                 type="checkbox"
@@ -136,7 +140,9 @@ export function V2ProfilesCard({
             </label>
 
             <label className="flex items-center justify-between rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-[12px]">
-              <span className="font-medium">Relaxed Lock on Weekends (Sat–Sun)</span>
+              <span className="font-medium">
+                {isVi ? "Nới lỏng khóa vào cuối tuần (Thứ 7 – Chủ nhật)" : "Relaxed Lock on Weekends (Sat–Sun)"}
+              </span>
               <input
                 type="checkbox"
                 checked={weekendRelaxed}
@@ -147,7 +153,8 @@ export function V2ProfilesCard({
 
             <label className="block text-[12px]">
               <span className="flex items-center gap-1.5 text-muted">
-                <Globe className="size-3.5" /> Blocked Domains (Browser Extension)
+                <Globe className="size-3.5" />{" "}
+                {isVi ? "Tên miền bị chặn (Tiện ích trình duyệt)" : "Blocked Domains (Browser Extension)"}
               </span>
               <Input
                 value={blockedDomainsText}
@@ -158,7 +165,11 @@ export function V2ProfilesCard({
             </label>
 
             <label className="block text-[12px]">
-              <span className="text-muted">Allowed Work Apps (Whitelist mode, comma-separated)</span>
+              <span className="text-muted">
+                {isVi
+                  ? "Ứng dụng công việc được phép (chế độ Whitelist, cách nhau dấu phẩy)"
+                  : "Allowed Work Apps (Whitelist mode, comma-separated)"}
+              </span>
               <Input
                 value={allowedAppsText}
                 onChange={(e) => setAllowedAppsText(e.target.value)}
@@ -168,7 +179,7 @@ export function V2ProfilesCard({
             </label>
 
             <Button type="submit" variant="accent" size="sm" disabled={pending}>
-              Save Profiles &amp; Rules
+              {isVi ? "Lưu hồ sơ & Quy tắc" : "Save Profiles & Rules"}
             </Button>
           </form>
         </CardContent>
@@ -178,14 +189,16 @@ export function V2ProfilesCard({
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Laptop className="size-4 text-accent" />
-            Discovered Apps (Windows &amp; Android)
+            {isVi ? "Ứng dụng đã phát hiện (Windows & Android)" : "Discovered Apps (Windows & Android)"}
           </CardTitle>
           <Badge tone="neutral">{discoveredApps.length}</Badge>
         </CardHeader>
         <CardContent className="pt-2">
           {discoveredApps.length === 0 ? (
             <p className="text-[12px] text-muted">
-              No discovered apps yet. Run the Windows Agent or Android app to report installed/running apps here for 1-click blocking.
+              {isVi
+                ? "Chưa phát hiện ứng dụng nào. Hãy chạy Windows Agent hoặc app Android để đồng bộ danh sách ứng dụng về đây."
+                : "No discovered apps yet. Run the Windows Agent or Android app to report installed/running apps here for 1-click blocking."}
             </p>
           ) : (
             <div className="max-h-[340px] space-y-2 overflow-y-auto pr-1">
@@ -207,7 +220,7 @@ export function V2ProfilesCard({
                     disabled={pending}
                     onClick={() => handleBlockDiscovered(app)}
                   >
-                    <Plus className="size-3.5" /> Block
+                    <Plus className="size-3.5" /> {isVi ? "Chặn" : "Block"}
                   </Button>
                 </div>
               ))}

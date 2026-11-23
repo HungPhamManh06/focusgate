@@ -36,7 +36,7 @@ export function Sidebar({
       </div>
 
       <nav aria-label="Primary" className="flex-1 px-3">
-        <p className="label-xs px-3 pb-3 text-muted">Workspace</p>
+        <p className="label-xs px-3 pb-3 text-muted">{isVi ? "Không gian làm việc" : "Workspace"}</p>
         <ul className="space-y-1">
           {navItems.map((item) => {
             const active = isNavActive(item, pathname);
@@ -109,18 +109,18 @@ export function Sidebar({
       <div className="space-y-4 px-4 pb-5">
         <div className="rounded-2xl border border-line bg-surface-2 p-4">
           <div className="flex items-center justify-between">
-            <p className="label-xs text-muted">Available time</p>
+            <p className="label-xs text-muted">{isVi ? "Thời gian khả dụng" : "Available time"}</p>
             {hasAvailableTime ? (
               <span
                 className="size-2 rounded-full bg-success"
-                title="Leisure time available to spend"
-                aria-label="Leisure time available"
+                title={isVi ? "Có thời gian giải trí khả dụng" : "Leisure time available to spend"}
+                aria-label={isVi ? "Có thời gian giải trí khả dụng" : "Leisure time available"}
               />
             ) : null}
           </div>
           {walletError || availableMinutes === null ? (
             <p className="mt-2.5 text-[12.5px] font-medium text-warning">
-              Balance unavailable
+              {isVi ? "Không tải được số dư" : "Balance unavailable"}
             </p>
           ) : (
             <p className="mt-3 font-display text-[30px] leading-none tracking-[-0.02em] tabular-nums">
@@ -131,7 +131,9 @@ export function Sidebar({
             href="/wallet"
             className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline"
           >
-            {walletError || availableMinutes === null ? "Retry in wallet" : "Open wallet"}{" "}
+            {walletError || availableMinutes === null
+              ? isVi ? "Thử lại trong ví" : "Retry in wallet"
+              : isVi ? "Mở ví thưởng" : "Open wallet"}{" "}
             <ArrowUpRight className="size-3" />
           </Link>
         </div>
@@ -144,7 +146,7 @@ export function Sidebar({
             <div className="min-w-0">
               <p className="truncate text-[12.5px] font-medium">{displayName}</p>
               <p className="truncate text-[11px] text-muted">
-                {authEmail ?? "Local workspace"}
+                {authEmail ?? (isVi ? "Không gian cục bộ" : "Local workspace")}
               </p>
             </div>
           </div>
@@ -153,8 +155,8 @@ export function Sidebar({
               <form action="/auth/signout" method="post">
                 <button
                   type="submit"
-                  title="Sign out"
-                  aria-label="Sign out"
+                  title={isVi ? "Đăng xuất" : "Sign out"}
+                  aria-label={isVi ? "Đăng xuất" : "Sign out"}
                   className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
                 >
                   <LogOut className="size-4" />

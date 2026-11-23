@@ -19,6 +19,7 @@ import { BarChart } from "@/components/charts/bar-chart";
 import { formatDate, formatMinutes, todayIso } from "@/lib/data/format";
 import { getHealthSummary } from "@/lib/data/health";
 import { getStatistics } from "@/lib/data/stats";
+import { getV2Settings } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
 import { cn } from "@/lib/utils";
 import { HealthLogCard } from "./health-log-card";
@@ -40,7 +41,13 @@ export default async function StatisticsPage({
   const requested = Number(params.period);
   const period = periods.some((option) => option.value === requested) ? requested : 7;
 
-  const [workspace, stats] = await Promise.all([getWorkspace(), getStatistics(period)]);
+  const [workspace, stats, v2Settings] = await Promise.all([
+    getWorkspace(),
+    getStatistics(period),
+    getV2Settings().catch(() => null),
+  ]);
+  const locale = v2Settings?.language ?? "en";
+  const isVi = locale === "vi";
   const { timezone } = workspace.profile;
   const health = await getHealthSummary(period, timezone);
 
@@ -49,22 +56,26 @@ export default async function StatisticsPage({
   const hasActivity =
     stats.focusMinutes > 0 || stats.tasksCompleted > 0 || stats.entertainmentMinutes > 0;
   const bestLabel = stats.bestDay
-    ? formatDate(`${stats.bestDay.date}T12:00:00Z`, { weekday: "short", day: "numeric", month: "short" }, "UTC")
+    ? formatDate(`${stats.bestDay.date}T12:00:00Z`, { weekday: "short", day: "numeric", month: "short" }, "UTC", locale)
     : null;
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-5 py-8 sm:px-8 sm:py-10">
       <PageHeader
-        eyebrow="Statistics"
-        title="Proof, not vibes."
-        description="What actually happened to your attention — verified focus, finished work, and the entertainment you paid for."
+        eyebrow={isVi ? "Thống kê" : "Statistics"}
+        title={isVi ? "Số liệu thực tế, không cảm tính." : "Proof, not vibes."}
+        description={
+          isVi
+            ? "Điều gì thực sự đã diễn ra với sự tập trung của bạn — phiên hợp lệ, việc đã xong và thời gian giải trí đã dùng."
+            : "What actually happened to your attention — verified focus, finished work, and the entertainment you paid for."
+        }
         actions={
           <>
             <Link href="/focus" className={buttonVariants({ variant: "outline", size: "md" })}>
-              <Timer className="size-4" /> Start a session
+              <Timer className="size-4" /> {isVi ? "Bắt đầu phiên" : "Start a session"}
             </Link>
             <Link href="/wallet" className={buttonVariants({ variant: "ghost", size: "md" })}>
-              Wallet
+              {isVi ? "Ví thưởng" : "Wallet"}
             </Link>
           </>
         }
@@ -83,48 +94,64 @@ export default async function StatisticsPage({
                 : "text-muted hover:bg-surface-2 hover:text-ink",
             )}
           >
-            {option.label}
+            {isVi ? `${option.value} ngày` : option.label}
           </Link>
         ))}
       </div>
 
       <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Verified focus"
+          label={isVi ? "Tập trung hợp lệ" : "Verified focus"}
           value={formatMinutes(stats.focusMinutes)}
-          hint={`${stats.sessionCount} sessions · avg ${formatMinutes(averageFocus)}/day`}
+          hint={
+            isVi
+              ? `${stats.sessionCount} phiên · TB ${formatMinutes(averageFocus)}/ngày`
+              : `${stats.sessionCount} sessions · avg ${formatMinutes(averageFocus)}/day`
+          }
           icon={Timer}
           tone="accent"
         />
         <StatCard
-          label="Tasks completed"
+          label={isVi ? "Nhiệm vụ hoàn thành" : "Tasks completed"}
           value={String(stats.tasksCompleted)}
           hint={
             stats.tasksCompleted + stats.openTasks > 0
-              ? `${stats.openTasks} open · ${stats.completionRate}% completion`
-              : "No tasks logged in this period"
+              ? isVi
+                ? `${stats.openTasks} đang mở · hoàn thành ${stats.completionRate}%`
+                : `${stats.openTasks} open · ${stats.completionRate}% completion`
+              : isVi
+                ? "Chưa có nhiệm vụ nào trong kỳ này"
+                : "No tasks logged in this period"
           }
           icon={CheckCircle2}
           tone={stats.tasksCompleted > 0 ? "success" : "default"}
         />
         <StatCard
-          label="Entertainment"
+          label={isVi ? "Giải trí" : "Entertainment"}
           value={formatMinutes(stats.entertainmentMinutes)}
           hint={
             (stats.blockedAttempts ?? 0) > 0
-              ? `${stats.blockedAttempts} blocked attempt${stats.blockedAttempts === 1 ? "" : "s"}`
-              : "Paid for with earned minutes"
+              ? isVi
+                ? `${stats.blockedAttempts} lần bị chặn`
+                : `${stats.blockedAttempts} blocked attempt${stats.blockedAttempts === 1 ? "" : "s"}`
+              : isVi
+                ? "Đổi bằng phút thưởng đã kiếm"
+                : "Paid for with earned minutes"
           }
           icon={TrendingDown}
           tone="warning"
         />
         <StatCard
-          label="Valid sessions"
+          label={isVi ? "Phiên hợp lệ" : "Valid sessions"}
           value={stats.sessionCount > 0 ? `${stats.validRate}%` : "—"}
           hint={
             stats.sessionCount > 0
-              ? `${stats.sessionCount - Math.round((stats.sessionCount * stats.validRate) / 100)} below the minimum`
-              : "No completed sessions in this period"
+              ? isVi
+                ? `${stats.sessionCount - Math.round((stats.sessionCount * stats.validRate) / 100)} phiên dưới ngưỡng tối thiểu`
+                : `${stats.sessionCount - Math.round((stats.sessionCount * stats.validRate) / 100)} below the minimum`
+              : isVi
+                ? "Chưa có phiên nào trong kỳ này"
+                : "No completed sessions in this period"
           }
           icon={Flame}
         />
@@ -134,11 +161,15 @@ export default async function StatisticsPage({
         <Card className="mt-4">
           <EmptyState
             icon={BarChart3}
-            title="No activity in this period"
-            description="Focus sessions and completed tasks will create your rhythm here. The first block starts on the Focus screen."
+            title={isVi ? "Chưa có hoạt động trong kỳ này" : "No activity in this period"}
+            description={
+              isVi
+                ? "Các phiên tập trung và nhiệm vụ hoàn thành sẽ tạo nên nhịp độ của bạn tại đây."
+                : "Focus sessions and completed tasks will create your rhythm here. The first block starts on the Focus screen."
+            }
             action={
               <Link href="/focus" className={buttonVariants({ variant: "accent", size: "sm" })}>
-                Start focusing
+                {isVi ? "Bắt đầu tập trung" : "Start focusing"}
               </Link>
             }
             className="border-0 bg-transparent shadow-none"
@@ -150,9 +181,11 @@ export default async function StatisticsPage({
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Focus rhythm</CardTitle>
+                  <CardTitle>{isVi ? "Nhịp độ tập trung" : "Focus rhythm"}</CardTitle>
                   <p className="mt-1 text-[12px] text-muted">
-                    Verified focus minutes per day over the last {stats.periodDays} days.
+                    {isVi
+                      ? `Số phút tập trung hợp lệ mỗi ngày trong ${stats.periodDays} ngày qua.`
+                      : `Verified focus minutes per day over the last ${stats.periodDays} days.`}
                   </p>
                 </div>
                 <span className="font-display text-[26px] leading-none">
@@ -171,15 +204,19 @@ export default async function StatisticsPage({
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Consistency</CardTitle>
-                  <p className="mt-1 text-[12px] text-muted">Small blocks, repeated.</p>
+                  <CardTitle>{isVi ? "Sự đều đặn" : "Consistency"}</CardTitle>
+                  <p className="mt-1 text-[12px] text-muted">
+                    {isVi ? "Những phiên nhỏ, lặp lại đều đặn." : "Small blocks, repeated."}
+                  </p>
                 </div>
                 <CalendarDays className="size-4 text-muted" strokeWidth={1.8} />
               </CardHeader>
               <CardContent className="space-y-5 pt-5">
                 <div>
                   <div className="flex items-baseline justify-between">
-                    <p className="text-[11.5px] text-muted">Active days</p>
+                    <p className="text-[11.5px] text-muted">
+                      {isVi ? "Số ngày hoạt động" : "Active days"}
+                    </p>
                     <p className="text-[12.5px] font-medium">
                       {activeDays}/{stats.periodDays}
                     </p>
@@ -192,7 +229,9 @@ export default async function StatisticsPage({
                 </div>
                 <div>
                   <div className="flex items-baseline justify-between">
-                    <p className="text-[11.5px] text-muted">Valid session rate</p>
+                    <p className="text-[11.5px] text-muted">
+                      {isVi ? "Tỉ lệ phiên hợp lệ" : "Valid session rate"}
+                    </p>
                     <p className="text-[12.5px] font-medium">{stats.validRate}%</p>
                   </div>
                   <Progress
@@ -203,7 +242,9 @@ export default async function StatisticsPage({
                 </div>
                 <div>
                   <div className="flex items-baseline justify-between">
-                    <p className="text-[11.5px] text-muted">Task completion</p>
+                    <p className="text-[11.5px] text-muted">
+                      {isVi ? "Hoàn thành nhiệm vụ" : "Task completion"}
+                    </p>
                     <p className="text-[12.5px] font-medium">{stats.completionRate}%</p>
                   </div>
                   <Progress value={stats.completionRate} tone="ink" className="mt-2" />
@@ -211,7 +252,7 @@ export default async function StatisticsPage({
 
                 <dl className="space-y-2.5 border-t border-line pt-4 text-[11.5px]">
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted">Best day</dt>
+                    <dt className="text-muted">{isVi ? "Ngày tốt nhất" : "Best day"}</dt>
                     <dd className="font-medium">
                       {stats.bestDay && bestLabel
                         ? `${bestLabel} · ${formatMinutes(stats.bestDay.focusMinutes)}`
@@ -219,15 +260,15 @@ export default async function StatisticsPage({
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted">Average / day</dt>
+                    <dt className="text-muted">{isVi ? "Trung bình / ngày" : "Average / day"}</dt>
                     <dd className="font-medium">{formatMinutes(averageFocus)}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted">Sessions</dt>
+                    <dt className="text-muted">{isVi ? "Số phiên" : "Sessions"}</dt>
                     <dd className="font-medium">{stats.sessionCount}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted">Open tasks</dt>
+                    <dt className="text-muted">{isVi ? "Việc đang mở" : "Open tasks"}</dt>
                     <dd className="font-medium">{stats.openTasks}</dd>
                   </div>
                 </dl>
@@ -239,9 +280,11 @@ export default async function StatisticsPage({
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Entertainment paid for</CardTitle>
+                  <CardTitle>{isVi ? "Thời gian giải trí đã dùng" : "Entertainment paid for"}</CardTitle>
                   <p className="mt-1 text-[12px] text-muted">
-                    Logged usage against earned minutes, per day.
+                    {isVi
+                      ? "Thời gian giải trí đã ghi nhận theo từng ngày."
+                      : "Logged usage against earned minutes, per day."}
                   </p>
                 </div>
                 <span className="font-display text-[26px] leading-none">
@@ -253,14 +296,18 @@ export default async function StatisticsPage({
                   data={stats.days.map((day) => ({ label: day.label, value: day.entertainmentMinutes }))}
                   tone="ink"
                   height={140}
-                  emptyLabel="No entertainment time logged in this period."
+                  emptyLabel={
+                    isVi
+                      ? "Chưa có thời gian giải trí nào được ghi nhận."
+                      : "No entertainment time logged in this period."
+                  }
                 />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Reading the numbers</CardTitle>
+                <CardTitle>{isVi ? "Cách đọc số liệu" : "Reading the numbers"}</CardTitle>
                 <Sparkles className="size-4 text-accent" />
               </CardHeader>
               <CardContent className="space-y-3 pt-4">
@@ -269,8 +316,12 @@ export default async function StatisticsPage({
                     <Clock3 className="size-3.5" />
                   </span>
                   <p className="text-[11.5px] leading-relaxed text-muted">
-                    <span className="font-medium text-ink">Verified focus</span> only counts sessions
-                    that meet the minimum length and are tied to real time on the clock.
+                    <span className="font-medium text-ink">
+                      {isVi ? "Tập trung hợp lệ" : "Verified focus"}
+                    </span>{" "}
+                    {isVi
+                      ? "chỉ tính các phiên đạt thời lượng tối thiểu theo đồng hồ máy chủ."
+                      : "only counts sessions that meet the minimum length and are tied to real time on the clock."}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -278,8 +329,12 @@ export default async function StatisticsPage({
                     <CheckCircle2 className="size-3.5" />
                   </span>
                   <p className="text-[11.5px] leading-relaxed text-muted">
-                    <span className="font-medium text-ink">Completion</span> compares finished tasks
-                    with everything still open — not just this period.
+                    <span className="font-medium text-ink">
+                      {isVi ? "Hoàn thành" : "Completion"}
+                    </span>{" "}
+                    {isVi
+                      ? "so sánh số việc đã xong với toàn bộ việc đang mở."
+                      : "compares finished tasks with everything still open — not just this period."}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -287,8 +342,12 @@ export default async function StatisticsPage({
                     <TrendingDown className="size-3.5" />
                   </span>
                   <p className="text-[11.5px] leading-relaxed text-muted">
-                    <span className="font-medium text-ink">Entertainment</span> is usage logged against
-                    the wallet. If it is high, the gate is doing its job honestly.
+                    <span className="font-medium text-ink">
+                      {isVi ? "Giải trí" : "Entertainment"}
+                    </span>{" "}
+                    {isVi
+                      ? "là thời gian bạn đã đổi từ ví thưởng."
+                      : "is usage logged against the wallet. If it is high, the gate is doing its job honestly."}
                   </p>
                 </div>
               </CardContent>
@@ -299,9 +358,11 @@ export default async function StatisticsPage({
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Discipline streak &amp; activity</CardTitle>
+                  <CardTitle>{isVi ? "Chuỗi kỷ luật & Hoạt động" : "Discipline streak & activity"}</CardTitle>
                   <p className="mt-1 text-[12px] text-muted">
-                    Current streak: <span className="font-semibold text-ink">{stats.currentStreak ?? 0}d</span> · Best:{" "}
+                    {isVi ? "Chuỗi hiện tại:" : "Current streak:"}{" "}
+                    <span className="font-semibold text-ink">{stats.currentStreak ?? 0}d</span> ·{" "}
+                    {isVi ? "Tốt nhất:" : "Best:"}{" "}
                     <span className="font-semibold text-ink">{stats.bestStreak ?? 0}d</span>
                   </p>
                 </div>
@@ -334,9 +395,11 @@ export default async function StatisticsPage({
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Time by category</CardTitle>
+                  <CardTitle>{isVi ? "Thời gian theo danh mục" : "Time by category"}</CardTitle>
                   <p className="mt-1 text-[12px] text-muted">
-                    Verified focus &amp; stopwatch minutes grouped by task category.
+                    {isVi
+                      ? "Phút tập trung & bấm giờ được nhóm theo danh mục nhiệm vụ."
+                      : "Verified focus & stopwatch minutes grouped by task category."}
                   </p>
                 </div>
                 <Clock3 className="size-4 text-muted" />
@@ -344,7 +407,9 @@ export default async function StatisticsPage({
               <CardContent className="pt-4">
                 {(stats.categoryBreakdown ?? []).length === 0 ? (
                   <p className="text-[12px] text-muted">
-                    Complete a Focus or Stopwatch session linked to a task to see time breakdown.
+                    {isVi
+                      ? "Hoàn thành phiên Tập trung hoặc Bấm giờ gắn với nhiệm vụ để xem phân bổ."
+                      : "Complete a Focus or Stopwatch session linked to a task to see time breakdown."}
                   </p>
                 ) : (
                   <div className="space-y-2.5">
@@ -377,15 +442,19 @@ export default async function StatisticsPage({
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Peak Focus Hours (24h)</CardTitle>
+                  <CardTitle>{isVi ? "Khung giờ tập trung cao điểm (24h)" : "Peak Focus Hours (24h)"}</CardTitle>
                   <p className="mt-1 text-[12px] text-muted">
                     {stats.peakFocusHour !== null && stats.peakFocusHour !== undefined
-                      ? `Your peak focus hour is ${String(stats.peakFocusHour).padStart(2, "0")}:00 – ${String((stats.peakFocusHour + 1) % 24).padStart(2, "0")}:00.`
-                      : "Complete focus sessions to discover your peak focus hours."}
+                      ? isVi
+                        ? `Khung giờ tập trung cao điểm của bạn là ${String(stats.peakFocusHour).padStart(2, "0")}:00 – ${String((stats.peakFocusHour + 1) % 24).padStart(2, "0")}:00.`
+                        : `Your peak focus hour is ${String(stats.peakFocusHour).padStart(2, "0")}:00 – ${String((stats.peakFocusHour + 1) % 24).padStart(2, "0")}:00.`
+                      : isVi
+                        ? "Hoàn thành các phiên tập trung để khám phá khung giờ vàng của bạn."
+                        : "Complete focus sessions to discover your peak focus hours."}
                   </p>
                 </div>
                 <span className="text-[11px] text-muted">
-                  Streak Freezes: {stats.streakFreezeCount ?? 0}
+                  {isVi ? "Đóng băng chuỗi:" : "Streak Freezes:"} {stats.streakFreezeCount ?? 0}
                 </span>
               </CardHeader>
               <CardContent className="pt-3">
@@ -402,7 +471,7 @@ export default async function StatisticsPage({
                     return (
                       <div
                         key={bucket.hour}
-                        title={`${String(bucket.hour).padStart(2, "0")}:00 · ${bucket.focusMinutes}m focus · ${bucket.blockedAttempts} blocked`}
+                        title={`${String(bucket.hour).padStart(2, "0")}:00 · ${bucket.focusMinutes}m · ${bucket.blockedAttempts} ${isVi ? "bị chặn" : "blocked"}`}
                         className={`flex flex-col items-center justify-center rounded-md py-1.5 text-[10px] font-medium ${intensity}`}
                       >
                         <span>{String(bucket.hour).padStart(2, "0")}</span>
@@ -418,9 +487,11 @@ export default async function StatisticsPage({
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Daily breakdown</CardTitle>
+                  <CardTitle>{isVi ? "Chi tiết theo ngày" : "Daily breakdown"}</CardTitle>
                   <p className="mt-1 text-[12px] text-muted">
-                    Focus, finished tasks and paid entertainment.
+                    {isVi
+                      ? "Tập trung, nhiệm vụ hoàn thành và giải trí đã dùng."
+                      : "Focus, finished tasks and paid entertainment."}
                   </p>
                 </div>
                 <BarChart3 className="size-4 text-muted" strokeWidth={1.8} />
@@ -430,17 +501,17 @@ export default async function StatisticsPage({
                   <table className="w-full min-w-[420px] text-left text-[11.5px]">
                     <thead>
                       <tr className="border-b border-line text-[10px] uppercase tracking-[0.08em] text-muted">
-                        <th className="py-2 pr-3 font-medium">Day</th>
-                        <th className="py-2 pr-3 text-right font-medium">Focus</th>
-                        <th className="py-2 pr-3 text-right font-medium">Tasks</th>
-                        <th className="py-2 text-right font-medium">Entertainment</th>
+                        <th className="py-2 pr-3 font-medium">{isVi ? "Ngày" : "Day"}</th>
+                        <th className="py-2 pr-3 text-right font-medium">{isVi ? "Tập trung" : "Focus"}</th>
+                        <th className="py-2 pr-3 text-right font-medium">{isVi ? "Nhiệm vụ" : "Tasks"}</th>
+                        <th className="py-2 text-right font-medium">{isVi ? "Giải trí" : "Entertainment"}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {[...stats.days].reverse().map((day) => (
                         <tr key={day.date} className="border-b border-line/70 last:border-0">
                           <td className="py-2.5 pr-3 text-ink-soft">
-                            {formatDate(`${day.date}T12:00:00Z`, { weekday: "short", day: "numeric", month: "short" }, "UTC")}
+                            {formatDate(`${day.date}T12:00:00Z`, { weekday: "short", day: "numeric", month: "short" }, "UTC", locale)}
                           </td>
                           <td className="py-2.5 pr-3 text-right font-medium">
                             {day.focusMinutes > 0 ? formatMinutes(day.focusMinutes) : "—"}
@@ -469,7 +540,9 @@ export default async function StatisticsPage({
       </section>
 
       <p className="mt-6 text-[10.5px] text-muted">
-        Time zone: {timezone} · periods include today. “Valid” means the backend verified the session.
+        {isVi
+          ? `Múi giờ: ${timezone} · các kỳ bao gồm hôm nay. “Hợp lệ” nghĩa là máy chủ đã xác thực phiên.`
+          : `Time zone: ${timezone} · periods include today. “Valid” means the backend verified the session.`}
       </p>
     </div>
   );

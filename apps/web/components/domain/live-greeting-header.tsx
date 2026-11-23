@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, type AppLocale } from "@/components/i18n/language-provider";
 import { PageHeader } from "@/components/ui/page-header";
 import { greetingForDate } from "@/lib/data/format";
 
-function computeLocalHeaderState() {
+function computeLocalHeaderState(locale: AppLocale) {
   const now = new Date();
-  const dateLabel = new Intl.DateTimeFormat("en-GB", {
+  const dateLabel = new Intl.DateTimeFormat(locale === "vi" ? "vi-VN" : "en-GB", {
     weekday: "long",
     day: "numeric",
     month: "long",
   }).format(now);
   return {
     dateLabel,
-    greetingText: greetingForDate(now),
+    greetingText: greetingForDate(now, undefined, locale),
   };
 }
 
@@ -28,6 +29,7 @@ export function LiveGreetingHeader({
   initialGreeting: string;
   description: string;
 }) {
+  const locale = useLocale();
   const [header, setHeader] = useState({
     dateLabel: initialDateLabel,
     greetingText: initialGreeting,
@@ -35,7 +37,7 @@ export function LiveGreetingHeader({
 
   useEffect(() => {
     const sync = () => {
-      const next = computeLocalHeaderState();
+      const next = computeLocalHeaderState(locale);
       setHeader((prev) =>
         prev.dateLabel === next.dateLabel && prev.greetingText === next.greetingText
           ? prev
@@ -46,7 +48,7 @@ export function LiveGreetingHeader({
     sync();
     const timer = window.setInterval(sync, 30_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [locale]);
 
   return (
     <PageHeader

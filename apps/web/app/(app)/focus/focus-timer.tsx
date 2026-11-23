@@ -29,6 +29,7 @@ import {
   getFocusSubmissionUiLabels,
   type FocusSubmissionState,
 } from "@/lib/domain/focus-timer-state";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -44,6 +45,7 @@ export function FocusTimer({
   session: FocusSession;
   minValidMinutes: number;
 }) {
+  const isVi = useLocale() === "vi";
   const [now, setNow] = useState(() => Date.now());
   const [keepFocusingOvertime, setKeepFocusingOvertime] = useState(false);
   const [submission, setSubmission] = useState<FocusSubmissionState>({ status: "idle" });
@@ -267,7 +269,7 @@ export function FocusTimer({
         {/* Task & Authoritative State Banner */}
         <div className="mt-7 w-full max-w-md text-center">
           <p className="text-[16px] font-semibold text-ink">
-            {session.taskTitle ?? "Free focus"}
+            {session.taskTitle ?? (isVi ? "Tập trung tự do" : "Free focus")}
           </p>
 
           {submission.status === "completing" ? (
@@ -278,9 +280,13 @@ export function FocusTimer({
             >
               <Loader2 className="size-4 shrink-0 animate-spin text-accent" />
               <div>
-                <p className="font-semibold text-accent">Verifying session…</p>
+                <p className="font-semibold text-accent">
+                  {isVi ? "Đang xác thực phiên…" : "Verifying session…"}
+                </p>
                 <p className="mt-0.5 text-[11.5px] text-ink-soft">
-                  Calculating authoritative elapsed time and credited minutes.
+                  {isVi
+                    ? "Đang tính thời gian thực tế và số phút được cộng."
+                    : "Calculating authoritative elapsed time and credited minutes."}
                 </p>
               </div>
             </div>
@@ -292,9 +298,13 @@ export function FocusTimer({
             >
               <Loader2 className="size-4 shrink-0 animate-spin text-ink-soft" />
               <div>
-                <p className="font-semibold text-ink">Cancelling session…</p>
+                <p className="font-semibold text-ink">
+                  {isVi ? "Đang hủy phiên…" : "Cancelling session…"}
+                </p>
                 <p className="mt-0.5 text-[11.5px] text-ink-soft">
-                  Discarding active focus block without crediting minutes.
+                  {isVi
+                    ? "Đang hủy phiên tập trung hiện tại và không cộng phút."
+                    : "Discarding active focus block without crediting minutes."}
                 </p>
               </div>
             </div>
@@ -317,8 +327,12 @@ export function FocusTimer({
               <div>
                 <p className="font-semibold">
                   {submission.verification.isValid
-                    ? `Backend verified: ${submission.verification.creditedMinutes}m credited (${submission.verification.actualMinutes}m actual)`
-                    : `Session not eligible for credit (${submission.verification.actualMinutes}m actual)`}
+                    ? isVi
+                      ? `Máy chủ đã xác thực: +${submission.verification.creditedMinutes}m (thực tế ${submission.verification.actualMinutes}m)`
+                      : `Backend verified: ${submission.verification.creditedMinutes}m credited (${submission.verification.actualMinutes}m actual)`
+                    : isVi
+                      ? `Phiên chưa đủ điều kiện cộng điểm (thực tế ${submission.verification.actualMinutes}m)`
+                      : `Session not eligible for credit (${submission.verification.actualMinutes}m actual)`}
                 </p>
                 <p className="mt-0.5 text-[11.5px] leading-relaxed">{submission.message}</p>
               </div>
@@ -330,7 +344,9 @@ export function FocusTimer({
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">Could not verify &amp; complete session</p>
+                <p className="font-semibold">
+                  {isVi ? "Không thể xác thực & hoàn thành phiên" : "Could not verify & complete session"}
+                </p>
                 <p className="mt-0.5 text-[11.5px] leading-relaxed">{submission.message}</p>
               </div>
             </div>
@@ -341,7 +357,9 @@ export function FocusTimer({
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">Could not cancel session</p>
+                <p className="font-semibold">
+                  {isVi ? "Không thể hủy phiên" : "Could not cancel session"}
+                </p>
                 <p className="mt-0.5 text-[11.5px] leading-relaxed">{submission.message}</p>
               </div>
             </div>
@@ -363,7 +381,7 @@ export function FocusTimer({
               <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold text-ink">{timerState.bannerTitle}</p>
                 <span className="shrink-0 rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-soft tabular-nums">
-                  Est. credit: {formatMinutes(timerState.projectedCreditedMinutes)}
+                  {isVi ? "Ước tính:" : "Est. credit:"} {formatMinutes(timerState.projectedCreditedMinutes)}
                 </span>
               </div>
               <p className="mt-1 text-[11.5px] leading-relaxed text-ink-soft">
@@ -411,12 +429,12 @@ export function FocusTimer({
                 {timerState.isPaused ? (
                   <>
                     <Play className="size-4" />
-                    Resume
+                    {isVi ? "Tiếp tục" : "Resume"}
                   </>
                 ) : (
                   <>
                     <Pause className="size-4" />
-                    Pause
+                    {isVi ? "Tạm dừng" : "Pause"}
                   </>
                 )}
               </Button>
@@ -432,7 +450,9 @@ export function FocusTimer({
                 ) : (
                   <Check className="size-4" />
                 )}
-                {uiLabels.primaryCompleteLabel}
+                {isVi && uiLabels.primaryCompleteLabel === "End & complete"
+                  ? "Kết thúc & hoàn thành"
+                  : uiLabels.primaryCompleteLabel}
               </Button>
 
               {timerState.phase === "target_reached" && !keepFocusingOvertime ? (
@@ -443,7 +463,7 @@ export function FocusTimer({
                   size="lg"
                 >
                   <Play className="size-3.5" />
-                  Keep focusing
+                  {isVi ? "Tiếp tục tập trung" : "Keep focusing"}
                 </Button>
               ) : null}
 
@@ -455,7 +475,7 @@ export function FocusTimer({
                   size="lg"
                 >
                   <RotateCcw className="size-3.5" />
-                  Dismiss error
+                  {isVi ? "Đóng lỗi" : "Dismiss error"}
                 </Button>
               ) : null}
 
@@ -470,7 +490,9 @@ export function FocusTimer({
                 ) : (
                   <X className="size-4" />
                 )}
-                {uiLabels.isCancelling ? "Cancelling session…" : "Cancel"}
+                {uiLabels.isCancelling
+                  ? isVi ? "Đang hủy phiên…" : "Cancelling session…"
+                  : isVi ? "Hủy" : "Cancel"}
               </Button>
             </>
           )}
@@ -481,8 +503,9 @@ export function FocusTimer({
         <p className="mt-5 flex items-center gap-1.5 text-[11px] text-muted">
           <Clock3 className="size-3" />
           <span>
-            Elapsed time is anchored to the server start timestamp. Minimum valid threshold is
-            locked at {formatMinutes(effectiveMinValidMinutes)} for this session.
+            {isVi
+              ? `Thời gian được neo theo đồng hồ máy chủ. Ngưỡng hợp lệ tối thiểu cho phiên này là ${formatMinutes(effectiveMinValidMinutes)}.`
+              : `Elapsed time is anchored to the server start timestamp. Minimum valid threshold is locked at ${formatMinutes(effectiveMinValidMinutes)} for this session.`}
           </span>
         </p>
       </div>
@@ -492,17 +515,21 @@ export function FocusTimer({
         open={confirmEndOpen}
         onClose={() => setConfirmEndOpen(false)}
         onConfirm={performComplete}
-        eyebrow="Short session"
-        title="End before minimum threshold?"
-        description={`You have focused for ${formatMinutes(Math.max(0, timerState.elapsedMinutes))}. Sessions under ${formatMinutes(effectiveMinValidMinutes)} are saved to your history, but earn 0 credited minutes toward today's plan requirements.`}
+        eyebrow={isVi ? "Phiên ngắn" : "Short session"}
+        title={isVi ? "Kết thúc trước ngưỡng tối thiểu?" : "End before minimum threshold?"}
+        description={
+          isVi
+            ? `Bạn đã tập trung ${formatMinutes(Math.max(0, timerState.elapsedMinutes))}. Phiên dưới ${formatMinutes(effectiveMinValidMinutes)} vẫn lưu vào lịch sử nhưng nhận 0 phút tính vào kế hoạch hôm nay.`
+            : `You have focused for ${formatMinutes(Math.max(0, timerState.elapsedMinutes))}. Sessions under ${formatMinutes(effectiveMinValidMinutes)} are saved to your history, but earn 0 credited minutes toward today's plan requirements.`
+        }
         confirmLabel={
           uiLabels.isCompleting
-            ? "Verifying session…"
+            ? isVi ? "Đang xác thực…" : "Verifying session…"
             : submission.status === "complete_error"
-              ? "Retry end & log session"
-              : "End anyway (0m credit)"
+              ? isVi ? "Thử kết thúc lại" : "Retry end & log session"
+              : isVi ? "Vẫn kết thúc (0m)" : "End anyway (0m credit)"
         }
-        cancelLabel="Keep focusing"
+        cancelLabel={isVi ? "Tiếp tục tập trung" : "Keep focusing"}
         confirmVariant="primary"
         pending={uiLabels.isCompleting}
       >
@@ -522,11 +549,19 @@ export function FocusTimer({
         open={confirmCancelOpen}
         onClose={() => setConfirmCancelOpen(false)}
         onConfirm={performCancel}
-        eyebrow="Cancel session"
-        title="Discard this focus block?"
-        description="Cancelling stops the clock immediately and logs 0 minutes toward your tasks or daily focus total."
-        confirmLabel={uiLabels.cancelDialogConfirmLabel}
-        cancelLabel="Keep focusing"
+        eyebrow={isVi ? "Hủy phiên" : "Cancel session"}
+        title={isVi ? "Bỏ phiên tập trung này?" : "Discard this focus block?"}
+        description={
+          isVi
+            ? "Hủy sẽ dừng đồng hồ ngay lập tức và ghi nhận 0 phút cho nhiệm vụ hoặc tổng tập trung ngày."
+            : "Cancelling stops the clock immediately and logs 0 minutes toward your tasks or daily focus total."
+        }
+        confirmLabel={
+          isVi && uiLabels.cancelDialogConfirmLabel === "Discard session"
+            ? "Hủy bỏ phiên"
+            : uiLabels.cancelDialogConfirmLabel
+        }
+        cancelLabel={isVi ? "Tiếp tục tập trung" : "Keep focusing"}
         confirmVariant="danger"
         pending={uiLabels.isCancelling}
       >

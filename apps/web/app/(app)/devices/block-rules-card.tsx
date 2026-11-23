@@ -8,6 +8,7 @@ import {
   toggleBlockRuleAction,
 } from "@/lib/actions/devices";
 import type { BlockRuleRecord, DeviceRecord } from "@/lib/data/devices";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ export function BlockRulesCard({
   devices: DeviceRecord[];
   rules: BlockRuleRecord[];
 }) {
+  const isVi = useLocale() === "vi";
   const activeDevices = devices.filter((device) => device.status === "active");
   const [deviceId, setDeviceId] = useState(activeDevices[0]?.id ?? "");
   const [ruleType, setRuleType] = useState<"block" | "allow">("block");
@@ -73,25 +75,31 @@ export function BlockRulesCard({
     <Card className="overflow-hidden">
       <CardHeader>
         <div>
-          <CardTitle>App lock policy rules</CardTitle>
+          <CardTitle>{isVi ? "Quy tắc khóa ứng dụng" : "App lock policy rules"}</CardTitle>
           <p className="mt-1 text-[12px] text-muted">
-            Configure blocked or allowlisted apps synced to Windows and Android agents via{" "}
+            {isVi
+              ? "Cấu hình ứng dụng bị chặn hoặc cho phép đồng bộ tới Windows và Android qua "
+              : "Configure blocked or allowlisted apps synced to Windows and Android agents via "}
             <code className="text-ink">/api/agent/policy</code>.
           </p>
         </div>
-        <span className="text-[12px] text-muted">{rules.length} rules</span>
+        <span className="text-[12px] text-muted">
+          {rules.length} {isVi ? "quy tắc" : "rules"}
+        </span>
       </CardHeader>
 
       <CardContent className="space-y-5 pt-4">
         {activeDevices.length === 0 ? (
           <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-4 py-3 text-[12.5px] text-muted">
             <ShieldAlert className="size-4 shrink-0" />
-            Register an active device first to attach app lock rules.
+            {isVi
+              ? "Hãy đăng ký ít nhất một thiết bị đang hoạt động trước khi gắn quy tắc khóa."
+              : "Register an active device first to attach app lock rules."}
           </div>
         ) : (
           <form onSubmit={addRule} className="grid gap-3 rounded-xl border border-line bg-surface-2/60 p-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="lg:col-span-2">
-              <Label htmlFor="rule-device">Device</Label>
+              <Label htmlFor="rule-device">{isVi ? "Thiết bị" : "Device"}</Label>
               <Select
                 id="rule-device"
                 value={deviceId}
@@ -106,48 +114,48 @@ export function BlockRulesCard({
             </div>
 
             <div>
-              <Label htmlFor="rule-type">Type</Label>
+              <Label htmlFor="rule-type">{isVi ? "Loại" : "Type"}</Label>
               <Select
                 id="rule-type"
                 value={ruleType}
                 onChange={(event) => setRuleType(event.target.value as "block" | "allow")}
               >
-                <option value="block">Block</option>
-                <option value="allow">Allowlist</option>
+                <option value="block">{isVi ? "Chặn" : "Block"}</option>
+                <option value="allow">{isVi ? "Cho phép" : "Allowlist"}</option>
               </Select>
             </div>
 
             <div>
-              <Label htmlFor="rule-category">Category</Label>
+              <Label htmlFor="rule-category">{isVi ? "Danh mục" : "Category"}</Label>
               <Select
                 id="rule-category"
                 value={category}
                 onChange={(event) => setCategory(event.target.value as BlockRuleRecord["category"])}
               >
-                <option value="games">Games</option>
-                <option value="social">Social</option>
+                <option value="games">{isVi ? "Trò chơi" : "Games"}</option>
+                <option value="social">{isVi ? "Mạng xã hội" : "Social"}</option>
                 <option value="video">Video</option>
-                <option value="entertainment">Entertainment</option>
-                <option value="other">Other</option>
+                <option value="entertainment">{isVi ? "Giải trí" : "Entertainment"}</option>
+                <option value="other">{isVi ? "Khác" : "Other"}</option>
               </Select>
             </div>
 
             <div>
-              <Label htmlFor="rule-action">Action</Label>
+              <Label htmlFor="rule-action">{isVi ? "Hành động" : "Action"}</Label>
               <Select
                 id="rule-action"
                 value={action}
                 onChange={(event) => setAction(event.target.value as BlockRuleRecord["action"])}
               >
-                <option value="overlay">Overlay</option>
-                <option value="minimize">Minimize</option>
-                <option value="terminate">Terminate</option>
-                <option value="notify">Notify</option>
+                <option value="overlay">{isVi ? "Che màn hình" : "Overlay"}</option>
+                <option value="minimize">{isVi ? "Thu nhỏ" : "Minimize"}</option>
+                <option value="terminate">{isVi ? "Đóng app" : "Terminate"}</option>
+                <option value="notify">{isVi ? "Thông báo" : "Notify"}</option>
               </Select>
             </div>
 
             <div>
-              <Label htmlFor="rule-display-name">Display name</Label>
+              <Label htmlFor="rule-display-name">{isVi ? "Tên hiển thị" : "Display name"}</Label>
               <Input
                 id="rule-display-name"
                 value={displayName}
@@ -159,7 +167,9 @@ export function BlockRulesCard({
             </div>
 
             <div className="sm:col-span-2 lg:col-span-4">
-              <Label htmlFor="rule-identifier">Process / package identifier</Label>
+              <Label htmlFor="rule-identifier">
+                {isVi ? "Tên tiến trình / gói ứng dụng" : "Process / package identifier"}
+              </Label>
               <Input
                 id="rule-identifier"
                 value={identifier}
@@ -173,7 +183,7 @@ export function BlockRulesCard({
             <div className="flex items-end sm:col-span-2">
               <Button type="submit" variant="primary" size="md" disabled={pending} className="w-full">
                 {pending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-                Add rule
+                {isVi ? "Thêm quy tắc" : "Add rule"}
               </Button>
             </div>
           </form>
@@ -181,7 +191,7 @@ export function BlockRulesCard({
 
         {rules.length === 0 ? (
           <p className="py-4 text-center text-[12.5px] text-muted">
-            No app lock rules configured yet.
+            {isVi ? "Chưa có quy tắc khóa ứng dụng nào." : "No app lock rules configured yet."}
           </p>
         ) : (
           <div className="divide-y divide-line rounded-xl border border-line bg-surface">
@@ -196,9 +206,13 @@ export function BlockRulesCard({
                       {rule.displayName}
                     </p>
                     <Badge tone={rule.ruleType === "block" ? "danger" : "success"}>
-                      {rule.ruleType === "block" ? "Block" : "Allow"}
+                      {rule.ruleType === "block"
+                        ? isVi ? "Chặn" : "Block"
+                        : isVi ? "Cho phép" : "Allow"}
                     </Badge>
-                    {!rule.isEnabled ? <Badge tone="neutral">Paused</Badge> : null}
+                    {!rule.isEnabled ? (
+                      <Badge tone="neutral">{isVi ? "Tạm dừng" : "Paused"}</Badge>
+                    ) : null}
                   </div>
                   <p className="mt-1 text-[12px] text-muted">
                     <code className="text-ink-soft">{rule.identifier}</code> · {rule.deviceName} ·{" "}
@@ -214,7 +228,9 @@ export function BlockRulesCard({
                     disabled={pending}
                     onClick={() => toggle(rule)}
                   >
-                    {rule.isEnabled ? "Disable" : "Enable"}
+                    {rule.isEnabled
+                      ? isVi ? "Tắt" : "Disable"
+                      : isVi ? "Bật" : "Enable"}
                   </Button>
                   <button
                     type="button"

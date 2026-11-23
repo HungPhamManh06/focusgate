@@ -4,12 +4,14 @@ import { NotebookPen, Save } from "lucide-react";
 import { useState, useTransition } from "react";
 import { saveFocusSessionNoteAction } from "@/lib/actions/v2";
 import type { FocusNoteItem } from "@/lib/data/v3-features";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 
 export function SessionNotesCard({ items }: { items: FocusNoteItem[] }) {
+  const isVi = useLocale() === "vi";
   const [pending, startTransition] = useTransition();
   const toast = useToast();
   const [drafts, setDrafts] = useState<Record<string, string>>(() => {
@@ -35,7 +37,7 @@ export function SessionNotesCard({ items }: { items: FocusNoteItem[] }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <NotebookPen className="size-4 text-accent" />
-          Session Journal &amp; Notes
+          {isVi ? "Nhật ký & Ghi chú phiên tập trung" : "Session Journal & Notes"}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-2">
@@ -46,7 +48,7 @@ export function SessionNotesCard({ items }: { items: FocusNoteItem[] }) {
           >
             <div className="flex items-center justify-between gap-2 text-[12px]">
               <span className="font-medium text-ink">
-                {item.taskTitle ?? "Free Focus Session"}
+                {item.taskTitle ?? (isVi ? "Tập trung tự do" : "Free Focus Session")}
               </span>
               <span className="text-muted">
                 {item.creditedMinutes}m ·{" "}
@@ -62,7 +64,11 @@ export function SessionNotesCard({ items }: { items: FocusNoteItem[] }) {
                 onChange={(e) =>
                   setDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))
                 }
-                placeholder="What did you finish? What is the next step?"
+                placeholder={
+                  isVi
+                    ? "Bạn đã hoàn thành gì? Bước tiếp theo là gì?"
+                    : "What did you finish? What is the next step?"
+                }
                 disabled={pending}
               />
               <Button
@@ -72,7 +78,7 @@ export function SessionNotesCard({ items }: { items: FocusNoteItem[] }) {
                 disabled={pending}
                 onClick={() => handleSave(item.id)}
               >
-                <Save className="size-3.5" /> Save
+                <Save className="size-3.5" /> {isVi ? "Lưu" : "Save"}
               </Button>
             </div>
           </div>

@@ -8,6 +8,7 @@ import { formatMinutes } from "@/lib/data/format";
 import type { FocusMode } from "@/lib/data/types";
 import { evaluateFocusStarterOptions } from "@/lib/domain/focus-timer-state";
 import { validatePlannedDurationAgainstMinValid } from "@/lib/validation";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
@@ -22,6 +23,7 @@ export function FocusStarter({
   minValidMinutes: number;
   initialTaskId?: string | null;
 }) {
+  const isVi = useLocale() === "vi";
   const starterConfig = useMemo(
     () => evaluateFocusStarterOptions(minValidMinutes),
     [minValidMinutes],
@@ -128,31 +130,31 @@ export function FocusStarter({
   return (
     <div className="surface-card">
       <div className="border-b border-line px-5 py-5 sm:px-7">
-        <p className="label-xs text-muted">New session</p>
+        <p className="label-xs text-muted">{isVi ? "Phiên mới" : "New session"}</p>
         <h2 className="mt-2 font-display text-[28px] leading-none tracking-[-0.01em]">
-          Start a focus block.
+          {isVi ? "Bắt đầu phiên tập trung." : "Start a focus block."}
         </h2>
         <p className="mt-2 text-[12px] leading-relaxed text-muted">
-          Pick one task. Keep the block honest. Valid focus is computed from the server clock and
-          locks your current {formatMinutes(starterConfig.minValidMinutes)} minimum threshold when
-          started.
+          {isVi
+            ? `Chọn một nhiệm vụ và giữ đúng cam kết. Thời gian hợp lệ được tính theo đồng hồ máy chủ và áp dụng ngưỡng tối thiểu ${formatMinutes(starterConfig.minValidMinutes)} khi bắt đầu.`
+            : `Pick one task. Keep the block honest. Valid focus is computed from the server clock and locks your current ${formatMinutes(starterConfig.minValidMinutes)} minimum threshold when started.`}
         </p>
       </div>
 
       <div className="space-y-6 px-5 py-6 sm:px-7">
         <div>
           <label htmlFor="focus-task" className="mb-1.5 block text-[12px] font-medium text-ink-soft">
-            What are you focusing on?
+            {isVi ? "Bạn đang tập trung vào việc gì?" : "What are you focusing on?"}
           </label>
           <Select
             id="focus-task"
             value={taskId}
             onChange={(event) => setTaskId(event.target.value)}
           >
-            <option value="">Free focus — no task</option>
+            <option value="">{isVi ? "Tập trung tự do — không gắn nhiệm vụ" : "Free focus — no task"}</option>
             {candidates.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
-                {candidate.inTodayPlan ? "Today · " : ""}
+                {candidate.inTodayPlan ? (isVi ? "Hôm nay · " : "Today · ") : ""}
                 {candidate.title}
               </option>
             ))}
@@ -160,23 +162,34 @@ export function FocusStarter({
           {selectedTask ? (
             <p className="mt-1.5 text-[11px] text-muted">
               {selectedTask.requiredFocusMinutes > 0
-                ? `${selectedTask.requiredFocusMinutes} verified minutes needed for this task`
-                : "No focus requirement for this task"}
-              {selectedTask.inTodayPlan ? " · part of today's plan" : " · not in today's plan"}
+                ? isVi
+                  ? `Cần ${selectedTask.requiredFocusMinutes} phút hợp lệ cho nhiệm vụ này`
+                  : `${selectedTask.requiredFocusMinutes} verified minutes needed for this task`
+                : isVi
+                  ? "Nhiệm vụ này không yêu cầu phút tập trung"
+                  : "No focus requirement for this task"}
+              {selectedTask.inTodayPlan
+                ? isVi ? " · thuộc kế hoạch hôm nay" : " · part of today's plan"
+                : isVi ? " · chưa có trong kế hoạch hôm nay" : " · not in today's plan"}
             </p>
           ) : (
             <p className="mt-1.5 text-[11px] text-muted">
-              Free focus still counts toward your daily focus total, but not toward a plan task.
+              {isVi
+                ? "Tập trung tự do vẫn cộng vào tổng thời gian hôm nay, nhưng không tính vào nhiệm vụ cụ thể."
+                : "Free focus still counts toward your daily focus total, but not toward a plan task."}
             </p>
           )}
         </div>
 
         <div>
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-[12px] font-medium text-ink-soft">Session length</p>
+            <p className="text-[12px] font-medium text-ink-soft">
+              {isVi ? "Thời lượng phiên" : "Session length"}
+            </p>
             <p className="text-[11px] text-muted tabular-nums">
-              Minimum valid session: {formatMinutes(starterConfig.minValidMinutes)} (requires ≥{" "}
-              {formatMinutes(starterConfig.minAllowedCustomMinutes)} planned)
+              {isVi
+                ? `Hợp lệ tối thiểu: ${formatMinutes(starterConfig.minValidMinutes)} (cần đặt ≥ ${formatMinutes(starterConfig.minAllowedCustomMinutes)})`
+                : `Minimum valid session: ${formatMinutes(starterConfig.minValidMinutes)} (requires ≥ ${formatMinutes(starterConfig.minAllowedCustomMinutes)} planned)`}
             </p>
           </div>
 
@@ -259,10 +272,10 @@ export function FocusStarter({
               <span
                 className={cn("text-[12.5px] font-medium", mode === "open_ended" && "text-accent")}
               >
-                Stopwatch
+                {isVi ? "Bấm giờ tự do" : "Stopwatch"}
               </span>
               <span className="mt-0.5 block text-[10.5px] text-muted">
-                Count up · no time limit
+                {isVi ? "Đếm tăng dần · không giới hạn" : "Count up · no time limit"}
               </span>
             </button>
 
@@ -281,12 +294,16 @@ export function FocusStarter({
               )}
             >
               <span className={cn("text-[12.5px] font-medium", mode === "custom" && "text-accent")}>
-                Custom
+                {isVi ? "Tùy chỉnh" : "Custom"}
               </span>
               <span className="mt-0.5 block text-[10.5px] text-muted">
                 {mode === "custom"
-                  ? `${customMinutes} min (max ${customMinutes * 2}m credit)`
-                  : `Min ${starterConfig.minAllowedCustomMinutes} min`}
+                  ? isVi
+                    ? `${customMinutes} phút (tối đa ${customMinutes * 2}m)`
+                    : `${customMinutes} min (max ${customMinutes * 2}m credit)`
+                  : isVi
+                    ? `Tối thiểu ${starterConfig.minAllowedCustomMinutes} phút`
+                    : `Min ${starterConfig.minAllowedCustomMinutes} min`}
               </span>
             </button>
           </div>
@@ -314,8 +331,9 @@ export function FocusStarter({
                   )}
                 />
                 <span className="text-[11px] text-muted tabular-nums">
-                  minutes ({starterConfig.minAllowedCustomMinutes}–180 · max{" "}
-                  {Math.max(0, customMinutes * 2)}m credit)
+                  {isVi
+                    ? `phút (${starterConfig.minAllowedCustomMinutes}–180 · tối đa ${Math.max(0, customMinutes * 2)}m được tính)`
+                    : `minutes (${starterConfig.minAllowedCustomMinutes}–180 · max ${Math.max(0, customMinutes * 2)}m credit)`}
                 </span>
               </div>
               {!durationCheck.valid ? (
@@ -341,12 +359,18 @@ export function FocusStarter({
             size="lg"
           >
             {pending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-            {mode === "open_ended" ? "Start stopwatch" : "Start focus"}
+            {mode === "open_ended"
+              ? isVi ? "Bắt đầu bấm giờ" : "Start stopwatch"
+              : isVi ? "Bắt đầu tập trung" : "Start focus"}
           </Button>
           <p className="text-[10.5px] leading-relaxed text-muted">
             {mode === "open_ended"
-              ? `Counts up from 00:00 and records your exact task time (up to 10h; minimum ${formatMinutes(starterConfig.minValidMinutes)} to earn credit).`
-              : `Sessions shorter than ${formatMinutes(starterConfig.minValidMinutes)} are saved to history with 0m credit. Maximum credit per session is ${formatMinutes(selectedPlannedMinutes * 2)} (2× planned).`}
+              ? isVi
+                ? `Đếm từ 00:00 và ghi nhận thời gian thực tế (tối đa 10h; cần tối thiểu ${formatMinutes(starterConfig.minValidMinutes)} để được tính).`
+                : `Counts up from 00:00 and records your exact task time (up to 10h; minimum ${formatMinutes(starterConfig.minValidMinutes)} to earn credit).`
+              : isVi
+                ? `Phiên ngắn hơn ${formatMinutes(starterConfig.minValidMinutes)} được lưu lịch sử với 0m tính điểm. Tối đa mỗi phiên là ${formatMinutes(selectedPlannedMinutes * 2)} (2× dự kiến).`
+                : `Sessions shorter than ${formatMinutes(starterConfig.minValidMinutes)} are saved to history with 0m credit. Maximum credit per session is ${formatMinutes(selectedPlannedMinutes * 2)} (2× planned).`}
           </p>
         </div>
       </div>

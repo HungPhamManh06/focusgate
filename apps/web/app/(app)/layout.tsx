@@ -8,6 +8,7 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ToastProvider } from "@/components/ui/toast";
+import { LanguageProvider } from "@/components/i18n/language-provider";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { Sidebar } from "@/components/shell/sidebar";
 
@@ -42,8 +43,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     authUser?.email?.split("@")[0] ||
     workspace.profile.displayName;
 
+  const language = v2Settings?.language ?? "en";
+  const isVi = language === "vi";
+
   return (
-    <ToastProvider>
+    <LanguageProvider language={language}>
+      <ToastProvider>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:border focus:border-accent focus:bg-surface focus:px-4 focus:py-2 focus:text-[12.5px] focus:font-medium focus:text-ink focus:shadow-lift"
@@ -70,7 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 href="/devices"
                 className="rounded-full border border-line bg-surface px-3 py-1.5 text-[11.5px] font-medium text-ink-soft"
               >
-                Devices
+                {isVi ? "Thiết bị" : "Devices"}
               </Link>
               <Link
                 href="/wallet"
@@ -78,7 +83,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               >
                 {walletSummaryResult.minutes !== null
                   ? formatMinutes(walletSummaryResult.minutes)
-                  : "Wallet"}
+                  : isVi ? "Ví thưởng" : "Wallet"}
               </Link>
               <span
                 title={`${workspace.profile.displayName} · Local workspace`}
@@ -95,9 +100,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {children}
           </main>
 
-          <MobileNav language={v2Settings?.language ?? "en"} />
+          <MobileNav language={language} />
         </div>
       </div>
-    </ToastProvider>
+      </ToastProvider>
+    </LanguageProvider>
   );
 }

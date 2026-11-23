@@ -6,6 +6,7 @@ import { spendMinutesAction } from "@/lib/actions/rewards";
 import { EMPTY_ACTION_STATE } from "@/lib/actions/types";
 import { formatDate, formatMinutes } from "@/lib/data/format";
 import type { Grant } from "@/lib/data/types";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
@@ -15,6 +16,8 @@ const QUICK_MINUTES = [10, 15, 30] as const;
 const QUICK_SOURCES = ["YouTube", "Gaming", "Social", "Show / Film"] as const;
 
 export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: string }) {
+  const locale = useLocale();
+  const isVi = locale === "vi";
   const [state, formAction, pending] = useActionState(spendMinutesAction, EMPTY_ACTION_STATE);
   const [grantId, setGrantId] = useState(grants[0]?.id ?? "");
   const [minutes, setMinutes] = useState(15);
@@ -38,7 +41,9 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
   if (grants.length === 0) {
     return (
       <p className="text-[12px] leading-relaxed text-muted">
-        No active grant to spend. Finish a plan to earn your next block of time.
+        {isVi
+          ? "Chưa có phần thưởng nào đang hiệu lực. Hoàn thành kế hoạch ngày để nhận thời gian giải trí."
+          : "No active grant to spend. Finish a plan to earn your next block of time."}
       </p>
     );
   }
@@ -50,7 +55,7 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
   return (
     <form action={formAction} className="space-y-4">
       <div>
-        <Label htmlFor="spend-grant">From grant</Label>
+        <Label htmlFor="spend-grant">{isVi ? "Từ gói thưởng" : "From grant"}</Label>
         <Select
           id="spend-grant"
           name="grantId"
@@ -59,8 +64,9 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
         >
           {grants.map((grant) => (
             <option key={grant.id} value={grant.id}>
-              {formatMinutes(grant.remainingMinutes)} left · expires{" "}
-              {formatDate(grant.expiresAt, { month: "short", day: "numeric" }, timezone)}
+              {isVi
+                ? `còn ${formatMinutes(grant.remainingMinutes)} · hết hạn ${formatDate(grant.expiresAt, { month: "short", day: "numeric" }, timezone, locale)}`
+                : `${formatMinutes(grant.remainingMinutes)} left · expires ${formatDate(grant.expiresAt, { month: "short", day: "numeric" }, timezone)}`}
             </option>
           ))}
         </Select>
@@ -69,7 +75,7 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
       <div>
         <div className="mb-1.5 flex items-center justify-between">
           <Label htmlFor="spend-minutes" className="mb-0">
-            Minutes
+            {isVi ? "Số phút" : "Minutes"}
           </Label>
           <div className="flex items-center gap-1" role="group" aria-label="Quick duration presets">
             {QUICK_MINUTES.filter((preset) => preset < maxMinutes).map((preset) => (
@@ -99,7 +105,7 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
                   : "border-line bg-surface-2/60 text-muted hover:text-ink",
               )}
             >
-              Max ({maxMinutes}m)
+              {isVi ? `Tối đa (${maxMinutes}m)` : `Max (${maxMinutes}m)`}
             </button>
           </div>
         </div>
@@ -116,13 +122,13 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
       </div>
 
       <div>
-        <Label htmlFor="spend-label">What for?</Label>
+        <Label htmlFor="spend-label">{isVi ? "Dùng cho việc gì?" : "What for?"}</Label>
         <Input
           id="spend-label"
           name="label"
           value={label}
           onChange={(event) => setLabel(event.target.value)}
-          placeholder="YouTube, gaming, social…"
+          placeholder={isVi ? "YouTube, game, mạng xã hội…" : "YouTube, gaming, social…"}
           maxLength={120}
           required
         />
@@ -147,12 +153,14 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
       </div>
 
       <p className="text-[10.5px] leading-relaxed text-muted">
-        Max {formatMinutes(maxMinutes)} on this grant. Spending records a usage event and is final.
+        {isVi
+          ? `Tối đa ${formatMinutes(maxMinutes)} cho gói này. Khi dùng sẽ ghi nhận ngay và không thể hoàn tác.`
+          : `Max ${formatMinutes(maxMinutes)} on this grant. Spending records a usage event and is final.`}
       </p>
 
       <Button type="submit" variant="primary" disabled={pending} className="w-full">
         {pending ? <Loader2 className="size-4 animate-spin" /> : <MinusCircle className="size-4" />}
-        Spend {clampedMinutes} min
+        {isVi ? `Dùng ${clampedMinutes} phút` : `Spend ${clampedMinutes} min`}
       </Button>
     </form>
   );

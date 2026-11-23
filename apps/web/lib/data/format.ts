@@ -28,13 +28,21 @@ export function formatDate(
   value: string | null,
   options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" },
   timeZone = "Asia/Ho_Chi_Minh",
+  locale: "en" | "vi" = "en",
 ): string {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("en-GB", { ...options, timeZone }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale === "vi" ? "vi-VN" : "en-GB", {
+    ...options,
+    timeZone,
+  }).format(new Date(value));
 }
 
-export function formatDateLong(value: string, timeZone = "Asia/Ho_Chi_Minh"): string {
-  return new Intl.DateTimeFormat("en-GB", {
+export function formatDateLong(
+  value: string,
+  timeZone = "Asia/Ho_Chi_Minh",
+  locale: "en" | "vi" = "en",
+): string {
+  return new Intl.DateTimeFormat(locale === "vi" ? "vi-VN" : "en-GB", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -61,7 +69,11 @@ export function todayIso(timeZone = "Asia/Ho_Chi_Minh"): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-export function greetingForDate(date: Date, timeZone?: string): string {
+export function greetingForDate(
+  date: Date,
+  timeZone?: string,
+  locale: "en" | "vi" = "en",
+): string {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", {
       hour: "numeric",
@@ -69,14 +81,20 @@ export function greetingForDate(date: Date, timeZone?: string): string {
       ...(timeZone ? { timeZone } : {}),
     }).format(date),
   );
+  if (locale === "vi") {
+    if (hour < 5) return "Vẫn còn thức à";
+    if (hour < 12) return "Chào buổi sáng";
+    if (hour < 18) return "Chào buổi chiều";
+    return "Chào buổi tối";
+  }
   if (hour < 5) return "Still up";
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
 
-export function greeting(timeZone = "Asia/Ho_Chi_Minh"): string {
-  return greetingForDate(new Date(), timeZone);
+export function greeting(timeZone = "Asia/Ho_Chi_Minh", locale: "en" | "vi" = "en"): string {
+  return greetingForDate(new Date(), timeZone, locale);
 }
 
 export function initials(name: string): string {
@@ -88,7 +106,11 @@ export function initials(name: string): string {
     .join("");
 }
 
-export function relativeDue(value: string | null, timeZone = "Asia/Ho_Chi_Minh"): string | null {
+export function relativeDue(
+  value: string | null,
+  timeZone = "Asia/Ho_Chi_Minh",
+  locale: "en" | "vi" = "en",
+): string | null {
   if (!value) return null;
   const date = new Date(value);
   const now = new Date();
@@ -103,6 +125,12 @@ export function relativeDue(value: string | null, timeZone = "Asia/Ho_Chi_Minh")
       }).format(input),
     ).getTime();
   const diff = Math.round((startOf(date) - startOf(now)) / dayMs);
+  if (locale === "vi") {
+    if (diff < 0) return `Quá hạn ${Math.abs(diff)} ngày`;
+    if (diff === 0) return "Hạn hôm nay";
+    if (diff === 1) return "Hạn ngày mai";
+    return `Còn ${diff} ngày`;
+  }
   if (diff < 0) return `${Math.abs(diff)}d overdue`;
   if (diff === 0) return "Due today";
   if (diff === 1) return "Due tomorrow";

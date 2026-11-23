@@ -3,9 +3,11 @@
 import { Search, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Input } from "@/components/ui/input";
 
 export function TaskSearch({ initialQuery }: { initialQuery?: string }) {
+  const isVi = useLocale() === "vi";
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -60,8 +62,8 @@ export function TaskSearch({ initialQuery }: { initialQuery?: string }) {
         name="q"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search tasks…"
-        aria-label="Search tasks"
+        placeholder={isVi ? "Tìm nhiệm vụ…" : "Search tasks…"}
+        aria-label={isVi ? "Tìm nhiệm vụ" : "Search tasks"}
         className="h-9 w-full pl-8 pr-8 text-[12px] sm:w-[210px]"
       />
       {query ? (

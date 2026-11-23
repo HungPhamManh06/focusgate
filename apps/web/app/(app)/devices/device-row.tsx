@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { renameDeviceAction, revokeDeviceAction } from "@/lib/actions/devices";
 import type { DeviceRecord } from "@/lib/data/devices";
 import { formatDate } from "@/lib/data/format";
+import { useLocale } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -32,6 +33,8 @@ export function DeviceRow({
   isCurrentWorkspaceDevice: boolean;
   timezone: string;
 }) {
+  const locale = useLocale();
+  const isVi = locale === "vi";
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(device.name);
   const [confirmRevokeOpen, setConfirmRevokeOpen] = useState(false);
@@ -83,7 +86,7 @@ export function DeviceRow({
               />
               <Button type="submit" variant="primary" size="sm" disabled={pending}>
                 {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                Save
+                {isVi ? "Lưu" : "Save"}
               </Button>
               <Button
                 type="button"
@@ -95,21 +98,33 @@ export function DeviceRow({
                   setEditing(false);
                 }}
               >
-                <X className="size-3.5" /> Cancel
+                <X className="size-3.5" /> {isVi ? "Hủy" : "Cancel"}
               </Button>
             </form>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[14px] font-medium text-ink">{device.name}</p>
-              {isCurrentWorkspaceDevice ? <Badge tone="accent">This workspace</Badge> : null}
+              {isCurrentWorkspaceDevice ? (
+                <Badge tone="accent">{isVi ? "Thiết bị này" : "This workspace"}</Badge>
+              ) : null}
               <Badge tone={isRevoked ? "danger" : "success"}>
-                {isRevoked ? "Revoked" : "Active"}
+                {isRevoked
+                  ? isVi ? "Đã thu hồi" : "Revoked"
+                  : isVi ? "Đang hoạt động" : "Active"}
               </Badge>
             </div>
           )}
 
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted">
-            <span>{platformLabels[device.platform]}</span>
+            <span>
+              {isVi
+                ? device.platform === "windows"
+                  ? "Ứng dụng Windows"
+                  : device.platform === "android"
+                    ? "Ứng dụng Android"
+                    : "Trình duyệt Web"
+                : platformLabels[device.platform]}
+            </span>
             {device.appVersion ? (
               <>
                 <span aria-hidden>·</span>
@@ -119,8 +134,8 @@ export function DeviceRow({
             <span aria-hidden>·</span>
             <span>
               {device.lastSeenAt
-                ? `Last seen ${formatDate(device.lastSeenAt, undefined, timezone)}`
-                : `Added ${formatDate(device.createdAt, undefined, timezone)}`}
+                ? `${isVi ? "Hoạt động cuối" : "Last seen"} ${formatDate(device.lastSeenAt, undefined, timezone, locale)}`
+                : `${isVi ? "Đã thêm" : "Added"} ${formatDate(device.createdAt, undefined, timezone, locale)}`}
             </span>
           </div>
         </div>
@@ -140,7 +155,7 @@ export function DeviceRow({
                   setEditing(true);
                 }}
               >
-                <Pencil className="size-3.5" /> Rename
+                <Pencil className="size-3.5" /> {isVi ? "Đổi tên" : "Rename"}
               </Button>
               <Button
                 type="button"
@@ -150,7 +165,7 @@ export function DeviceRow({
                 onClick={() => setConfirmRevokeOpen(true)}
                 className="text-danger hover:bg-danger-soft hover:text-danger"
               >
-                <ShieldOff className="size-3.5" /> Revoke
+                <ShieldOff className="size-3.5" /> {isVi ? "Thu hồi" : "Revoke"}
               </Button>
             </>
           ) : null}
@@ -161,15 +176,22 @@ export function DeviceRow({
         open={confirmRevokeOpen}
         onClose={() => setConfirmRevokeOpen(false)}
         onConfirm={revoke}
-        eyebrow="Revoke device"
-        title={`Revoke "${device.name}"?`}
+        eyebrow={isVi ? "Thu hồi thiết bị" : "Revoke device"}
+        title={isVi ? `Thu hồi "${device.name}"?` : `Revoke "${device.name}"?`}
         description={
-          <>
-            Revoking immediately cancels any open focus session on this device, revokes active
-            entertainment grants issued to it, and blocks future sync until re-registered.
-          </>
+          isVi ? (
+            <>
+              Thu hồi sẽ hủy ngay mọi phiên tập trung đang mở trên thiết bị này, thu hồi quyền giải
+              trí đang cấp và chặn đồng bộ cho đến khi đăng ký lại.
+            </>
+          ) : (
+            <>
+              Revoking immediately cancels any open focus session on this device, revokes active
+              entertainment grants issued to it, and blocks future sync until re-registered.
+            </>
+          )
         }
-        confirmLabel="Revoke device"
+        confirmLabel={isVi ? "Thu hồi thiết bị" : "Revoke device"}
         confirmVariant="danger"
         pending={pending}
       />
