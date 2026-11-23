@@ -11,6 +11,13 @@ import {
   useStreakFreeze,
 } from "@/lib/data/v2-settings";
 import { upsertDailyHealthMetrics } from "@/lib/data/health";
+import {
+  createGoal,
+  deleteGoal,
+  incrementGoalProgress,
+  saveFocusSessionNote,
+  setPlanTaskSchedule,
+} from "@/lib/data/v3-features";
 import { breakdownGoalIntoTasks } from "@/lib/domain/smart-breakdown";
 import { revalidateWorkspace } from "./shared";
 import type { ActionState } from "./types";
@@ -116,6 +123,11 @@ export async function updateV2SettingsAction(input: {
   weekendBedtimeEnd?: string | null;
   weekendRelaxedMode?: boolean;
   lastDailyReviewDate?: string | null;
+  language?: "en" | "vi";
+  dailyFocusGoalMinutes?: number;
+  dailyStepsGoal?: number;
+  dailySleepGoalHours?: number;
+  targetWeightKg?: number | null;
 }): Promise<ActionState> {
   try {
     await updateV2Settings(input);
@@ -154,6 +166,69 @@ export async function saveManualHealthMetricAction(input: {
     });
     revalidateWorkspace();
     return { success: `Đã lưu chỉ số sức khỏe ngày ${input.date}.` };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function createGoalAction(input: {
+  title: string;
+  periodType: "weekly" | "monthly";
+  targetValue: number;
+  unit: string;
+}): Promise<ActionState> {
+  if (!input.title.trim()) return { error: "Goal title is required." };
+  try {
+    await createGoal(input);
+    revalidateWorkspace();
+    return { success: "Goal created." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function incrementGoalAction(goalId: string, delta: number): Promise<ActionState> {
+  try {
+    await incrementGoalProgress(goalId, delta);
+    revalidateWorkspace();
+    return { success: "Goal progress updated." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function deleteGoalAction(goalId: string): Promise<ActionState> {
+  try {
+    await deleteGoal(goalId);
+    revalidateWorkspace();
+    return { success: "Goal removed." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function setPlanTaskScheduleAction(input: {
+  planTaskId: string;
+  start: string | null;
+  end: string | null;
+}): Promise<ActionState> {
+  try {
+    await setPlanTaskSchedule(input.planTaskId, input.start, input.end);
+    revalidateWorkspace();
+    return { success: "Time block saved." };
+  } catch (error) {
+    return { error: friendlyDbError(error) };
+  }
+}
+
+export async function saveFocusSessionNoteAction(
+  sessionId: string,
+  note: string,
+): Promise<ActionState> {
+  try {
+    await saveFocusSessionNote(sessionId, note);
+    revalidateWorkspace();
+    return { success: "Session note saved." };
   } catch (error) {
     return { error: friendlyDbError(error) };
   }

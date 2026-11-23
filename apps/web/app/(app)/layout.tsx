@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatMinutes, initials } from "@/lib/data/format";
 import { getWalletSummary } from "@/lib/data/rewards";
+import { getV2Settings } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { Logo } from "@/components/ui/logo";
@@ -13,7 +14,7 @@ import { Sidebar } from "@/components/shell/sidebar";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [workspaceResult, walletSummaryResult, authUser] = await Promise.all([
+  const [workspaceResult, walletSummaryResult, authUser, v2Settings] = await Promise.all([
     getWorkspace()
       .then((data) => ({ ok: true as const, data }))
       .catch((error: unknown) => ({
@@ -24,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .then((minutes) => ({ minutes, error: false }))
       .catch(() => ({ minutes: null, error: true })),
     getAuthenticatedUser().catch(() => null),
+    getV2Settings().catch(() => null),
   ]);
 
   if (!workspaceResult.ok) {
@@ -55,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           availableMinutes={walletSummaryResult.minutes}
           walletError={walletSummaryResult.error}
           authEmail={authUser?.email ?? null}
+          language={v2Settings?.language ?? "en"}
         />
 
         <div className="flex min-h-screen min-w-0 flex-col">
@@ -92,7 +95,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {children}
           </main>
 
-          <MobileNav />
+          <MobileNav language={v2Settings?.language ?? "en"} />
         </div>
       </div>
     </ToastProvider>

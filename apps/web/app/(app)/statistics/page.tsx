@@ -461,7 +461,11 @@ export default async function StatisticsPage({
       )}
 
       <section className="mt-4">
-        <HealthLogCard health={health} todayDate={todayIso(timezone)} />
+        <HealthLogCard
+          health={health}
+          todayDate={todayIso(timezone)}
+          focusDays={stats.days.map((d) => ({ date: d.date, focusMinutes: d.focusMinutes }))}
+        />
       </section>
 
       <p className="mt-6 text-[10.5px] text-muted">

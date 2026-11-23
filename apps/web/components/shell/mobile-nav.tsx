@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { isNavActive, navItems } from "./nav-items";
 
-export function MobileNav() {
+export function MobileNav({ language = "en" }: { language?: "en" | "vi" }) {
   const pathname = usePathname();
+  const isVi = language === "vi";
 
   return (
     <nav
@@ -35,7 +36,7 @@ export function MobileNav() {
                 >
                   <item.icon className="size-[17px]" strokeWidth={active ? 2 : 1.8} />
                 </span>
-                <span className="truncate">{item.shortLabel}</span>
+                <span className="truncate">{isVi ? item.shortLabelVi : item.shortLabel}</span>
               </Link>
             </li>
           );

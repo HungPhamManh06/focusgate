@@ -29,6 +29,7 @@ import {
   getTodaySessions,
 } from "@/lib/data/focus";
 import { getTodayPlan } from "@/lib/data/planner";
+import { listRecentFocusNotes } from "@/lib/data/v3-features";
 import { getWorkspace } from "@/lib/data/workspace";
 import {
   buildFocusPageMetrics,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/domain/tasks-planner-state";
 import { FocusStarter } from "./focus-starter";
 import { FocusTimer } from "./focus-timer";
+import { SessionNotesCard } from "./session-notes-card";
 
 export const dynamic = "force-dynamic";
 
@@ -50,13 +52,14 @@ export default async function FocusPage({
   searchParams?: Promise<{ taskId?: string }>;
 }) {
   const params = searchParams ? await searchParams : {};
-  const [workspace, active, candidates, sessions, summary, plan] = await Promise.all([
+  const [workspace, active, candidates, sessions, summary, plan, focusNotes] = await Promise.all([
     getWorkspace(),
     getActiveSession(),
     getFocusCandidates(),
     getTodaySessions(10),
     getTodayFocusSummary(),
     getTodayPlan(),
+    listRecentFocusNotes(5),
   ]);
 
   const { timezone } = workspace.profile;
@@ -399,6 +402,8 @@ export default async function FocusPage({
           </Card>
         )}
       </section>
+
+      <SessionNotesCard items={focusNotes} />
     </div>
   );
 }

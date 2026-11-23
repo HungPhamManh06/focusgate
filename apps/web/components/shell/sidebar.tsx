@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, Laptop, LogOut } from "lucide-react";
+import { ArrowUpRight, Laptop, LogOut, Settings } from "lucide-react";
 import { formatMinutes, initials } from "@/lib/data/format";
 import { isSidebarWalletActive } from "@/lib/domain/dashboard-state";
 import { cn } from "@/lib/utils";
@@ -15,14 +15,17 @@ export function Sidebar({
   availableMinutes,
   walletError = false,
   authEmail = null,
+  language = "en",
 }: {
   displayName: string;
   availableMinutes: number | null;
   walletError?: boolean;
   authEmail?: string | null;
+  language?: "en" | "vi";
 }) {
   const pathname = usePathname();
   const hasAvailableTime = isSidebarWalletActive(availableMinutes);
+  const isVi = language === "vi";
 
   return (
     <aside className="sticky top-0 hidden h-screen flex-col border-r border-line bg-surface lg:flex">
@@ -53,7 +56,7 @@ export function Sidebar({
                     className={cn("size-[17px]", active ? "text-accent" : "text-muted group-hover:text-ink-soft")}
                     strokeWidth={1.8}
                   />
-                  {item.label}
+                  {isVi ? item.labelVi : item.label}
                 </Link>
               </li>
             );
@@ -76,7 +79,28 @@ export function Sidebar({
                 )}
                 strokeWidth={1.8}
               />
-              Devices
+              {isVi ? "Thiết bị" : "Devices"}
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/settings"
+              aria-current={pathname === "/settings" ? "page" : undefined}
+              className={cn(
+                "group flex h-10 items-center gap-3 rounded-xl px-3 text-[13.5px] transition-colors",
+                pathname === "/settings"
+                  ? "bg-accent-soft font-medium text-accent"
+                  : "text-ink-soft hover:bg-surface-2 hover:text-ink",
+              )}
+            >
+              <Settings
+                className={cn(
+                  "size-[17px]",
+                  pathname === "/settings" ? "text-accent" : "text-muted group-hover:text-ink-soft",
+                )}
+                strokeWidth={1.8}
+              />
+              {isVi ? "Cài đặt" : "Settings"}
             </Link>
           </li>
         </ul>

@@ -11,18 +11,20 @@ import {
 export interface NavItem {
   href: string;
   label: string;
+  labelVi: string;
   shortLabel: string;
+  shortLabelVi: string;
   icon: LucideIcon;
   exact?: boolean;
 }
 
 export const navItems: NavItem[] = [
-  { href: "/", label: "Dashboard", shortLabel: "Today", icon: LayoutDashboard, exact: true },
-  { href: "/tasks", label: "Tasks", shortLabel: "Tasks", icon: ListTodo },
-  { href: "/planner", label: "Planner", shortLabel: "Plan", icon: CalendarClock },
-  { href: "/focus", label: "Focus", shortLabel: "Focus", icon: Timer },
-  { href: "/wallet", label: "Wallet", shortLabel: "Wallet", icon: Wallet },
-  { href: "/statistics", label: "Statistics", shortLabel: "Stats", icon: BarChart3 },
+  { href: "/", label: "Dashboard", labelVi: "Tổng quan", shortLabel: "Today", shortLabelVi: "Hôm nay", icon: LayoutDashboard, exact: true },
+  { href: "/tasks", label: "Tasks", labelVi: "Nhiệm vụ", shortLabel: "Tasks", shortLabelVi: "Việc", icon: ListTodo },
+  { href: "/planner", label: "Planner", labelVi: "Kế hoạch", shortLabel: "Plan", shortLabelVi: "Kế hoạch", icon: CalendarClock },
+  { href: "/focus", label: "Focus", labelVi: "Tập trung", shortLabel: "Focus", shortLabelVi: "Focus", icon: Timer },
+  { href: "/wallet", label: "Wallet", labelVi: "Ví thưởng", shortLabel: "Wallet", shortLabelVi: "Ví", icon: Wallet },
+  { href: "/statistics", label: "Statistics", labelVi: "Thống kê", shortLabel: "Stats", shortLabelVi: "Thống kê", icon: BarChart3 },
 ];
 
 export function isNavActive(item: NavItem, pathname: string): boolean {

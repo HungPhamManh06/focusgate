@@ -8,10 +8,12 @@ import type { HealthSummary } from "@/lib/data/health";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { BarChart } from "@/components/charts/bar-chart";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 type HealthPeriodTab = "week" | "month" | "year";
+type HealthChartMetric = "steps" | "sleep" | "calories" | "weight";
 
 function formatPctDelta(current: number, previous: number | undefined): string {
   if (previous === undefined || previous <= 0) return "No prior period";
@@ -38,13 +40,16 @@ function formatWeightDelta(currentKg: number | null, previousKg: number | null |
 export function HealthLogCard({
   health,
   todayDate,
+  focusDays = [],
 }: {
   health: HealthSummary;
   todayDate: string;
+  focusDays?: ReadonlyArray<{ date: string; focusMinutes: number }>;
 }) {
   const [pending, startTransition] = useTransition();
   const toast = useToast();
   const [tab, setTab] = useState<HealthPeriodTab>("week");
+  const [chartMetric, setChartMetric] = useState<HealthChartMetric>("steps");
 
   const existingToday = health.days.find((d) => d.date === todayDate) ?? health.latest;
   const [date, setDate] = useState(todayDate);
@@ -93,6 +98,34 @@ export function HealthLogCard({
     tab === "week" ? health.byWeek : tab === "month" ? health.byMonth : health.byYear;
   const cur = activeComparison.current;
   const prev = activeComparison.previous;
+
+  const focusByDate = new Map(focusDays.map((d) => [d.date, d.focusMinutes]));
+  const pairedDays = health.days.filter((d) => focusByDate.has(d.date));
+  const wellSlept = pairedDays.filter((d) => d.sleepMinutes >= 420);
+  const shortSlept = pairedDays.filter((d) => d.sleepMinutes > 0 && d.sleepMinutes < 420);
+  const avgFocusWellSlept =
+    wellSlept.length > 0
+      ? Math.round(wellSlept.reduce((s, d) => s + (focusByDate.get(d.date) ?? 0), 0) / wellSlept.length)
+      : null;
+  const avgFocusShortSlept =
+    shortSlept.length > 0
+      ? Math.round(shortSlept.reduce((s, d) => s + (focusByDate.get(d.date) ?? 0), 0) / shortSlept.length)
+      : null;
+
+  const chartPoints = [...activeComparison.buckets]
+    .slice(0, 12)
+    .reverse()
+    .map((b) => ({
+      label: b.label,
+      value:
+        chartMetric === "steps"
+          ? b.avgSteps
+          : chartMetric === "sleep"
+            ? b.avgSleepMinutes
+            : chartMetric === "calories"
+              ? b.avgCalories
+              : Math.round((b.avgWeightKg ?? 0) * 10),
+    }));
 
   return (
     <Card>
@@ -246,6 +279,55 @@ export function HealthLogCard({
             <Plus className="size-3.5" /> Save day
           </Button>
         </form>
+
+        {chartPoints.length > 0 ? (
+          <div className="rounded-xl border border-line bg-surface-2/30 p-3.5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11.5px] font-medium text-ink">
+                Health trend ({tab})
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {(
+                  [
+                    { id: "steps", label: "Steps" },
+                    { id: "calories", label: "Calories" },
+                    { id: "sleep", label: "Sleep" },
+                    { id: "weight", label: "Weight (×0.1kg)" },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setChartMetric(m.id)}
+                    className={cn(
+                      "rounded-md border px-2 py-0.5 text-[10.5px] font-medium transition-colors",
+                      chartMetric === m.id
+                        ? "border-accent bg-accent text-white"
+                        : "border-line bg-surface text-muted hover:text-ink",
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <BarChart
+              data={chartPoints}
+              tone={chartMetric === "weight" || chartMetric === "calories" ? "ink" : "accent"}
+              height={130}
+              emptyLabel="Log health entries to see trends."
+            />
+            {avgFocusWellSlept !== null || avgFocusShortSlept !== null ? (
+              <p className="mt-2.5 text-[11px] text-muted">
+                Focus vs Sleep correlation:{" "}
+                {avgFocusWellSlept !== null ? `≥7h sleep averages ${formatMinutes(avgFocusWellSlept)} focus/day` : ""}
+                {avgFocusWellSlept !== null && avgFocusShortSlept !== null ? " · " : ""}
+                {avgFocusShortSlept !== null ? `<7h sleep averages ${formatMinutes(avgFocusShortSlept)} focus/day` : ""}
+                .
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {activeComparison.buckets.length > 0 ? (
           <div className="overflow-x-auto">

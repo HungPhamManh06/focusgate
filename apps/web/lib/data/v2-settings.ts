@@ -23,6 +23,11 @@ export interface V2Settings {
   weekendBedtimeEnd: string | null;
   weekendRelaxedMode: boolean;
   lastDailyReviewDate: string | null;
+  language: "en" | "vi";
+  dailyFocusGoalMinutes: number;
+  dailyStepsGoal: number;
+  dailySleepGoalHours: number;
+  targetWeightKg: number | null;
 }
 
 export interface DiscoveredAppRecord {
@@ -61,6 +66,14 @@ function mapSettingsRow(row: Record<string, unknown> | null | undefined): V2Sett
     weekendBedtimeEnd: (r.weekend_bedtime_end as string | null | undefined) ?? "07:00",
     weekendRelaxedMode: Boolean(r.weekend_relaxed_mode ?? false),
     lastDailyReviewDate: (r.last_daily_review_date as string | null | undefined) ?? null,
+    language: r.language === "vi" ? "vi" : "en",
+    dailyFocusGoalMinutes: Number(r.daily_focus_goal_minutes ?? 120),
+    dailyStepsGoal: Number(r.daily_steps_goal ?? 8000),
+    dailySleepGoalHours: Number(r.daily_sleep_goal_hours ?? 7.5),
+    targetWeightKg:
+      r.target_weight_kg !== null && r.target_weight_kg !== undefined
+        ? Number(r.target_weight_kg)
+        : null,
   };
 }
 
@@ -105,6 +118,11 @@ export async function updateV2Settings(
     weekendBedtimeEnd: string | null;
     weekendRelaxedMode: boolean;
     lastDailyReviewDate: string | null;
+    language: "en" | "vi";
+    dailyFocusGoalMinutes: number;
+    dailyStepsGoal: number;
+    dailySleepGoalHours: number;
+    targetWeightKg: number | null;
   }>,
 ): Promise<void> {
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -118,6 +136,22 @@ export async function updateV2Settings(
   if (input.weekendBedtimeEnd !== undefined) patch.weekend_bedtime_end = input.weekendBedtimeEnd;
   if (input.weekendRelaxedMode !== undefined) patch.weekend_relaxed_mode = input.weekendRelaxedMode;
   if (input.lastDailyReviewDate !== undefined) patch.last_daily_review_date = input.lastDailyReviewDate;
+  if (input.language !== undefined) patch.language = input.language;
+  if (input.dailyFocusGoalMinutes !== undefined) {
+    patch.daily_focus_goal_minutes = Math.max(15, Math.round(input.dailyFocusGoalMinutes));
+  }
+  if (input.dailyStepsGoal !== undefined) {
+    patch.daily_steps_goal = Math.max(1000, Math.round(input.dailyStepsGoal));
+  }
+  if (input.dailySleepGoalHours !== undefined) {
+    patch.daily_sleep_goal_hours = Math.max(4, Math.min(14, Math.round(input.dailySleepGoalHours * 10) / 10));
+  }
+  if (input.targetWeightKg !== undefined) {
+    patch.target_weight_kg =
+      input.targetWeightKg !== null && input.targetWeightKg > 0
+        ? Math.round(input.targetWeightKg * 100) / 100
+        : null;
+  }
 
   const ctx = await getSupabaseContext();
   if (ctx) {

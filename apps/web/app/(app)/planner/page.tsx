@@ -31,12 +31,14 @@ import { KindBadge, PlanStatusBadge, kindDescriptions, kindLabels } from "@/comp
 import { formatDateLong, formatMinutes, formatTime, todayIso } from "@/lib/data/format";
 import { buildPlannerSummaryViewModel } from "@/lib/domain/tasks-planner-state";
 import { getPlannerBacklog, getTodayPlan } from "@/lib/data/planner";
+import { listGoals, listPlanSchedules } from "@/lib/data/v3-features";
 import { getWorkspace } from "@/lib/data/workspace";
 import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { AddPlanTask } from "./add-plan-task";
 import { PlanTaskRow } from "./plan-task-row";
 import { V2PlannerTools } from "./v2-planner-tools";
+import { V3GoalsTimeline } from "./v3-goals-timeline";
 
 export const dynamic = "force-dynamic";
 
@@ -104,8 +106,15 @@ function PlanStepper({ plan }: { plan: Plan }) {
 }
 
 export default async function PlannerPage() {
-  const [workspace, plan] = await Promise.all([getWorkspace(), getTodayPlan()]);
-  const backlog = await getPlannerBacklog(plan?.id ?? null);
+  const [workspace, plan, goals] = await Promise.all([
+    getWorkspace(),
+    getTodayPlan(),
+    listGoals(),
+  ]);
+  const [backlog, schedules] = await Promise.all([
+    getPlannerBacklog(plan?.id ?? null),
+    listPlanSchedules(plan?.id ?? null),
+  ]);
   const { timezone, displayName } = workspace.profile;
   const today = todayIso(timezone);
   const planDate = plan?.planDate ?? today;
@@ -512,6 +521,8 @@ export default async function PlannerPage() {
         completedTasks={plan?.tasks.filter((t) => Boolean(t.completedAt)).length ?? 0}
         focusMinutes={plan?.progress.focusDone ?? 0}
       />
+
+      <V3GoalsTimeline goals={goals} schedules={schedules} />
     </div>
   );
 }
