@@ -272,7 +272,8 @@ class AppUsageMonitorService : Service() {
             return
         }
 
-        val unlockedByPlan = AgentPreferences.isPlanUnlocked(this)
+        val unlockedByPlan = AgentPreferences.isPlanUnlocked(this) &&
+            !AgentPreferences.isCurrentlyBedtime(this)
         val isBlocked = !unlockedByPlan && PolicyEvaluator.isBlocked(
             packageName = current,
             blockedPackages = blockedPackages,

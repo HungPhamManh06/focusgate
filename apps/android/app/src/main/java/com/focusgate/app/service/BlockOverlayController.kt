@@ -18,6 +18,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.focusgate.app.ui.BlockOverlayContent
 import com.focusgate.app.ui.theme.FocusGateTheme
+import com.focusgate.app.util.AgentPreferences
 
 class BlockOverlayController(private val context: Context) {
 
@@ -47,9 +48,13 @@ class BlockOverlayController(private val context: Context) {
                 FocusGateTheme {
                     BlockOverlayContent(
                         appLabel = appLabel,
+                        allowEmergency = AgentPreferences.canUseEmergencyToday(context),
                         onBackHome = onBackHome,
                         onOpenFocusGate = onOpenFocusGate,
-                        onEmergency = onEmergency,
+                        onEmergency = {
+                            AgentPreferences.markEmergencyUsedToday(context)
+                            onEmergency()
+                        },
                     )
                 }
             }

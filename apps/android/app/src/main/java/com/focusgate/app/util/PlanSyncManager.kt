@@ -7,6 +7,8 @@ import com.focusgate.app.data.FocusGateDatabase
 import com.focusgate.app.policy.RemoteAgentSyncClient
 import com.focusgate.app.policy.RemotePlanSnapshot
 import com.focusgate.app.policy.UnauthorizedApiException
+import com.focusgate.app.ui.FocusGateWidgetProvider
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 object PlanSyncManager {
@@ -42,9 +44,39 @@ object PlanSyncManager {
             val unlocked = planSnapshot.unlocked || policyUnlocked
             AgentPreferences.setPlanUnlocked(context, unlocked)
             AgentPreferences.setLastSyncAt(context, System.currentTimeMillis())
+            updateWidgetState(context, planSnapshot, unlocked)
             runCatching { pushPendingUsage(context, token, deviceId) }
+            runCatching { pushLocalRules(context, token, deviceId) }
             planSnapshot.copy(unlocked = unlocked)
         }
+    }
+
+    private fun updateWidgetState(
+        context: Context,
+        snapshot: RemotePlanSnapshot,
+        unlocked: Boolean,
+    ) {
+        val plan = snapshot.plan
+        val summary = when {
+            plan == null || plan.allTasksTotal == 0 -> "No tasks in today's plan"
+            unlocked -> "Unlocked (${plan.allTasksCompleted}/${plan.allTasksTotal} done)"
+            else -> "Locked (${plan.allTasksCompleted}/${plan.allTasksTotal} tasks done)"
+        }
+        AgentPreferences.setPlanSummaryText(context, summary)
+        FocusGateWidgetProvider.updateAll(context)
+    }
+
+    private fun pushLocalRules(context: Context, token: String, deviceId: String) {
+        val rows = runBlocking { FocusGateDatabase.get(context).blockedAppDao().observeAll().first() }
+        val rules = rows
+            .filter { it.enabled && !it.isExempt }
+            .map { it.packageName to it.label }
+        client.pushBlockRules(
+            apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
+            accessToken = token,
+            deviceId = deviceId,
+            rules = rules,
+        )
     }
 
     private fun pushPendingUsage(context: Context, token: String, deviceId: String) {
@@ -83,6 +115,7 @@ object PlanSyncManager {
             )
             AgentPreferences.setPlanUnlocked(context, snapshot.unlocked)
             AgentPreferences.setLastSyncAt(context, System.currentTimeMillis())
+            updateWidgetState(context, snapshot, snapshot.unlocked)
             snapshot
         }
     }

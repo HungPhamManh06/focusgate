@@ -1,6 +1,10 @@
 package com.focusgate.app.util
 
 import android.content.Context
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 object AgentPreferences {
     private const val NAME = "focusgate"
@@ -15,6 +19,10 @@ object AgentPreferences {
     private const val KEY_PLAN_UNLOCKED = "plan_unlocked"
     private const val KEY_LAST_SYNC_AT = "last_sync_at"
     private const val KEY_LAST_SYNCED_USAGE_ID = "last_synced_usage_id"
+    private const val KEY_STRICT_NO_EMERGENCY = "strict_no_emergency"
+    private const val KEY_EMERGENCY_LAST_DATE = "emergency_last_date"
+    private const val KEY_BEDTIME_ENABLED = "bedtime_enabled"
+    private const val KEY_PLAN_SUMMARY_TEXT = "plan_summary_text"
 
     const val DEFAULT_API_BASE_URL = "https://focusgate-blue.vercel.app"
     const val DEFAULT_SUPABASE_URL = "https://dyfdeceiszmxozdqugon.supabase.co"
@@ -110,5 +118,44 @@ object AgentPreferences {
 
     fun setLastSyncedUsageId(context: Context, usageId: Long) {
         prefs(context).edit().putLong(KEY_LAST_SYNCED_USAGE_ID, usageId).apply()
+    }
+
+    fun isStrictNoEmergency(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_STRICT_NO_EMERGENCY, false)
+
+    fun setStrictNoEmergency(context: Context, strict: Boolean) {
+        prefs(context).edit().putBoolean(KEY_STRICT_NO_EMERGENCY, strict).apply()
+    }
+
+    fun canUseEmergencyToday(context: Context): Boolean {
+        if (isStrictNoEmergency(context)) return false
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        return prefs(context).getString(KEY_EMERGENCY_LAST_DATE, null) != today
+    }
+
+    fun markEmergencyUsedToday(context: Context) {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        prefs(context).edit().putString(KEY_EMERGENCY_LAST_DATE, today).apply()
+    }
+
+    fun isBedtimeEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_BEDTIME_ENABLED, false)
+
+    fun setBedtimeEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_BEDTIME_ENABLED, enabled).apply()
+    }
+
+    fun isCurrentlyBedtime(context: Context): Boolean {
+        if (!isBedtimeEnabled(context)) return false
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return hour >= 23 || hour < 6
+    }
+
+    fun getPlanSummaryText(context: Context): String =
+        prefs(context).getString(KEY_PLAN_SUMMARY_TEXT, "Sync to load today's tasks")
+            ?: "Sync to load today's tasks"
+
+    fun setPlanSummaryText(context: Context, text: String) {
+        prefs(context).edit().putString(KEY_PLAN_SUMMARY_TEXT, text).apply()
     }
 }

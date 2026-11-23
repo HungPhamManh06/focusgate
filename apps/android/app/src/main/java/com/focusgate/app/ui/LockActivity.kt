@@ -8,6 +8,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import com.focusgate.app.FocusGateApp
 import com.focusgate.app.ui.theme.FocusGateTheme
+import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,9 +34,13 @@ class LockActivity : ComponentActivity() {
             FocusGateTheme {
                 BlockOverlayContent(
                     appLabel = appLabel,
+                    allowEmergency = AgentPreferences.canUseEmergencyToday(this),
                     onBackHome = ::goHome,
                     onOpenFocusGate = ::openFocusGate,
-                    onEmergency = ::startEmergency,
+                    onEmergency = {
+                        AgentPreferences.markEmergencyUsedToday(this)
+                        startEmergency()
+                    },
                 )
             }
         }

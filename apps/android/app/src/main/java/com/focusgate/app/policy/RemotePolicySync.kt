@@ -429,6 +429,35 @@ class RemoteAgentSyncClient(
         }
     }
 
+    fun pushBlockRules(
+        apiBaseUrl: String,
+        accessToken: String,
+        deviceId: String,
+        rules: List<Pair<String, String>>,
+    ) {
+        val base = apiBaseUrl.trimEnd('/')
+        val conn = (URL("$base/api/agent/rules").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+        }
+
+        val itemsJson = rules.joinToString(",") { (pkg, label) ->
+            """{"identifier":${quoteJson(pkg)},"displayName":${quoteJson(label)}}"""
+        }
+        val payload = """{"deviceId":${quoteJson(deviceId)},"rules":[$itemsJson]}"""
+        conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+        val code = conn.responseCode
+        val body = readResponseBody(conn, code)
+        if (code == 401) throw UnauthorizedApiException()
+        if (code !in 200..299) {
+            throw IOException(parseErrorMessage(body, "Rules sync failed ($code)"))
+        }
+    }
+
     private fun formatIsoUtc(epochMs: Long): String {
         val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
         fmt.timeZone = TimeZone.getTimeZone("UTC")

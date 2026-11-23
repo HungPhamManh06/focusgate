@@ -142,6 +142,8 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var planSyncBusy by remember { mutableStateOf(false) }
     var completingTaskId by remember { mutableStateOf<String?>(null) }
     var syncError by remember { mutableStateOf<String?>(null) }
+    var bedtimeEnabled by remember { mutableStateOf(AgentPreferences.isBedtimeEnabled(context)) }
+    var strictNoEmergency by remember { mutableStateOf(AgentPreferences.isStrictNoEmergency(context)) }
 
     fun syncPlanFromWeb() {
         if (AgentPreferences.getAccessToken(context) == null || planSyncBusy) return
@@ -838,6 +840,28 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 enabled = !isOperationInProgress,
                             )
                         }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Bedtime lock (23:00–06:00)")
+                                Text(
+                                    if (bedtimeEnabled) "Locks apps during sleep hours" else "Off",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = bedtimeEnabled,
+                                onCheckedChange = { enabled ->
+                                    bedtimeEnabled = enabled
+                                    AgentPreferences.setBedtimeEnabled(context, enabled)
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -901,6 +925,32 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 enabled = !isOperationInProgress,
                                 modifier = Modifier.padding(top = 8.dp),
                             ) { Text("Emergency access (10 min)") }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Strict mode (disable emergency)")
+                                Text(
+                                    if (strictNoEmergency) {
+                                        "Emergency button hidden on lock screen"
+                                    } else {
+                                        "Max 1/day · 30s wait"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = strictNoEmergency,
+                                onCheckedChange = { strict ->
+                                    strictNoEmergency = strict
+                                    AgentPreferences.setStrictNoEmergency(context, strict)
+                                },
+                            )
                         }
                     }
                 }

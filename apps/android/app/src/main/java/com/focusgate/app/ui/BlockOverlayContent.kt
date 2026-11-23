@@ -19,10 +19,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,11 +39,23 @@ import com.focusgate.app.R
 @Composable
 fun BlockOverlayContent(
     appLabel: String,
+    allowEmergency: Boolean = true,
     onBackHome: () -> Unit,
     onOpenFocusGate: () -> Unit,
     onEmergency: () -> Unit,
 ) {
     var confirmEmergency by remember { mutableStateOf(false) }
+    var countdownSeconds by remember { mutableIntStateOf(30) }
+
+    LaunchedEffect(confirmEmergency) {
+        if (confirmEmergency) {
+            countdownSeconds = 30
+            while (countdownSeconds > 0) {
+                delay(1_000L)
+                countdownSeconds -= 1
+            }
+        }
+    }
 
     Surface(color = Color(0xFF0F1117), modifier = Modifier.fillMaxSize()) {
         Column(
@@ -122,17 +137,24 @@ fun BlockOverlayContent(
                                     confirmEmergency = false
                                     onEmergency()
                                 },
+                                enabled = countdownSeconds == 0,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF7AA2F7),
                                     contentColor = Color(0xFF0F1117),
                                 ),
                             ) {
-                                Text(stringResource(R.string.blocked_emergency_confirm_action))
+                                Text(
+                                    if (countdownSeconds > 0) {
+                                        "Wait ${countdownSeconds}s"
+                                    } else {
+                                        stringResource(R.string.blocked_emergency_confirm_action)
+                                    },
+                                )
                             }
                         }
                     }
                 }
-            } else {
+            } else if (allowEmergency) {
                 OutlinedButton(
                     onClick = { confirmEmergency = true },
                     modifier = Modifier
@@ -144,6 +166,13 @@ fun BlockOverlayContent(
                         color = Color(0xFFB6BFCE),
                     )
                 }
+            } else {
+                Text(
+                    text = "Strict mode active (emergency access unavailable today).",
+                    color = Color(0xFF8C96A8),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
             }
 
             TextButton(
