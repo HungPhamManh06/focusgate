@@ -16,6 +16,32 @@ interface DayRow {
   entertainment_seconds: number;
 }
 
+function computeStreaks(days: DayPoint[]): { currentStreak: number; bestStreak: number } {
+  let best = 0;
+  let running = 0;
+  for (const day of days) {
+    if (day.focusMinutes > 0 || day.tasksCompleted > 0) {
+      running += 1;
+      if (running > best) best = running;
+    } else {
+      running = 0;
+    }
+  }
+  let current = 0;
+  for (let i = days.length - 1; i >= 0; i -= 1) {
+    const day = days[i]!;
+    if (day.focusMinutes > 0 || day.tasksCompleted > 0) {
+      current += 1;
+    } else if (i === days.length - 1) {
+      // Today may still be in progress; check consecutive streak ending yesterday.
+      continue;
+    } else {
+      break;
+    }
+  }
+  return { currentStreak: current, bestStreak: best };
+}
+
 function buildDayKeys(timezone: string, period: number): string[] {
   const todayStr = localDateInTimezone(timezone);
   const anchor = new Date(`${todayStr}T12:00:00Z`).getTime();
@@ -42,7 +68,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     const [focusRes, taskRes, usageRes] = await Promise.all([
       ctx.supabase
         .from("focus_sessions")
-        .select("started_at, credited_minutes, is_valid")
+        .select("started_at, credited_minutes, is_valid, tasks(category)")
         .eq("user_id", ctx.userId)
         .eq("status", "completed")
         .gte("started_at", cutoffIso),
@@ -62,6 +88,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       started_at: string;
       credited_minutes: number;
       is_valid: boolean;
+      tasks: { category: string } | Array<{ category: string }> | null;
     }>;
     const taskRows = unwrapSupabase(taskRes) as Array<{
       status: string;
@@ -81,6 +108,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
     let focusMinutes = 0;
     let sessionCount = 0;
     let validCount = 0;
+    const categoryTotals = new Map<string, number>();
     for (const row of focusRows) {
       const day = localDateInTimezone(timezone, new Date(row.started_at));
       if (day < startDayKey) continue;
@@ -90,6 +118,9 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
         focusMinutes += row.credited_minutes;
         const bucket = dayMap.get(day);
         if (bucket) bucket.focus += row.credited_minutes;
+        const catObj = Array.isArray(row.tasks) ? row.tasks[0] : row.tasks;
+        const category = catObj?.category ?? "free_focus";
+        categoryTotals.set(category, (categoryTotals.get(category) ?? 0) + row.credited_minutes);
       }
     }
 
@@ -139,6 +170,10 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       if (!best || day.focusMinutes > best.focusMinutes) return day;
       return best;
     }, null);
+    const { currentStreak, bestStreak } = computeStreaks(days);
+    const categoryBreakdown = Array.from(categoryTotals.entries())
+      .map(([category, minutes]) => ({ category, minutes }))
+      .sort((a, b) => b.minutes - a.minutes);
 
     return {
       days,
@@ -150,6 +185,9 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       completionRate: totalDecided > 0 ? Math.round((completedTasks / totalDecided) * 100) : 0,
       entertainmentMinutes: Math.round(entertainmentSeconds / 60),
       blockedAttempts,
+      currentStreak,
+      bestStreak,
+      categoryBreakdown,
       validRate: sessionCount > 0 ? Math.round((validCount / sessionCount) * 100) : 0,
       bestDay: bestDay && bestDay.focusMinutes > 0 ? bestDay : null,
     };

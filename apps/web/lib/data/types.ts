@@ -160,6 +160,9 @@ export interface Statistics {
   completionRate: number;
   entertainmentMinutes: number;
   blockedAttempts?: number;
+  currentStreak?: number;
+  bestStreak?: number;
+  categoryBreakdown?: { category: string; minutes: number }[];
   validRate: number;
   bestDay: DayPoint | null;
 }

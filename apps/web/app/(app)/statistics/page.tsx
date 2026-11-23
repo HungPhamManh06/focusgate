@@ -294,6 +294,84 @@ export default async function StatisticsPage({
             </Card>
           </div>
 
+          <section className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle>Discipline streak &amp; activity</CardTitle>
+                  <p className="mt-1 text-[12px] text-muted">
+                    Current streak: <span className="font-semibold text-ink">{stats.currentStreak ?? 0}d</span> · Best:{" "}
+                    <span className="font-semibold text-ink">{stats.bestStreak ?? 0}d</span>
+                  </p>
+                </div>
+                <Flame className="size-4 text-accent" />
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="flex flex-wrap gap-1.5">
+                  {stats.days.map((day) => {
+                    const score = day.focusMinutes + day.tasksCompleted * 15;
+                    const tone =
+                      score === 0
+                        ? "bg-surface-2 border-line"
+                        : score < 30
+                          ? "bg-accent/25 border-accent/30"
+                          : score < 60
+                            ? "bg-accent/55 border-accent/60"
+                            : "bg-accent border-accent";
+                    return (
+                      <div
+                        key={day.date}
+                        title={`${day.label}: ${formatMinutes(day.focusMinutes)} focus · ${day.tasksCompleted} tasks`}
+                        className={cn("size-4 rounded-[4px] border", tone)}
+                      />
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle>Time by category</CardTitle>
+                  <p className="mt-1 text-[12px] text-muted">
+                    Verified focus &amp; stopwatch minutes grouped by task category.
+                  </p>
+                </div>
+                <Clock3 className="size-4 text-muted" />
+              </CardHeader>
+              <CardContent className="pt-4">
+                {(stats.categoryBreakdown ?? []).length === 0 ? (
+                  <p className="text-[12px] text-muted">
+                    Complete a Focus or Stopwatch session linked to a task to see time breakdown.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {(stats.categoryBreakdown ?? []).map((item) => {
+                      const pct =
+                        stats.focusMinutes > 0
+                          ? Math.round((item.minutes / stats.focusMinutes) * 100)
+                          : 0;
+                      return (
+                        <div key={item.category}>
+                          <div className="flex items-center justify-between text-[12px]">
+                            <span className="capitalize font-medium text-ink">
+                              {item.category.replace("_", " ")}
+                            </span>
+                            <span className="tabular-nums text-muted">
+                              {formatMinutes(item.minutes)} ({pct}%)
+                            </span>
+                          </div>
+                          <Progress value={pct} className="mt-1 h-1.5" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+
           <section className="mt-4">
             <Card>
               <CardHeader>
