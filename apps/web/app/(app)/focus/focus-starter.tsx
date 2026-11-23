@@ -66,11 +66,18 @@ export function FocusStarter({
   );
 
   const selectedPlannedMinutes = useMemo(() => {
+    if (mode === "open_ended") return 600;
     if (mode === "custom") return customMinutes;
     return starterConfig.presets.find((preset) => preset.mode === mode)?.minutes ?? 25;
   }, [customMinutes, mode, starterConfig.presets]);
 
   const durationCheck = useMemo(() => {
+    if (mode === "open_ended") {
+      return validatePlannedDurationAgainstMinValid({
+        plannedMinutes: 600,
+        minValidFocusMinutes: starterConfig.minValidMinutes,
+      });
+    }
     if (!Number.isFinite(selectedPlannedMinutes) || selectedPlannedMinutes < 5) {
       return {
         valid: false as const,
@@ -196,7 +203,7 @@ export function FocusStarter({
             </div>
           ) : null}
 
-          <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Session length presets">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4" role="group" aria-label="Session length presets">
             {starterConfig.presets.map((preset) => (
               <button
                 key={preset.mode}
@@ -234,6 +241,30 @@ export function FocusStarter({
                 ) : null}
               </button>
             ))}
+
+            <button
+              type="button"
+              aria-pressed={mode === "open_ended"}
+              onClick={() => {
+                setMode("open_ended");
+                setValidationError(null);
+              }}
+              className={cn(
+                "rounded-xl border px-3.5 py-3 text-left transition-colors",
+                mode === "open_ended"
+                  ? "border-accent/40 bg-accent-soft/70"
+                  : "border-line bg-surface-2/40 hover:bg-surface-2",
+              )}
+            >
+              <span
+                className={cn("text-[12.5px] font-medium", mode === "open_ended" && "text-accent")}
+              >
+                Stopwatch
+              </span>
+              <span className="mt-0.5 block text-[10.5px] text-muted">
+                Count up · no time limit
+              </span>
+            </button>
 
             <button
               type="button"
@@ -310,12 +341,12 @@ export function FocusStarter({
             size="lg"
           >
             {pending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-            Start focus
+            {mode === "open_ended" ? "Start stopwatch" : "Start focus"}
           </Button>
           <p className="text-[10.5px] leading-relaxed text-muted">
-            Sessions shorter than {formatMinutes(starterConfig.minValidMinutes)} are saved to
-            history with 0m credit. Maximum credit per session is{" "}
-            {formatMinutes(selectedPlannedMinutes * 2)} (2× planned).
+            {mode === "open_ended"
+              ? `Counts up from 00:00 and records your exact task time (up to 10h; minimum ${formatMinutes(starterConfig.minValidMinutes)} to earn credit).`
+              : `Sessions shorter than ${formatMinutes(starterConfig.minValidMinutes)} are saved to history with 0m credit. Maximum credit per session is ${formatMinutes(selectedPlannedMinutes * 2)} (2× planned).`}
           </p>
         </div>
       </div>

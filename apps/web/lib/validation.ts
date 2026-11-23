@@ -3,7 +3,7 @@ import { z } from "zod";
 export const taskKinds = ["must_do", "should_do", "bonus"] as const;
 export const taskPriorities = ["low", "medium", "high", "urgent"] as const;
 export const taskCategories = ["work", "study", "health", "personal", "finance", "other"] as const;
-export const focusModes = ["pomodoro_25_5", "pomodoro_50_10", "custom"] as const;
+export const focusModes = ["pomodoro_25_5", "pomodoro_50_10", "custom", "open_ended"] as const;
 export const devicePlatforms = ["windows", "android", "web"] as const;
 
 export const deviceRegisterSchema = z.object({
@@ -80,7 +80,7 @@ export type TaskFormValues = z.infer<typeof taskFormSchema>;
 export const focusStartSchema = z.object({
   taskId: z.string().uuid().nullable().optional(),
   mode: z.enum(focusModes),
-  minutes: z.coerce.number().int().min(5, "A session needs at least 5 minutes.").max(180),
+  minutes: z.coerce.number().int().min(5, "A session needs at least 5 minutes.").max(600),
 });
 
 export function getMinAllowedPlannedMinutes(minValidFocusMinutes: number): number {

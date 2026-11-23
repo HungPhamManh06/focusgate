@@ -6,7 +6,7 @@ export const FOCUS_MODE_LABELS: Record<string, string> = {
   pomodoro_50_10: "Deep Work 50/10",
   deep_50_10: "Deep Work 50/10",
   custom: "Custom",
-  open_ended: "Open-ended",
+  open_ended: "Stopwatch",
 };
 
 export function formatFocusModeLabel(mode: FocusMode | string): string {
@@ -124,6 +124,7 @@ export function computeFocusTimerState(input: {
   nowMs: number;
   plannedMinutes: number;
   minValidMinutes: number;
+  mode?: FocusMode | string;
   keepFocusingOvertime?: boolean;
   status?: "running" | "paused";
   pausedAtIso?: string | null;
@@ -204,6 +205,68 @@ export function computeFocusTimerState(input: {
   const projectedCreditedMinutes = meetsMinimumThreshold
     ? Math.min(Math.max(elapsedMinutes, minValidMinutes), maxCreditedMinutes)
     : 0;
+
+  if (input.mode === "open_ended") {
+    const stopwatchProgress = Math.min(100, Math.max(4, ((elapsedSeconds % 3600) / 3600) * 100));
+    if (isPaused) {
+      return {
+        phase: "paused",
+        statusHeader: "STOPWATCH · PAUSED",
+        ringLabel: "Paused",
+        clockDisplay: formatClock(elapsedSeconds),
+        subLabel: `${elapsedMinutes}m elapsed (paused)`,
+        ringProgress: stopwatchProgress,
+        ringTone: "warning",
+        elapsedSeconds,
+        elapsedMinutes,
+        plannedMinutes,
+        minValidMinutes,
+        maxCreditedMinutes,
+        projectedCreditedMinutes,
+        overtimeSeconds: 0,
+        isPaused: true,
+        meetsMinimumThreshold,
+        isImpossibleConfiguration: false,
+        isTargetReached: false,
+        isOvertime: false,
+        isCreditLimitReached: false,
+        bannerTone: "warning",
+        bannerTitle: "Stopwatch paused",
+        bannerMessage: "Paused time is excluded. Resume when you are ready to continue.",
+      };
+    }
+
+    return {
+      phase: meetsMinimumThreshold ? "focusing" : "below_min",
+      statusHeader: "STOPWATCH · RECORDING",
+      ringLabel: "Recording",
+      clockDisplay: formatClock(elapsedSeconds),
+      subLabel: meetsMinimumThreshold
+        ? `${elapsedMinutes}m recorded`
+        : `${elapsedMinutes}m elapsed · ${minValidMinutes}m min`,
+      ringProgress: stopwatchProgress,
+      ringTone: "accent",
+      elapsedSeconds,
+      elapsedMinutes,
+      plannedMinutes,
+      minValidMinutes,
+      maxCreditedMinutes,
+      projectedCreditedMinutes,
+      overtimeSeconds: 0,
+      isPaused: false,
+      meetsMinimumThreshold,
+      isImpossibleConfiguration: false,
+      isTargetReached: false,
+      isOvertime: false,
+      isCreditLimitReached: false,
+      bannerTone: meetsMinimumThreshold ? "accent" : "neutral",
+      bannerTitle: meetsMinimumThreshold
+        ? `Recording task time (${formatMinutes(elapsedMinutes)} so far)`
+        : `Counting up (${formatMinutes(minValidMinutes)} minimum to credit)`,
+      bannerMessage:
+        "No time limit — stop and save whenever you finish this task to record the exact time spent.",
+    };
+  }
 
   if (isPaused) {
     return {

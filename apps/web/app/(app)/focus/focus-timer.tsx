@@ -105,6 +105,7 @@ export function FocusTimer({
     nowMs: now,
     plannedMinutes: session.plannedMinutes,
     minValidMinutes: effectiveMinValidMinutes,
+    mode: session.mode,
     keepFocusingOvertime,
     status: optimisticSession.status,
     pausedAtIso: optimisticSession.pausedAt,
@@ -239,9 +240,9 @@ export function FocusTimer({
           ) : null}
         </div>
         <p className="text-[11.5px] text-muted tabular-nums">
-          {formatFocusModeLabel(session.mode)} · {session.plannedMinutes} min planned ·{" "}
-          {formatMinutes(effectiveMinValidMinutes)} min threshold (max{" "}
-          {timerState.maxCreditedMinutes}m credit)
+          {session.mode === "open_ended"
+            ? `${formatFocusModeLabel(session.mode)} · ${formatMinutes(effectiveMinValidMinutes)} min threshold`
+            : `${formatFocusModeLabel(session.mode)} · ${session.plannedMinutes} min planned · ${formatMinutes(effectiveMinValidMinutes)} min threshold (max ${timerState.maxCreditedMinutes}m credit)`}
         </p>
       </div>
 

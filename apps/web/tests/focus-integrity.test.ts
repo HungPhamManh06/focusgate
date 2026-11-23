@@ -276,7 +276,7 @@ test("B14: Focus mode labels format all enum values and unknown fallbacks cleanl
   assert.equal(formatFocusModeLabel("pomodoro_50_10"), "Deep Work 50/10");
   assert.equal(formatFocusModeLabel("deep_50_10"), "Deep Work 50/10");
   assert.equal(formatFocusModeLabel("custom"), "Custom");
-  assert.equal(formatFocusModeLabel("open_ended"), "Open-ended");
+  assert.equal(formatFocusModeLabel("open_ended"), "Stopwatch");
   assert.equal(formatFocusModeLabel("flow_90_15"), "Flow 90 15");
 });
 
