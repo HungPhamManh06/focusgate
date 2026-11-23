@@ -112,20 +112,36 @@ export function HealthLogCard({
       ? Math.round(shortSlept.reduce((s, d) => s + (focusByDate.get(d.date) ?? 0), 0) / shortSlept.length)
       : null;
 
-  const chartPoints = [...activeComparison.buckets]
-    .slice(0, 12)
-    .reverse()
-    .map((b) => ({
-      label: b.label,
-      value:
-        chartMetric === "steps"
-          ? b.avgSteps
-          : chartMetric === "sleep"
-            ? b.avgSleepMinutes
-            : chartMetric === "calories"
-              ? b.avgCalories
-              : Math.round((b.avgWeightKg ?? 0) * 10),
-    }));
+  const chartPoints =
+    tab === "week"
+      ? [...health.days]
+          .slice(0, 7)
+          .reverse()
+          .map((d) => ({
+            label: d.date.slice(5),
+            value:
+              chartMetric === "steps"
+                ? d.steps
+                : chartMetric === "sleep"
+                  ? d.sleepMinutes
+                  : chartMetric === "calories"
+                    ? d.activeCalories
+                    : Math.round((d.weightKg ?? 0) * 10),
+          }))
+      : [...activeComparison.buckets]
+          .slice(0, 12)
+          .reverse()
+          .map((b) => ({
+            label: b.label,
+            value:
+              chartMetric === "steps"
+                ? b.avgSteps
+                : chartMetric === "sleep"
+                  ? b.avgSleepMinutes
+                  : chartMetric === "calories"
+                    ? b.avgCalories
+                    : Math.round((b.avgWeightKg ?? 0) * 10),
+          }));
 
   return (
     <Card>
