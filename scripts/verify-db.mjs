@@ -27,6 +27,7 @@ const MIGRATIONS = [
   "supabase/migrations/20260101000007_focus_snapshot_backfill_safety.sql",
   "supabase/migrations/20260101000008_focus_migration_compatibility.sql",
   "supabase/migrations/20260101000009_focus_pause_resume.sql",
+  "supabase/migrations/20260101000017_allow_add_tasks_to_active_plan.sql",
 ];
 
 const USER_A = "11111111-1111-4111-8111-111111111111";
@@ -566,6 +567,22 @@ await asUser(USER_A, async () => {
   check("plan completes once all Must Do tasks are done", completed.rows[0].res.status === "completed");
 });
 
+await expectError(
+  "completed plan refuses adding new tasks",
+  () => asUser(USER_A, async () => {
+    const extraTask = await db.query(
+      `insert into public.tasks (user_id, title, kind, required_focus_minutes, estimated_minutes)
+       values ($1, 'Too late task', 'should_do', 0, 10) returning id`,
+      [USER_A],
+    );
+    return db.query(
+      "select public.rpc_add_plan_task($1, $2, 'should_do'::public.task_kind)",
+      [planId, extraTask.rows[0].id],
+    );
+  }),
+  "plan_not_active",
+);
+
 await asUser(USER_A, async () => {
   const result = await db.query(
     "select public.rpc_evaluate_unlock($1, $2, 'eval-key-00000001') as res",
@@ -613,6 +630,19 @@ await asUser(USER_A, async () => {
   await db.query("select public.rpc_add_plan_task($1, $2, 'must_do'::public.task_kind)", [plan2Id, task2.rows[0].id]);
   await db.query("select public.rpc_confirm_plan($1)", [plan2Id]);
   await db.query("select public.rpc_activate_plan($1)", [plan2Id]);
+  const midDayTask = await db.query(
+    `insert into public.tasks (user_id, title, kind, required_focus_minutes, estimated_minutes)
+     values ($1, 'Unplanned mid-day task', 'should_do', 0, 10) returning id`,
+    [USER_A],
+  );
+  const addedMidDay = await db.query(
+    "select public.rpc_add_plan_task($1, $2, 'should_do'::public.task_kind) as res",
+    [plan2Id, midDayTask.rows[0].id],
+  );
+  check(
+    "active plan allows adding an unplanned task from backlog",
+    addedMidDay.rows[0].res.created === true && Boolean(addedMidDay.rows[0].res.planTaskId),
+  );
   const started = await db.query(
     `select public.rpc_start_focus_session(
        $1, 'client-session-plan2', 4, 'custom'::public.focus_mode, $2, $3

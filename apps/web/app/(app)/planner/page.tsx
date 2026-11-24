@@ -341,25 +341,39 @@ export default async function PlannerPage() {
                 })
               )}
 
-              {plan.status === "draft" ? (
+              {plan.status === "draft" || plan.status === "confirmed" || plan.status === "active" ? (
                 <Card>
                   <CardHeader className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <CardTitle>{isVi ? "Thêm từ hàng chờ" : "Add from backlog"}</CardTitle>
+                      <CardTitle>
+                        {plan.status === "draft"
+                          ? isVi
+                            ? "Thêm từ hàng chờ"
+                            : "Add from backlog"
+                          : isVi
+                            ? "Thêm việc phát sinh từ hàng chờ"
+                            : "Add unplanned tasks from backlog"}
+                      </CardTitle>
                       <p className="mt-1 text-[12px] text-muted">
-                        {isVi
-                          ? `${backlog.length} nhiệm vụ chưa có trong kế hoạch.`
-                          : `${backlog.length} open task${backlog.length === 1 ? "" : "s"} not in this plan.`}
+                        {plan.status === "draft"
+                          ? isVi
+                            ? `${backlog.length} nhiệm vụ chưa có trong kế hoạch.`
+                            : `${backlog.length} open task${backlog.length === 1 ? "" : "s"} not in this plan.`
+                          : isVi
+                            ? `${backlog.length} nhiệm vụ đang mở. Các việc Bắt buộc đã chốt vẫn được giữ nguyên, bạn vẫn có thể bổ sung thêm việc phát sinh hôm nay.`
+                            : `${backlog.length} open task${backlog.length === 1 ? "" : "s"} waiting. Committed tasks stay locked while you can still add unplanned tasks for today.`}
                       </p>
                     </div>
-                    <ActionButton
-                      action={populateTodayHabitsAction.bind(null, plan.id)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <History className="size-3.5" />{" "}
-                      {isVi ? "Nạp thói quen / hôm qua" : "Load habits / yesterday"}
-                    </ActionButton>
+                    {plan.status === "draft" ? (
+                      <ActionButton
+                        action={populateTodayHabitsAction.bind(null, plan.id)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <History className="size-3.5" />{" "}
+                        {isVi ? "Nạp thói quen / hôm qua" : "Load habits / yesterday"}
+                      </ActionButton>
+                    ) : null}
                   </CardHeader>
                   <CardContent className="pt-4">
                     <AddPlanTask planId={plan.id} tasks={backlog} timezone={timezone} />

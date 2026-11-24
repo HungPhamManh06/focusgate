@@ -47,7 +47,12 @@ export function TaskRow({
     planTask.requiredFocusMinutes > 0 &&
     planTask.focusDone < planTask.requiredFocusMinutes;
   const canAddToTodayPlan =
-    !planTask && !completed && (planStatus === null || planStatus === "draft");
+    !planTask &&
+    !completed &&
+    (planStatus === null ||
+      planStatus === "draft" ||
+      planStatus === "confirmed" ||
+      planStatus === "active");
 
   function toggleComplete() {
     startTransition(async () => {
