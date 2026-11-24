@@ -45,6 +45,23 @@ class RemotePolicySyncTest {
 
         val snapshot = RemotePolicySync.parsePolicyJson(json)
         assertFalse(snapshot.lockActive)
+        assertEquals("en", snapshot.language)
         assertEquals(emptySet<String>(), RemotePolicySync.toEffectiveBlockedPackages(snapshot))
+    }
+
+    @Test
+    fun `parsePolicyJson parses language field when present`() {
+        val json = """
+            {
+              "pulledAtUtc": "2026-11-24T01:00:00.000Z",
+              "lockActive": true,
+              "blockedProcesses": [],
+              "allowedProcesses": [],
+              "language": "vi"
+            }
+        """.trimIndent()
+
+        val snapshot = RemotePolicySync.parsePolicyJson(json)
+        assertEquals("vi", snapshot.language)
     }
 }

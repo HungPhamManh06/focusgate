@@ -22,7 +22,8 @@ public sealed record AgentPolicySnapshot(
     IReadOnlyList<string> AllowedProcesses,
     bool WhitelistFocusMode = false,
     int EarnedMinutesBalance = 0,
-    ActiveFocusSummary? ActiveFocusSession = null);
+    ActiveFocusSummary? ActiveFocusSession = null,
+    string Language = "en");
 
 public sealed record DiscoveredAppUpload(
     string Identifier,

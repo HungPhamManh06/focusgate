@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FocusGate – Locked</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #141210;
+      color: #f4efe8;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      padding: 24px;
+    }
+    .panel {
+      max-width: 540px;
+      width: 100%;
+      background: #1e1a17;
+      border: 1px solid #352e29;
+      border-radius: 18px;
+      padding: 32px;
+    }
+    .brand {
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #e2786a;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 28px;
+      margin: 0 0 12px 0;
+      line-height: 1.25;
+    }
+    p {
+      font-size: 15px;
+      line-height: 1.55;
+      color: #c8bfb6;
+      margin: 0 0 24px 0;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 11px 18px;
+      border-radius: 999px;
+      border: 0;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .primary {
+      background: #c84b38;
+      color: #ffffff;
+    }
+    .secondary {
+      background: #2f2924;
+      color: #f4efe8;
+    }
+    .error {
+      color: #f29b8e;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="brand">FOCUSGATE</div>
+    <h1 id="headline">Site blocked during focus lock</h1>
+    <p id="message">Finish your Must-Do tasks and verified focus sessions to unlock entertainment sites.</p>
+    <div class="actions">
+      <button class="primary" id="plannerBtn">Open FocusGate Planner</button>
+      <button class="secondary" id="passBtn" style="display: none;">Use 10m Earned Time Pass</button>
+    </div>
+    <div id="errorBox" class="error"></div>
+  </div>
+  <script src="blocked.js"></script>
+</body>
+</html>

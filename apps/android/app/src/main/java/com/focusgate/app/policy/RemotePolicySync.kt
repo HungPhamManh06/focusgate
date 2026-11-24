@@ -19,6 +19,7 @@ data class RemotePolicySnapshot(
     val activeFocusRunning: Boolean = false,
     val bedtimeStart: String? = null,
     val bedtimeEnd: String? = null,
+    val language: String = "en",
 )
 
 data class RemoteDeviceRegistration(
@@ -97,6 +98,7 @@ object RemotePolicySync {
         val scheduleObj = obj["effectiveSchedule"] as? Map<*, *>
         val bedtimeStart = scheduleObj?.get("bedtimeStart") as? String
         val bedtimeEnd = scheduleObj?.get("bedtimeEnd") as? String
+        val language = if ((obj["language"] as? String) == "vi") "vi" else "en"
 
         return RemotePolicySnapshot(
             pulledAtUtc = pulledAtUtc,
@@ -108,6 +110,7 @@ object RemotePolicySync {
             activeFocusRunning = activeFocusRunning,
             bedtimeStart = bedtimeStart,
             bedtimeEnd = bedtimeEnd,
+            language = language,
         )
     }
 
@@ -603,6 +606,59 @@ class RemoteAgentSyncClient(
         } catch (_: Exception) {
             fallback
         }
+    }
+
+    fun buildTodayPlan(
+        apiBaseUrl: String,
+        accessToken: String,
+    ): RemotePlanSnapshot {
+        val base = apiBaseUrl.trimEnd('/')
+        val conn = (URL("$base/api/agent/plan").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        conn.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+
+        val code = conn.responseCode
+        val body = readResponseBody(conn, code)
+        if (code == 401) throw UnauthorizedApiException()
+        if (code !in 200..299) throw IllegalStateException("Plan build failed ($code): $body")
+        return parsePlanJson(body)
+    }
+
+    fun pushDailyHealthMetric(
+        apiBaseUrl: String,
+        accessToken: String,
+        deviceId: String?,
+        date: String,
+        steps: Int,
+        activeCalories: Int,
+        sleepMinutes: Int,
+        weightKg: Double?,
+    ) {
+        val base = apiBaseUrl.trimEnd('/')
+        val conn = (URL("$base/api/agent/health").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+        }
+
+        val devJson = if (deviceId != null) quoteJson(deviceId) else "null"
+        val weightJson = if (weightKg != null && weightKg > 0.0) String.format(java.util.Locale.US, "%.2f", weightKg) else "null"
+        val payload = """{"deviceId":$devJson,"metrics":[{"date":${quoteJson(date)},"steps":${steps.coerceIn(0, 200_000)},"sleepMinutes":${sleepMinutes.coerceIn(0, 1440)},"activeCalories":${activeCalories.coerceIn(0, 20_000)},"weightKg":$weightJson,"source":"android_manual"}]}"""
+        conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+
+        val code = conn.responseCode
+        val body = readResponseBody(conn, code)
+        if (code == 401) throw UnauthorizedApiException()
+        if (code !in 200..299) throw IllegalStateException("Health sync failed ($code): $body")
     }
 
     private fun readResponseBody(conn: HttpURLConnection, code: Int): String {

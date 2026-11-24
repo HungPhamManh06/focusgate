@@ -399,6 +399,7 @@ export async function getAgentPolicyForDevice(
         relaxedMode: isWeekend && v2.weekendRelaxedMode,
       },
       earnedMinutesBalance: v2.earnedMinutesBalance,
+      language: v2.language,
     });
 
     const hasUnlockPass =

@@ -19,6 +19,11 @@ jobs:
       - run: npm ci
       - run: npm run verify:all
       - run: npm run web:build
+      - name: Check browser extension scripts
+        run: |
+          node --check apps/browser-extension/background.js
+          node --check apps/browser-extension/popup.js
+          node --check apps/browser-extension/blocked.js
 
   windows-agent:
     name: Windows Agent (.NET 10)
@@ -39,9 +44,10 @@ jobs:
         with:
           distribution: "temurin"
           java-version: "17"
+          cache: "gradle"
       - uses: android-actions/setup-android@v3
       - name: Run unit tests for personal and managed flavors
         working-directory: apps/android
         run: |
           chmod +x gradlew
-          ./gradlew testPersonalDebugUnitTest testManagedDebugUnitTest
+          ./gradlew --no-daemon testPersonalDebugUnitTest testManagedDebugUnitTest

@@ -21,6 +21,13 @@ public sealed class TrayAgentContext : ApplicationContext
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _policyItem;
+    private readonly ToolStripMenuItem _openAppItem;
+    private readonly ToolStripMenuItem _syncNowItem;
+    private readonly ToolStripMenuItem _unlockPassItem;
+    private readonly ToolStripMenuItem _startupItem;
+    private readonly ToolStripMenuItem _showStatusItem;
+    private readonly ToolStripMenuItem _openLogsItem;
+    private readonly ToolStripMenuItem _exitItem;
     private readonly System.Windows.Forms.Timer _syncTimer;
     private readonly System.Windows.Forms.Timer _enforceTimer;
     private readonly EnforcementEngine _enforcementEngine;
@@ -52,36 +59,36 @@ public sealed class TrayAgentContext : ApplicationContext
         _statusItem = new ToolStripMenuItem("Status: Initializing...") { Enabled = false };
         _policyItem = new ToolStripMenuItem("Policy: Not pulled yet") { Enabled = false };
 
-        var openAppItem = new ToolStripMenuItem("Open FocusGate App", null, (_, _) => ShowDesktopWindow());
-        var syncNowItem = new ToolStripMenuItem("Sync policy now", null, async (_, _) => await SyncPolicyAsync());
-        var unlockPassItem = new ToolStripMenuItem("Use 10m Earned Time Pass", null, async (_, _) => await UseUnlockPassAsync());
-        var startupItem = new ToolStripMenuItem("Auto-start with Windows")
+        _openAppItem = new ToolStripMenuItem("Open FocusGate App", null, (_, _) => ShowDesktopWindow());
+        _syncNowItem = new ToolStripMenuItem("Sync policy now", null, async (_, _) => await SyncPolicyAsync());
+        _unlockPassItem = new ToolStripMenuItem("Use 10m Earned Time Pass", null, async (_, _) => await UseUnlockPassAsync());
+        _startupItem = new ToolStripMenuItem("Auto-start with Windows")
         {
             Checked = StartupRegistrar.IsInstalled(),
             CheckOnClick = true,
         };
-        startupItem.Click += (_, _) =>
+        _startupItem.Click += (_, _) =>
         {
-            if (startupItem.Checked) StartupRegistrar.Install();
+            if (_startupItem.Checked) StartupRegistrar.Install();
             else StartupRegistrar.Uninstall();
         };
-        var showStatusItem = new ToolStripMenuItem("Show status", null, (_, _) => ShowStatusDialog());
-        var openLogsItem = new ToolStripMenuItem("Open logs folder", null, (_, _) => OpenLogsFolder());
-        var exitItem = new ToolStripMenuItem("Exit", null, (_, _) => ConfirmExit());
+        _showStatusItem = new ToolStripMenuItem("Show status", null, (_, _) => ShowStatusDialog());
+        _openLogsItem = new ToolStripMenuItem("Open logs folder", null, (_, _) => OpenLogsFolder());
+        _exitItem = new ToolStripMenuItem("Exit", null, (_, _) => ConfirmExit());
 
         var menu = new ContextMenuStrip();
         menu.Items.AddRange([
             _statusItem,
             _policyItem,
             new ToolStripSeparator(),
-            openAppItem,
-            syncNowItem,
-            unlockPassItem,
-            startupItem,
-            showStatusItem,
-            openLogsItem,
+            _openAppItem,
+            _syncNowItem,
+            _unlockPassItem,
+            _startupItem,
+            _showStatusItem,
+            _openLogsItem,
             new ToolStripSeparator(),
-            exitItem,
+            _exitItem,
         ]);
 
         _trayIcon = new NotifyIcon
@@ -211,23 +218,41 @@ public sealed class TrayAgentContext : ApplicationContext
         UpdateMenuLabels();
     }
 
+    private bool IsVi => string.Equals(_lastPolicy?.Language, "vi", StringComparison.OrdinalIgnoreCase);
+
+    private string Tr(string en, string vi) => IsVi ? vi : en;
+
     private void UpdateMenuLabels()
     {
+        _openAppItem.Text = Tr("Open FocusGate App", "Mở ứng dụng FocusGate");
+        _syncNowItem.Text = Tr("Sync policy now", "Đồng bộ ngay");
+        _unlockPassItem.Text = Tr("Use 10m Earned Time Pass", "Dùng thẻ 10 phút tích lũy");
+        _startupItem.Text = Tr("Auto-start with Windows", "Tự khởi động cùng Windows");
+        _showStatusItem.Text = Tr("Show status", "Xem trạng thái");
+        _openLogsItem.Text = Tr("Open logs folder", "Mở thư mục log");
+        _exitItem.Text = Tr("Exit", "Thoát");
+
         if (_credentials is null)
         {
-            _statusItem.Text = $"Status: Unregistered ({_options.DeviceName ?? Environment.MachineName})";
-            _policyItem.Text = "Policy: Waiting for registration";
-            _trayIcon.Text = "FocusGate Agent (Unregistered)";
+            _statusItem.Text = Tr(
+                $"Status: Unregistered ({_options.DeviceName ?? Environment.MachineName})",
+                $"Trạng thái: Chưa đăng ký ({_options.DeviceName ?? Environment.MachineName})");
+            _policyItem.Text = Tr("Policy: Waiting for registration", "Chính sách: Chờ đăng ký");
+            _trayIcon.Text = Tr("FocusGate Agent (Unregistered)", "FocusGate Agent (Chưa đăng ký)");
             return;
         }
 
-        _statusItem.Text = $"Device: {_credentials.DeviceName} ({_credentials.DeviceId[..Math.Min(8, _credentials.DeviceId.Length)]})";
+        _statusItem.Text = Tr(
+            $"Device: {_credentials.DeviceName} ({_credentials.DeviceId[..Math.Min(8, _credentials.DeviceId.Length)]})",
+            $"Thiết bị: {_credentials.DeviceName} ({_credentials.DeviceId[..Math.Min(8, _credentials.DeviceId.Length)]})");
         _policyItem.Text = _lastPolicy is null
-            ? "Policy: Syncing..."
-            : $"Policy: {(_lastPolicy.LockActive ? "Lock Active" : "Unlocked")} ({_lastPolicy.PulledAtUtc.ToLocalTime():HH:mm:ss})";
+            ? Tr("Policy: Syncing...", "Chính sách: Đang đồng bộ...")
+            : Tr(
+                $"Policy: {(_lastPolicy.LockActive ? "Lock Active" : "Unlocked")} ({_lastPolicy.PulledAtUtc.ToLocalTime():HH:mm:ss})",
+                $"Chính sách: {(_lastPolicy.LockActive ? "Đang khóa" : "Đã mở khóa")} ({_lastPolicy.PulledAtUtc.ToLocalTime():HH:mm:ss})");
         _trayIcon.Text = $"FocusGate Agent — {_credentials.DeviceName}";
         _desktopForm?.UpdateStatusText(
-            $"FocusGate PC · {_credentials.DeviceName} · {(_lastPolicy is null ? "Syncing..." : _lastPolicy.LockActive ? $"Lock Active ({_lastPolicy.BlockedProcesses.Count} rules)" : "Unlocked")}");
+            $"FocusGate PC · {_credentials.DeviceName} · {(_lastPolicy is null ? Tr("Syncing...", "Đang đồng bộ...") : _lastPolicy.LockActive ? Tr($"Lock Active ({_lastPolicy.BlockedProcesses.Count} rules)", $"Đang khóa ({_lastPolicy.BlockedProcesses.Count} quy tắc)") : Tr("Unlocked", "Đã mở khóa"))}");
     }
 
     private void ShowDesktopWindow()
@@ -345,7 +370,7 @@ public sealed class TrayAgentContext : ApplicationContext
             if (_overlayForm is null || _overlayForm.IsDisposed || !_overlayForm.Visible)
             {
                 HideOverlay();
-                _overlayForm = new BlockOverlayForm(app, decision.Category ?? "blocked");
+                _overlayForm = new BlockOverlayForm(app, decision.Category ?? "blocked", IsVi);
                 _overlayForm.Show();
             }
         }
@@ -354,10 +379,14 @@ public sealed class TrayAgentContext : ApplicationContext
     private void ShowStatusDialog()
     {
         var summary = _credentials is null
-            ? $"Device: Unregistered ({_options.DeviceName ?? Environment.MachineName})\nCredentials: Not stored\nLogs: {_logger.LogDirectory}"
-            : $"Device: {_credentials.DeviceName}\nID: {_credentials.DeviceId}\nAPI: {_credentials.ApiBaseUrl}\nRegistered: {_credentials.RegisteredAtUtc.ToLocalTime():g}\nLogs: {_logger.LogDirectory}";
+            ? Tr(
+                $"Device: Unregistered ({_options.DeviceName ?? Environment.MachineName})\nCredentials: Not stored\nLogs: {_logger.LogDirectory}",
+                $"Thiết bị: Chưa đăng ký ({_options.DeviceName ?? Environment.MachineName})\nThông tin đăng nhập: Chưa lưu\nThư mục log: {_logger.LogDirectory}")
+            : Tr(
+                $"Device: {_credentials.DeviceName}\nID: {_credentials.DeviceId}\nAPI: {_credentials.ApiBaseUrl}\nRegistered: {_credentials.RegisteredAtUtc.ToLocalTime():g}\nLogs: {_logger.LogDirectory}",
+                $"Thiết bị: {_credentials.DeviceName}\nID: {_credentials.DeviceId}\nAPI: {_credentials.ApiBaseUrl}\nĐăng ký lúc: {_credentials.RegisteredAtUtc.ToLocalTime():g}\nThư mục log: {_logger.LogDirectory}");
 
-        MessageBox.Show(summary, "FocusGate Agent Status", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        MessageBox.Show(summary, Tr("FocusGate Agent Status", "Trạng thái FocusGate Agent"), MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void OpenLogsFolder()
@@ -374,7 +403,11 @@ public sealed class TrayAgentContext : ApplicationContext
     {
         if (_credentials is null)
         {
-            MessageBox.Show("Register this device first.", "FocusGate", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(
+                Tr("Register this device first.", "Vui lòng đăng ký thiết bị này trước."),
+                "FocusGate",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
             return;
         }
         try
@@ -384,11 +417,21 @@ public sealed class TrayAgentContext : ApplicationContext
                 _credentials.AccessToken,
                 10);
             await SyncPolicyAsync();
-            MessageBox.Show($"10m Unlock Pass activated! Remaining Earned Time: {remaining}m.", "FocusGate", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                Tr(
+                    $"10m Unlock Pass activated! Remaining Earned Time: {remaining}m.",
+                    $"Đã kích hoạt thẻ mở khóa 10 phút! Thời gian tích lũy còn lại: {remaining} phút."),
+                "FocusGate",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not activate Unlock Pass: {ex.Message}", "FocusGate", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(
+                Tr($"Could not activate Unlock Pass: {ex.Message}", $"Không thể kích hoạt thẻ mở khóa: {ex.Message}"),
+                "FocusGate",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
     }
 
@@ -397,7 +440,9 @@ public sealed class TrayAgentContext : ApplicationContext
         if (_lastPolicy?.LockActive == true)
         {
             var answer = MessageBox.Show(
-                "FocusGate Lock is currently active. Are you sure you want to exit the agent?",
+                Tr(
+                    "FocusGate Lock is currently active. Are you sure you want to exit the agent?",
+                    "Khóa FocusGate đang bật. Bạn có chắc muốn thoát ứng dụng không?"),
                 "FocusGate",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);

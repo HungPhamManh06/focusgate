@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FocusGate Blocker</title>
+  <style>
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      background: #f9f7f4;
+      color: #1d1917;
+    }
+    h1 {
+      font-size: 16px;
+      margin: 0 0 4px 0;
+    }
+    p.sub {
+      font-size: 12px;
+      color: #6b635e;
+      margin: 0 0 12px 0;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e7e1db;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      margin: 8px 0 4px 0;
+      color: #5b534e;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border: 1px solid #d7cfc7;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    button {
+      width: 100%;
+      padding: 9px 12px;
+      border: 0;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .primary {
+      background: #a32c20;
+      color: #ffffff;
+    }
+    .secondary {
+      background: #efeae4;
+      color: #1d1917;
+    }
+    .status-pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    .locked {
+      background: #fbeae8;
+      color: #98261a;
+    }
+    .unlocked {
+      background: #e6f4ea;
+      color: #1f6b3a;
+    }
+    .error {
+      color: #98261a;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .meta {
+      font-size: 12px;
+      color: #6b635e;
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1 id="title">FocusGate Blocker</h1>
+  <p class="sub" id="subtitle">Syncs with your daily Must-Do plan.</p>
+
+  <div id="signedOutView" class="card" style="display: none;">
+    <form id="loginForm">
+      <label for="emailInput">Email</label>
+      <input id="emailInput" type="email" required placeholder="you@example.com" />
+      <label for="passwordInput" id="passwordLabel">Password</label>
+      <input id="passwordInput" type="password" required />
+      <button type="submit" class="primary" id="signInBtn">Sign in &amp; Sync</button>
+    </form>
+    <div id="loginError" class="error"></div>
+  </div>
+
+  <div id="signedInView" style="display: none;">
+    <div class="card">
+      <span id="statusBadge" class="status-pill locked">Lock Active</span>
+      <div class="meta" id="emailLabel"></div>
+      <div class="meta" id="domainsLabel"></div>
+      <div class="meta" id="earnedLabel"></div>
+      <div id="syncError" class="error"></div>
+    </div>
+    <button class="primary" id="syncBtn">Sync Now</button>
+    <button class="secondary" id="passBtn">Use 10m Earned Time Pass</button>
+    <button class="secondary" id="openWebBtn">Open FocusGate Web</button>
+    <button class="secondary" id="signOutBtn">Sign out</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

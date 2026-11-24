@@ -29,6 +29,7 @@ export interface AgentPolicyPayload {
   activeFocusSession?: ActiveFocusSummary | null;
   effectiveSchedule?: EffectiveSchedule;
   earnedMinutesBalance?: number;
+  language?: "en" | "vi";
 }
 
 export function computeAgentPolicySnapshot(input: {
@@ -43,6 +44,7 @@ export function computeAgentPolicySnapshot(input: {
   activeFocusSession?: ActiveFocusSummary | null;
   effectiveSchedule?: EffectiveSchedule;
   earnedMinutesBalance?: number;
+  language?: "en" | "vi";
 }): AgentPolicyPayload {
   const nowIso = input.nowIso ?? new Date().toISOString();
   const nowMs = new Date(nowIso).getTime();
@@ -90,5 +92,6 @@ export function computeAgentPolicySnapshot(input: {
     ...(input.earnedMinutesBalance !== undefined
       ? { earnedMinutesBalance: input.earnedMinutesBalance }
       : {}),
+    ...(input.language !== undefined ? { language: input.language } : {}),
   };
 }

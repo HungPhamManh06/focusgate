@@ -13,6 +13,7 @@ const bodySchema = z.object({
         sleepMinutes: z.number().int().min(0).max(1440),
         avgHeartRate: z.number().int().min(30).max(240).optional().nullable(),
         activeCalories: z.number().int().min(0).max(20_000),
+        weightKg: z.number().min(20).max(300).optional().nullable(),
         source: z.string().max(40).optional(),
       }),
     )

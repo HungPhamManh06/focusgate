@@ -16,10 +16,12 @@ public sealed class BlockOverlayForm : Form
 
     private readonly Label _appLabel;
     private readonly Label _titleLabel;
+    private readonly Label _noteLabel;
+    private readonly Button _dismissButton;
 
-    public BlockOverlayForm(ForegroundApp app, string category)
+    public BlockOverlayForm(ForegroundApp app, string category, bool isVi = false)
     {
-        Text = "FocusGate – Locked";
+        Text = isVi ? "FocusGate – Đang khóa" : "FocusGate – Locked";
         FormBorderStyle = FormBorderStyle.None;
         WindowState = FormWindowState.Maximized;
         TopMost = true;
@@ -38,7 +40,7 @@ public sealed class BlockOverlayForm : Form
 
         _appLabel = new Label
         {
-            Text = $"“{app.ProcessName}” is locked ({category}).\nComplete your Must Do tasks to earn unlock time.",
+            Text = FormatBlockedText(app, category, isVi),
             Font = new Font("Segoe UI", 26f, FontStyle.Bold),
             ForeColor = Foreground,
             MaximumSize = new Size(900, 0),
@@ -46,18 +48,20 @@ public sealed class BlockOverlayForm : Form
             Location = new Point(80, 140),
         };
 
-        var note = new Label
+        _noteLabel = new Label
         {
-            Text = "Personal Strict Mode: this screen can be dismissed. FocusGate does not claim an unbreakable lock.",
+            Text = isVi
+                ? "Chế độ Nghiêm ngặt Cá nhân: màn hình này có thể đóng tạm thời."
+                : "Personal Strict Mode: this screen can be dismissed. FocusGate does not claim an unbreakable lock.",
             Font = new Font("Segoe UI", 10f),
             ForeColor = Muted,
             AutoSize = true,
             Location = new Point(80, 300),
         };
 
-        var dismiss = new Button
+        _dismissButton = new Button
         {
-            Text = "Back to tasks (PoC dismiss)",
+            Text = isVi ? "Quay lại nhiệm vụ (Đóng)" : "Back to tasks (PoC dismiss)",
             Font = new Font("Segoe UI Semibold", 11f),
             ForeColor = Color.FromArgb(15, 17, 23),
             BackColor = Accent,
@@ -66,24 +70,33 @@ public sealed class BlockOverlayForm : Form
             Padding = new Padding(16, 10, 16, 10),
             Location = new Point(80, 350),
         };
-        dismiss.FlatAppearance.BorderSize = 0;
-        dismiss.Click += (_, _) => Close();
+        _dismissButton.FlatAppearance.BorderSize = 0;
+        _dismissButton.Click += (_, _) => Close();
 
         Controls.Add(_titleLabel);
         Controls.Add(_appLabel);
-        Controls.Add(note);
-        Controls.Add(dismiss);
+        Controls.Add(_noteLabel);
+        Controls.Add(_dismissButton);
 
         Resize += (_, _) => LayoutChildren();
         LayoutChildren();
     }
 
-    public void UpdateBlockedApp(ForegroundApp app, string category)
+    public void UpdateBlockedApp(ForegroundApp app, string category, bool isVi = false)
     {
-        _appLabel.Text =
-            $"“{app.ProcessName}” is locked ({category}).\nComplete your Must Do tasks to earn unlock time.";
+        Text = isVi ? "FocusGate – Đang khóa" : "FocusGate – Locked";
+        _appLabel.Text = FormatBlockedText(app, category, isVi);
+        _noteLabel.Text = isVi
+            ? "Chế độ Nghiêm ngặt Cá nhân: màn hình này có thể đóng tạm thời."
+            : "Personal Strict Mode: this screen can be dismissed. FocusGate does not claim an unbreakable lock.";
+        _dismissButton.Text = isVi ? "Quay lại nhiệm vụ (Đóng)" : "Back to tasks (PoC dismiss)";
         LayoutChildren();
     }
+
+    private static string FormatBlockedText(ForegroundApp app, string category, bool isVi) =>
+        isVi
+            ? $"“{app.ProcessName}” đang bị khóa ({category}).\nHoàn thành các việc Bắt buộc để nhận thời gian mở khóa."
+            : $"“{app.ProcessName}” is locked ({category}).\nComplete your Must Do tasks to earn unlock time.";
 
     private void LayoutChildren()
     {

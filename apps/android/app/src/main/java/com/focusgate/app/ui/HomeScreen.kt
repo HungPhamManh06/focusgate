@@ -137,6 +137,15 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
     var signedInEmail by remember { mutableStateOf(AgentPreferences.getUserEmail(context)) }
     var emailInput by remember { mutableStateOf(AgentPreferences.getUserEmail(context) ?: "") }
+    var language by remember { mutableStateOf(AgentPreferences.getLanguage(context)) }
+    val isVi = language == "vi"
+    fun tr(en: String, vi: String): String = if (isVi) vi else en
+    var healthStepsInput by remember { mutableStateOf("8000") }
+    var healthCaloriesInput by remember { mutableStateOf("300") }
+    var healthSleepInput by remember { mutableStateOf("7.5") }
+    var healthWeightInput by remember { mutableStateOf("") }
+    var healthSyncBusy by remember { mutableStateOf(false) }
+    var healthSyncMessage by remember { mutableStateOf<String?>(null) }
     var passwordInput by remember { mutableStateOf("") }
     var planSnapshot by remember { mutableStateOf<RemotePlanSnapshot?>(null) }
     var planUnlocked by remember { mutableStateOf(AgentPreferences.isPlanUnlocked(context)) }
@@ -422,11 +431,15 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     if (showEmergencyDialog) {
         AlertDialog(
             onDismissRequest = { showEmergencyDialog = false },
-            title = { Text("Use emergency access?") },
+            title = { Text(tr("Use emergency access?", "Dùng quyền truy cập khẩn cấp?")) },
             text = {
                 Text(
-                    "This pauses all FocusGate restrictions for 10 minutes. The status " +
-                        "screen will show that protection is paused, and it resumes automatically.",
+                    tr(
+                        "This pauses all FocusGate restrictions for 10 minutes. The status " +
+                            "screen will show that protection is paused, and it resumes automatically.",
+                        "Thao tác này tạm dừng toàn bộ giới hạn FocusGate trong 10 phút. Màn hình " +
+                            "trạng thái sẽ hiển thị đang tạm dừng và tự kích hoạt lại sau đó.",
+                    ),
                 )
             },
             confirmButton = {
@@ -435,10 +448,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         showEmergencyDialog = false
                         startEmergency()
                     },
-                ) { Text("Start 10-minute access") }
+                ) { Text(tr("Start 10-minute access", "Bắt đầu 10 phút khẩn cấp")) }
             },
             dismissButton = {
-                TextButton(onClick = { showEmergencyDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showEmergencyDialog = false }) {
+                    Text(tr("Cancel", "Hủy"))
+                }
             },
         )
     }
@@ -465,7 +480,10 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         Column {
                             Text("FocusGate", fontWeight = FontWeight.SemiBold)
                             Text(
-                                "Finish your tasks. Earn your freedom.",
+                                tr(
+                                    "Finish your tasks. Earn your freedom.",
+                                    "Hoàn thành nhiệm vụ. Tự do giải trí.",
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -473,7 +491,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                     }
                 },
                 actions = {
-                    TextButton(onClick = onOpenSetup) { Text("Setup") }
+                    TextButton(onClick = onOpenSetup) { Text(tr("Setup", "Thiết lập")) }
                 },
             )
         },
@@ -496,7 +514,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(message, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { banner = null }) { Text("Dismiss") }
+                            TextButton(onClick = { banner = null }) {
+                                Text(tr("Dismiss", "Đóng"))
+                            }
                         }
                     }
                 }
@@ -509,11 +529,14 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("FocusGate Web Sync", fontWeight = FontWeight.SemiBold)
+                        Text(tr("FocusGate Web Sync", "Đồng bộ Web FocusGate"), fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))
                         if (signedInEmail == null) {
                             Text(
-                                "Sign in with your FocusGate web account to sync today's planned tasks and unlock apps when all tasks are done.",
+                                tr(
+                                    "Sign in with your FocusGate web account to sync today's planned tasks and unlock apps when all tasks are done.",
+                                    "Đăng nhập tài khoản web FocusGate để đồng bộ kế hoạch hôm nay và mở khóa ứng dụng khi xong hết việc.",
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -529,7 +552,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             OutlinedTextField(
                                 value = passwordInput,
                                 onValueChange = { passwordInput = it },
-                                label = { Text("Password") },
+                                label = { Text(tr("Password", "Mật khẩu")) },
                                 singleLine = true,
                                 visualTransformation = PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth(),
@@ -645,10 +668,43 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             when {
                                 (currentPlan == null || currentPlan.tasks.isEmpty()) && openWebTasks.isEmpty() -> {
                                     Text(
-                                        "No tasks in today's plan yet. Add tasks on FocusGate Web (Planner) and tap Sync.",
+                                        tr(
+                                            "No tasks in today's plan yet. Build today's plan from habits & Must-Dos, or add tasks on FocusGate Web.",
+                                            "Chưa có nhiệm vụ trong kế hoạch hôm nay. Bạn có thể tạo tự động từ thói quen & việc Bắt buộc, hoặc thêm trên Web.",
+                                        ),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
+                                    Spacer(Modifier.height(8.dp))
+                                    Button(
+                                        enabled = !planSyncBusy,
+                                        onClick = {
+                                            planSyncBusy = true
+                                            syncError = null
+                                            scope.launch {
+                                                try {
+                                                    val snap = withContext(Dispatchers.IO) {
+                                                        PlanSyncManager.buildTodayPlanAndSync(context)
+                                                    }
+                                                    planSnapshot = snap
+                                                    planUnlocked = snap.unlocked
+                                                    language = AgentPreferences.getLanguage(context)
+                                                } catch (t: Throwable) {
+                                                    syncError = t.message ?: tr("Could not build plan", "Không thể lập kế hoạch")
+                                                } finally {
+                                                    planSyncBusy = false
+                                                }
+                                            }
+                                        },
+                                    ) {
+                                        Text(
+                                            if (planSyncBusy) {
+                                                tr("Building...", "Đang tạo...")
+                                            } else {
+                                                tr("Build Today's Plan", "Lập kế hoạch hôm nay")
+                                            },
+                                        )
+                                    }
                                 }
                                 (currentPlan == null || currentPlan.tasks.isEmpty()) && openWebTasks.isNotEmpty() -> {
                                     Text(
@@ -681,7 +737,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                                         },
                                                     )
                                                     if (task.requiredFocusMinutes > 0) {
-                                                        append(" • Focus ${task.requiredFocusMinutes}m")
+                                                        append(tr(" • Focus ${task.requiredFocusMinutes}m", " • Tập trung ${task.requiredFocusMinutes}p"))
                                                     }
                                                 }
                                                 Text(
@@ -691,6 +747,36 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                                 )
                                             }
                                         }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Button(
+                                        enabled = !planSyncBusy,
+                                        onClick = {
+                                            planSyncBusy = true
+                                            syncError = null
+                                            scope.launch {
+                                                try {
+                                                    val snap = withContext(Dispatchers.IO) {
+                                                        PlanSyncManager.buildTodayPlanAndSync(context)
+                                                    }
+                                                    planSnapshot = snap
+                                                    planUnlocked = snap.unlocked
+                                                    language = AgentPreferences.getLanguage(context)
+                                                } catch (t: Throwable) {
+                                                    syncError = t.message ?: tr("Could not build plan", "Không thể lập kế hoạch")
+                                                } finally {
+                                                    planSyncBusy = false
+                                                }
+                                            }
+                                        },
+                                    ) {
+                                        Text(
+                                            if (planSyncBusy) {
+                                                tr("Building...", "Đang tạo...")
+                                            } else {
+                                                tr("Build Today's Plan", "Lập kế hoạch hôm nay")
+                                            },
+                                        )
                                     }
                                 }
                                 else -> {
@@ -713,13 +799,13 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                                 val meta = buildString {
                                                     append(
                                                         when (task.kind) {
-                                                            "must_do" -> "Must do"
-                                                            "should_do" -> "Should do"
-                                                            else -> "Bonus"
+                                                            "must_do" -> tr("Must do", "Bắt buộc")
+                                                            "should_do" -> tr("Should do", "Nên làm")
+                                                            else -> tr("Bonus", "Thưởng")
                                                         },
                                                     )
                                                     if (task.requiredFocusMinutes > 0) {
-                                                        append(" • Focus ${task.focusDone}/${task.requiredFocusMinutes}m")
+                                                        append(tr(" • Focus ${task.focusDone}/${task.requiredFocusMinutes}m", " • Tập trung ${task.focusDone}/${task.requiredFocusMinutes}p"))
                                                     }
                                                 }
                                                 Text(
@@ -731,7 +817,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                             Spacer(Modifier.width(8.dp))
                                             if (isDone) {
                                                 Text(
-                                                    "Done",
+                                                    tr("Done", "Xong"),
                                                     style = MaterialTheme.typography.labelMedium,
                                                     color = MaterialTheme.colorScheme.primary,
                                                     fontWeight = FontWeight.SemiBold,
@@ -742,13 +828,132 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                                     enabled = completingTaskId == null,
                                                 ) {
                                                     Text(
-                                                        if (completingTaskId == task.planTaskId) "..." else "Done",
+                                                        if (completingTaskId == task.planTaskId) "..." else tr("Done", "Xong"),
                                                     )
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (signedInEmail != null) {
+                item {
+                    LaunchedEffect(planSyncBusy) {
+                        language = AgentPreferences.getLanguage(context)
+                    }
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                tr("Daily Health Quick-Log", "Ghi nhanh sức khỏe hôm nay"),
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                tr(
+                                    "Log today's steps, active calories, sleep hours, and weight directly to FocusGate Web.",
+                                    "Lưu số bước, calo vận động, giờ ngủ và cân nặng hôm nay lên web FocusGate.",
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = healthStepsInput,
+                                    onValueChange = { healthStepsInput = it },
+                                    label = { Text(tr("Steps", "Bước chân")) },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OutlinedTextField(
+                                    value = healthCaloriesInput,
+                                    onValueChange = { healthCaloriesInput = it },
+                                    label = { Text(tr("Calories (kcal)", "Calo (kcal)")) },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = healthSleepInput,
+                                    onValueChange = { healthSleepInput = it },
+                                    label = { Text(tr("Sleep (hours)", "Ngủ (giờ)")) },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OutlinedTextField(
+                                    value = healthWeightInput,
+                                    onValueChange = { healthWeightInput = it },
+                                    label = { Text(tr("Weight (kg)", "Cân nặng (kg)")) },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            healthSyncMessage?.let { msg ->
+                                Text(
+                                    msg,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Button(
+                                enabled = !healthSyncBusy,
+                                onClick = {
+                                    val steps = healthStepsInput.trim().toIntOrNull() ?: 0
+                                    val calories = healthCaloriesInput.trim().toIntOrNull() ?: 0
+                                    val sleepHours = healthSleepInput.trim().replace(',', '.').toDoubleOrNull() ?: 0.0
+                                    val sleepMinutes = kotlin.math.round(sleepHours * 60.0).toInt().coerceIn(0, 1440)
+                                    val weightKg = healthWeightInput.trim().replace(',', '.').toDoubleOrNull()
+                                    healthSyncBusy = true
+                                    healthSyncMessage = null
+                                    scope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) {
+                                                PlanSyncManager.saveHealthMetricAndSync(
+                                                    context = context,
+                                                    steps = steps,
+                                                    activeCalories = calories,
+                                                    sleepMinutes = sleepMinutes,
+                                                    weightKg = weightKg,
+                                                )
+                                            }
+                                            healthSyncMessage = tr(
+                                                "Saved today's health log to FocusGate Web.",
+                                                "Đã lưu chỉ số sức khỏe hôm nay lên web.",
+                                            )
+                                        } catch (t: Throwable) {
+                                            healthSyncMessage = t.message ?: tr("Health sync failed", "Lưu sức khỏe thất bại")
+                                        } finally {
+                                            healthSyncBusy = false
+                                        }
+                                    }
+                                },
+                            ) {
+                                Text(
+                                    if (healthSyncBusy) {
+                                        tr("Saving...", "Đang lưu...")
+                                    } else {
+                                        tr("Save Health Today", "Lưu sức khỏe hôm nay")
+                                    },
+                                )
                             }
                         }
                     }
@@ -762,13 +967,13 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("Protection status", fontWeight = FontWeight.SemiBold)
+                        Text(tr("Protection status", "Trạng thái bảo vệ"), fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(6.dp))
                         Text(
                             when (protection.level) {
-                                ProtectionLevel.PROTECTED -> "Protected"
-                                ProtectionLevel.DEGRADED -> "Degraded"
-                                ProtectionLevel.OFF -> "Off"
+                                ProtectionLevel.PROTECTED -> tr("Protected", "Đang bảo vệ")
+                                ProtectionLevel.DEGRADED -> tr("Degraded", "Chưa đầy đủ")
+                                ProtectionLevel.OFF -> tr("Off", "Đang tắt")
                             },
                             style = MaterialTheme.typography.headlineSmall,
                             color = when (protection.level) {
@@ -780,11 +985,17 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         Text(
                             when (protection.level) {
                                 ProtectionLevel.PROTECTED ->
-                                    "Policy verified and fully applied."
+                                    tr("Policy verified and fully applied.", "Chính sách đã được xác minh và áp dụng.")
                                 ProtectionLevel.DEGRADED ->
-                                    "Action needed: protection is incomplete or has unverified apps."
+                                    tr(
+                                        "Action needed: protection is incomplete or has unverified apps.",
+                                        "Cần kiểm tra: bảo vệ chưa hoàn tất hoặc có ứng dụng chưa xác minh.",
+                                    )
                                 ProtectionLevel.OFF ->
-                                    "No active policy and no apps suspended by FocusGate."
+                                    tr(
+                                        "No active policy and no apps suspended by FocusGate.",
+                                        "Chưa có chính sách hoạt động và chưa có ứng dụng nào bị tạm dừng.",
+                                    )
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -843,9 +1054,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         }
                         Text(
                             if (managedActive) {
-                                "Mode: Managed Device (Device Owner policy)"
+                                tr("Mode: Managed Device (Device Owner policy)", "Chế độ: Thiết bị được quản lý (Device Owner)")
                             } else {
-                                "Mode: Personal Strict Mode"
+                                tr("Mode: Personal Strict Mode", "Chế độ: Nghiêm ngặt Cá nhân")
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -854,21 +1065,27 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 
                         Spacer(Modifier.height(10.dp))
                         StatusRow(
-                            title = "Usage Access",
+                            title = tr("Usage Access", "Quyền truy cập sử dụng"),
                             granted = usageGranted,
-                            actionLabel = if (usageGranted) "Settings" else "Grant",
+                            grantedLabel = tr("Granted", "Đã cấp"),
+                            notGrantedLabel = tr("Not granted", "Chưa cấp"),
+                            actionLabel = if (usageGranted) tr("Settings", "Cài đặt") else tr("Grant", "Cấp quyền"),
                             onAction = { PermissionChecks.openUsageAccessSettings(context) },
                         )
                         StatusRow(
-                            title = "Display over other apps",
+                            title = tr("Display over other apps", "Hiển thị trên ứng dụng khác"),
                             granted = overlayGranted,
-                            actionLabel = if (overlayGranted) "Settings" else "Grant",
+                            grantedLabel = tr("Granted", "Đã cấp"),
+                            notGrantedLabel = tr("Not granted", "Chưa cấp"),
+                            actionLabel = if (overlayGranted) tr("Settings", "Cài đặt") else tr("Grant", "Cấp quyền"),
                             onAction = { PermissionChecks.openOverlaySettings(context) },
                         )
                         StatusRow(
-                            title = "Notifications",
+                            title = tr("Notifications", "Thông báo"),
                             granted = notificationsGranted,
-                            actionLabel = "Settings",
+                            grantedLabel = tr("Granted", "Đã cấp"),
+                            notGrantedLabel = tr("Not granted", "Chưa cấp"),
+                            actionLabel = tr("Settings", "Cài đặt"),
                             onAction = { PermissionChecks.openAppNotificationSettings(context) },
                         )
 
@@ -879,13 +1096,13 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text("Monitoring")
+                                Text(tr("Monitoring", "Giám sát"))
                                 Text(
                                     when {
-                                        managedActive -> "Managed by Device Owner policy"
-                                        serviceRunning -> "Foreground service running"
-                                        monitorEnabled -> "Enabled, service not running"
-                                        else -> "Off"
+                                        managedActive -> tr("Managed by Device Owner policy", "Quản lý bởi Device Owner")
+                                        serviceRunning -> tr("Foreground service running", "Dịch vụ nền đang chạy")
+                                        monitorEnabled -> tr("Enabled, service not running", "Đã bật, dịch vụ chưa chạy")
+                                        else -> tr("Off", "Tắt")
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -893,7 +1110,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             }
                             if (!managedActive && monitorEnabled && !serviceRunning) {
                                 TextButton(onClick = { setMonitoring(true) }) {
-                                    Text("Restart")
+                                    Text(tr("Restart", "Khởi động lại"))
                                 }
                             }
                             Switch(
@@ -909,9 +1126,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text("Bedtime lock (23:00–06:00)")
+                                Text(tr("Bedtime lock (23:00–06:00)", "Khóa giờ đi ngủ (23:00–06:00)"))
                                 Text(
-                                    if (bedtimeEnabled) "Locks apps during sleep hours" else "Off",
+                                    if (bedtimeEnabled) tr("Locks apps during sleep hours", "Khóa ứng dụng vào giờ ngủ") else tr("Off", "Tắt"),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -931,9 +1148,13 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text("Settings anti-tamper guard")
+                                Text(tr("Settings anti-tamper guard", "Chống gỡ qua Cài đặt hệ thống"))
                                 Text(
-                                    if (settingsGuardEnabled) "Blocks System Settings while tasks are locked" else "Off",
+                                    if (settingsGuardEnabled) {
+                                        tr("Blocks System Settings while tasks are locked", "Chặn Cài đặt hệ thống khi đang khóa")
+                                    } else {
+                                        tr("Off", "Tắt")
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -953,9 +1174,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text("Focus Soundscape (Brown Noise)")
+                                Text(tr("Focus Soundscape (Brown Noise)", "Âm thanh tập trung (Brown Noise)"))
                                 Text(
-                                    if (soundscapePlaying) "Playing ambient focus audio" else "Off",
+                                    if (soundscapePlaying) tr("Playing ambient focus audio", "Đang phát âm thanh nền") else tr("Off", "Tắt"),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -975,7 +1196,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text(
-                                    "Earned Time: ${earnedMinutesBalance}m",
+                                    tr("Earned Time: ${earnedMinutesBalance}m", "Thời gian tích lũy: ${earnedMinutesBalance}p"),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -993,14 +1214,14 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                                 planUnlocked = snap.unlocked
                                                 earnedMinutesBalance = AgentPreferences.getEarnedMinutesBalance(context)
                                             } catch (t: Throwable) {
-                                                syncError = t.message ?: "Unlock pass failed"
+                                                syncError = t.message ?: tr("Unlock pass failed", "Kích hoạt thẻ thất bại")
                                             } finally {
                                                 planSyncBusy = false
                                             }
                                         }
                                     },
                                 ) {
-                                    Text("Use 10m Pass")
+                                    Text(tr("Use 10m Pass", "Dùng thẻ 10p"))
                                 }
                             }
                         }
@@ -1021,13 +1242,15 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("Emergency access", fontWeight = FontWeight.SemiBold)
+                        Text(tr("Emergency access", "Truy cập khẩn cấp"), fontWeight = FontWeight.SemiBold)
                         Text(
                             if (emergencyActive) {
-                                "${emergencyPresentation.message} Remaining: ${formatRemaining(emergencyRemaining)}."
+                                "${emergencyPresentation.message} ${tr("Remaining", "Còn lại")}: ${formatRemaining(emergencyRemaining)}."
                             } else {
-                                "Temporarily pause restrictions for up to 15 minutes. " +
-                                    "Use it for urgent access only."
+                                tr(
+                                    "Temporarily pause restrictions for up to 15 minutes. Use it for urgent access only.",
+                                    "Tạm dừng giới hạn tối đa 15 phút. Chỉ sử dụng khi thật sự khẩn cấp.",
+                                )
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = if (emergencyPresentation.state == EmergencyPresentationState.EMERGENCY_ACTIVE_DEGRADED) {
@@ -1060,13 +1283,13 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 onClick = ::endEmergency,
                                 enabled = !isOperationInProgress,
                                 modifier = Modifier.padding(top = 8.dp),
-                            ) { Text("End emergency access now") }
+                            ) { Text(tr("End emergency access now", "Kết thúc khẩn cấp ngay")) }
                         } else {
                             Button(
                                 onClick = { showEmergencyDialog = true },
                                 enabled = !isOperationInProgress,
                                 modifier = Modifier.padding(top = 8.dp),
-                            ) { Text("Emergency access (10 min)") }
+                            ) { Text(tr("Emergency access (10 min)", "Truy cập khẩn cấp (10 phút)")) }
                         }
                         Row(
                             modifier = Modifier
@@ -1075,12 +1298,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text("Strict mode (disable emergency)")
+                                Text(tr("Strict mode (disable emergency)", "Chế độ nghiêm ngặt (tắt khẩn cấp)"))
                                 Text(
                                     if (strictNoEmergency) {
-                                        "Emergency button hidden on lock screen"
+                                        tr("Emergency button hidden on lock screen", "Ẩn nút khẩn cấp trên màn hình khóa")
                                     } else {
-                                        "Max 1/day · 30s wait"
+                                        tr("Max 1/day · 30s wait", "Tối đa 1 lần/ngày · chờ 30 giây")
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1176,12 +1399,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("Rules", fontWeight = FontWeight.SemiBold)
+                        Text(tr("Rules", "Quy tắc chặn"), fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Restricted apps show the block screen. Exempt apps are never " +
-                                "blocked, even if they also appear on the restricted list. " +
-                                "Phone, messages, settings, permission controllers and the Play " +
-                                "Store are always allowed.",
+                            tr(
+                                "Restricted apps show the block screen. Exempt apps are never blocked, even if they also appear on the restricted list. Phone, messages, settings, permission controllers and the Play Store are always allowed.",
+                                "Ứng dụng bị hạn chế sẽ hiển thị màn hình khóa. Ứng dụng miễn trừ không bao giờ bị chặn. Điện thoại, tin nhắn, cài đặt và Play Store luôn được phép.",
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
@@ -1193,18 +1416,18 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             FilterChip(
                                 selected = tab == AppTab.RESTRICT,
                                 onClick = { tab = AppTab.RESTRICT },
-                                label = { Text("Restrict (${pendingBlocked.size})") },
+                                label = { Text("${tr("Restrict", "Chặn")} (${pendingBlocked.size})") },
                             )
                             FilterChip(
                                 selected = tab == AppTab.EXEMPT,
                                 onClick = { tab = AppTab.EXEMPT },
-                                label = { Text("Exempt (${pendingExempt.size})") },
+                                label = { Text("${tr("Exempt", "Miễn trừ")} (${pendingExempt.size})") },
                             )
                         }
                         OutlinedTextField(
                             value = search,
                             onValueChange = { search = it },
-                            label = { Text("Search apps") },
+                            label = { Text(tr("Search apps", "Tìm ứng dụng")) },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1217,7 +1440,11 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                if (hasUnsavedChanges) "Unsaved changes" else "Policy is saved",
+                                if (hasUnsavedChanges) {
+                                    tr("Unsaved changes", "Có thay đổi chưa lưu")
+                                } else {
+                                    tr("Policy is saved", "Chính sách đã được lưu")
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (hasUnsavedChanges) {
                                     MaterialTheme.colorScheme.tertiary
@@ -1230,7 +1457,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                 onClick = ::savePolicy,
                                 enabled = hasUnsavedChanges && !isOperationInProgress,
                             ) {
-                                Text(if (isOperationInProgress) "Applying…" else "Save policy")
+                                Text(
+                                    if (isOperationInProgress) tr("Applying…", "Đang lưu…") else tr("Save policy", "Lưu quy tắc"),
+                                )
                             }
                         }
                     }
@@ -1342,6 +1571,8 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
 private fun StatusRow(
     title: String,
     granted: Boolean,
+    grantedLabel: String = "Granted",
+    notGrantedLabel: String = "Not granted",
     actionLabel: String,
     onAction: () -> Unit,
 ) {
@@ -1354,7 +1585,7 @@ private fun StatusRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(title)
             Text(
-                if (granted) "Granted" else "Not granted",
+                if (granted) grantedLabel else notGrantedLabel,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (granted) {
                     MaterialTheme.colorScheme.primary

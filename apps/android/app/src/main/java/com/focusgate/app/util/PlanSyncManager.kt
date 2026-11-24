@@ -47,6 +47,7 @@ object PlanSyncManager {
                 AgentPreferences.setWhitelistFocusMode(context, remotePolicy.whitelistFocusMode)
                 AgentPreferences.setActiveFocusRunning(context, remotePolicy.activeFocusRunning)
                 AgentPreferences.setBedtimeWindow(context, remotePolicy.bedtimeStart, remotePolicy.bedtimeEnd)
+                AgentPreferences.setLanguage(context, remotePolicy.language)
             }
             val unlocked = planSnapshot.unlocked || policyUnlocked
             AgentPreferences.setPlanUnlocked(context, unlocked)
@@ -71,14 +72,53 @@ object PlanSyncManager {
         snapshot: RemotePlanSnapshot,
         unlocked: Boolean,
     ) {
+        val isVi = AgentPreferences.getLanguage(context) == "vi"
         val plan = snapshot.plan
         val summary = when {
-            plan == null || plan.allTasksTotal == 0 -> "No tasks in today's plan"
-            unlocked -> "Unlocked (${plan.allTasksCompleted}/${plan.allTasksTotal} done)"
-            else -> "Locked (${plan.allTasksCompleted}/${plan.allTasksTotal} tasks done)"
+            plan == null || plan.allTasksTotal == 0 ->
+                if (isVi) "Chưa có nhiệm vụ trong kế hoạch hôm nay" else "No tasks in today's plan"
+            unlocked ->
+                if (isVi) "Đã mở khóa (${plan.allTasksCompleted}/${plan.allTasksTotal} xong)"
+                else "Unlocked (${plan.allTasksCompleted}/${plan.allTasksTotal} done)"
+            else ->
+                if (isVi) "Đang khóa (${plan.allTasksCompleted}/${plan.allTasksTotal} xong)"
+                else "Locked (${plan.allTasksCompleted}/${plan.allTasksTotal} tasks done)"
         }
         AgentPreferences.setPlanSummaryText(context, summary)
         FocusGateWidgetProvider.updateAll(context)
+    }
+
+    fun buildTodayPlanAndSync(context: Context): RemotePlanSnapshot {
+        return withValidToken(context) { token ->
+            val snap = client.buildTodayPlan(AgentPreferences.DEFAULT_API_BASE_URL, token)
+            AgentPreferences.setPlanUnlocked(context, snap.unlocked)
+            AgentPreferences.setLastSyncAt(context, System.currentTimeMillis())
+            updateWidgetState(context, snap, snap.unlocked)
+            snap
+        }
+    }
+
+    fun saveHealthMetricAndSync(
+        context: Context,
+        steps: Int,
+        activeCalories: Int,
+        sleepMinutes: Int,
+        weightKg: Double?,
+    ) {
+        withValidToken(context) { token ->
+            val deviceId = ensureRegisteredDevice(context, token)
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            client.pushDailyHealthMetric(
+                apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
+                accessToken = token,
+                deviceId = deviceId,
+                date = today,
+                steps = steps,
+                activeCalories = activeCalories,
+                sleepMinutes = sleepMinutes,
+                weightKg = weightKg,
+            )
+        }
     }
 
     private fun pushLocalRules(context: Context, token: String, deviceId: String) {

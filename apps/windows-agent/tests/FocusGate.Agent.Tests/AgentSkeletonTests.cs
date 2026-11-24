@@ -275,6 +275,23 @@ public sealed class AgentSkeletonTests : IDisposable
         Assert.True(engine.Evaluate(steamApp).ShouldBlock);
     }
 
+    [Fact]
+    public void AgentPolicySnapshot_DeserializesLanguage_DefaultsToEnWhenOmitted()
+    {
+        var opts = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var vi = JsonSerializer.Deserialize<AgentPolicySnapshot>(
+            """{"pulledAtUtc":"2026-11-24T01:00:00Z","lockActive":true,"blockedProcesses":[],"allowedProcesses":[],"language":"vi"}""",
+            opts);
+        Assert.NotNull(vi);
+        Assert.Equal("vi", vi.Language);
+
+        var defaultLang = JsonSerializer.Deserialize<AgentPolicySnapshot>(
+            """{"pulledAtUtc":"2026-11-24T01:00:00Z","lockActive":false,"blockedProcesses":[],"allowedProcesses":[]}""",
+            opts);
+        Assert.NotNull(defaultLang);
+        Assert.Equal("en", defaultLang.Language);
+    }
+
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, object body) =>
         new(status)
         {

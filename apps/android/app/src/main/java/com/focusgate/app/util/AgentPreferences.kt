@@ -220,4 +220,12 @@ object AgentPreferences {
     fun setPlanSummaryText(context: Context, text: String) {
         prefs(context).edit().putString(KEY_PLAN_SUMMARY_TEXT, text).apply()
     }
+
+    fun getLanguage(context: Context): String =
+        if (prefs(context).getString("policy_language", "en") == "vi") "vi" else "en"
+
+    fun setLanguage(context: Context, language: String) {
+        val normalized = if (language == "vi") "vi" else "en"
+        prefs(context).edit().putString("policy_language", normalized).apply()
+    }
 }

@@ -25,10 +25,12 @@ describe("computeAgentPolicySnapshot", () => {
     const policy = computeAgentPolicySnapshot({
       activeGrantMinutes: 25,
       rules: [{ ruleType: "block", identifier: "discord.exe", isEnabled: true }],
+      language: "vi",
     });
 
     assert.equal(policy.lockActive, false);
     assert.deepEqual(policy.blockedProcesses, ["discord.exe"]);
+    assert.equal(policy.language, "vi");
   });
 });
 
