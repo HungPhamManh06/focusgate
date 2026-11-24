@@ -292,6 +292,13 @@ public sealed class AgentSkeletonTests : IDisposable
         Assert.Equal("en", defaultLang.Language);
     }
 
+    [Fact]
+    public void WindowsDesktopCulture_SupportsLcid1033ForWinFormsAndWebView2()
+    {
+        var culture = System.Globalization.CultureInfo.GetCultureInfo(1033);
+        Assert.Equal("en-US", culture.Name);
+    }
+
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, object body) =>
         new(status)
         {
