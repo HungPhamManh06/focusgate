@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -72,6 +73,7 @@ import com.focusgate.app.service.AppUsageMonitorService
 import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.FocusSoundscapePlayer
+import com.focusgate.app.util.SoundscapeMode
 import com.focusgate.app.util.PermissionChecks
 import com.focusgate.app.util.PlanSyncManager
 import com.focusgate.app.util.ProtectionWatchdog
@@ -1168,15 +1170,23 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             )
                         }
                         Spacer(Modifier.height(10.dp))
+                        var soundscapeMode by remember { mutableStateOf(FocusSoundscapePlayer.getMode()) }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(tr("Focus Soundscape (Brown Noise)", "Âm thanh tập trung (Brown Noise)"))
+                                Text(tr("Focus Soundscape", "Âm thanh tập trung"))
                                 Text(
-                                    if (soundscapePlaying) tr("Playing ambient focus audio", "Đang phát âm thanh nền") else tr("Off", "Tắt"),
+                                    if (soundscapePlaying) {
+                                        tr(
+                                            "Playing: ${soundscapeMode.labelEn}",
+                                            "Đang phát: ${soundscapeMode.labelVi}",
+                                        )
+                                    } else {
+                                        tr("Off", "Tắt")
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -1184,9 +1194,29 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             Switch(
                                 checked = soundscapePlaying,
                                 onCheckedChange = {
-                                    soundscapePlaying = FocusSoundscapePlayer.toggle()
+                                    soundscapePlaying = FocusSoundscapePlayer.toggle(soundscapeMode)
                                 },
                             )
+                        }
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(SoundscapeMode.entries) { mode ->
+                                FilterChip(
+                                    selected = soundscapeMode == mode,
+                                    onClick = {
+                                        soundscapeMode = mode
+                                        FocusSoundscapePlayer.setMode(mode)
+                                        if (!soundscapePlaying) {
+                                            soundscapePlaying = FocusSoundscapePlayer.toggle(mode)
+                                        }
+                                    },
+                                    label = { Text(if (isVi) mode.labelVi else mode.labelEn) },
+                                )
+                            }
                         }
                         if (signedInEmail != null) {
                             Spacer(Modifier.height(10.dp))

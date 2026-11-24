@@ -3,24 +3,103 @@
 import { Headphones, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "@/components/i18n/language-provider";
+import {
+  generatePinkSample,
+  SOUNDSCAPE_PRESETS,
+  type SoundPreset,
+} from "@/lib/domain/soundscapes";
 import { cn } from "@/lib/utils";
 
-type SoundPreset = "off" | "brown" | "rain" | "lofi";
+const VOLUME_STORAGE_KEY = "focusgate:soundscape-volume";
+const LAST_PRESET_STORAGE_KEY = "focusgate:soundscape-last-preset";
 
-const PRESETS: Array<{ id: SoundPreset; label: string; labelVi: string }> = [
-  { id: "off", label: "Off", labelVi: "Tắt" },
-  { id: "brown", label: "Brown Noise", labelVi: "Tiếng ồn nâu" },
-  { id: "rain", label: "Rain", labelVi: "Tiếng mưa" },
-  { id: "lofi", label: "Ambient Pad", labelVi: "Nhạc nền êm" },
-];
+function createPinkNoiseBuffer(ctx: AudioContext, seconds = 4): AudioBuffer {
+  const length = ctx.sampleRate * seconds;
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  const state = { b0: 0, b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, b6: 0 };
+  for (let i = 0; i < length; i += 1) {
+    data[i] = generatePinkSample(Math.random() * 2 - 1, state);
+  }
+  return buffer;
+}
+
+function createBrownNoiseBuffer(ctx: AudioContext, seconds = 4): AudioBuffer {
+  const length = ctx.sampleRate * seconds;
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let lastOut = 0;
+  for (let i = 0; i < length; i += 1) {
+    const white = Math.random() * 2 - 1;
+    lastOut = (lastOut + 0.02 * white) / 1.02;
+    data[i] = Math.max(-1, Math.min(1, lastOut * 3.1));
+  }
+  return buffer;
+}
+
+function createRainBuffer(ctx: AudioContext, seconds = 5): AudioBuffer {
+  const length = ctx.sampleRate * seconds;
+  const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch += 1) {
+    const data = buffer.getChannelData(ch);
+    const pink = { b0: 0, b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, b6: 0 };
+    let dropEnv = 0;
+    for (let i = 0; i < length; i += 1) {
+      const white = Math.random() * 2 - 1;
+      const bed = generatePinkSample(white, pink);
+      if (Math.random() < 0.0014) {
+        dropEnv = 0.25 + Math.random() * 0.3;
+      } else {
+        dropEnv *= 0.992;
+      }
+      data[i] = Math.max(-1, Math.min(1, bed * 0.85 + white * dropEnv));
+    }
+  }
+  return buffer;
+}
+
+function createCrackleBuffer(ctx: AudioContext, seconds = 6): AudioBuffer {
+  const length = ctx.sampleRate * seconds;
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let popDecay = 0;
+  let popSign = 1;
+  for (let i = 0; i < length; i += 1) {
+    if (Math.random() < 0.00055) {
+      popDecay = 0.45 + Math.random() * 0.55;
+      popSign = Math.random() < 0.5 ? 1 : -1;
+    } else {
+      popDecay *= 0.978;
+    }
+    const fineSnap = Math.random() < 0.0015 ? (Math.random() * 2 - 1) * 0.14 : 0;
+    data[i] = Math.max(-1, Math.min(1, popDecay * popSign * (Math.random() * 0.8 + 0.2) + fineSnap));
+  }
+  return buffer;
+}
 
 export function FocusSoundscape() {
   const isVi = useLocale() === "vi";
   const [preset, setPreset] = useState<SoundPreset>("off");
-  const [volume, setVolume] = useState(0.25);
+  const [lastPreset, setLastPreset] = useState<SoundPreset>("brown");
+  const [volume, setVolume] = useState(0.28);
   const ctxRef = useRef<AudioContext | null>(null);
   const gainRef = useRef<GainNode | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    try {
+      const savedVol = Number(window.localStorage.getItem(VOLUME_STORAGE_KEY));
+      if (Number.isFinite(savedVol) && savedVol >= 0.05 && savedVol <= 0.8) {
+        setVolume(savedVol);
+      }
+      const savedPreset = window.localStorage.getItem(LAST_PRESET_STORAGE_KEY) as SoundPreset | null;
+      if (savedPreset && savedPreset !== "off" && SOUNDSCAPE_PRESETS.some((p) => p.id === savedPreset)) {
+        setLastPreset(savedPreset);
+      }
+    } catch {
+      // Ignore storage errors in restricted environments.
+    }
+  }, []);
 
   const stopAllAudio = () => {
     cleanupRef.current?.();
@@ -50,14 +129,27 @@ export function FocusSoundscape() {
     if (gainRef.current) {
       gainRef.current.gain.value = volume;
     }
+    try {
+      window.localStorage.setItem(VOLUME_STORAGE_KEY, String(volume));
+    } catch {
+      // ignore
+    }
   }, [volume]);
 
   useEffect(() => {
     stopAllAudio();
-
     if (preset === "off") return;
 
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    try {
+      window.localStorage.setItem(LAST_PRESET_STORAGE_KEY, preset);
+      setLastPreset(preset);
+    } catch {
+      // ignore
+    }
+
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
 
     const ctx = new AudioCtx();
@@ -71,80 +163,361 @@ export function FocusSoundscape() {
     master.connect(ctx.destination);
     gainRef.current = master;
 
-    if (preset === "brown" || preset === "rain") {
-      const bufferSize = ctx.sampleRate * 2;
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      let lastOut = 0;
-      for (let i = 0; i < bufferSize; i += 1) {
-        const white = Math.random() * 2 - 1;
-        if (preset === "brown") {
-          lastOut = (lastOut + 0.02 * white) / 1.02;
-          data[i] = lastOut * 3.2;
-        } else {
-          lastOut = (lastOut + 0.08 * white) / 1.08;
-          data[i] = lastOut * 1.6 + white * 0.12;
+    const cleanups: Array<() => void> = [];
+    const trackNode = (node: AudioNode) => {
+      cleanups.push(() => {
+        try {
+          node.disconnect();
+        } catch {
+          // ignore
         }
-      }
+      });
+    };
+    const trackStoppable = (node: AudioScheduledSourceNode) => {
+      cleanups.push(() => {
+        try {
+          node.stop();
+        } catch {
+          // ignore
+        }
+        try {
+          node.disconnect();
+        } catch {
+          // ignore
+        }
+      });
+    };
 
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
+    if (preset === "brown" || preset === "pink") {
+      const src = ctx.createBufferSource();
+      src.buffer = preset === "brown" ? createBrownNoiseBuffer(ctx) : createPinkNoiseBuffer(ctx);
+      src.loop = true;
 
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
-      filter.frequency.value = preset === "brown" ? 380 : 1200;
+      filter.frequency.value = preset === "brown" ? 360 : 1850;
 
-      source.connect(filter);
+      src.connect(filter);
       filter.connect(master);
-      source.start();
+      src.start();
+      trackStoppable(src);
+      trackNode(filter);
+    } else if (preset === "rain") {
+      const rainSrc = ctx.createBufferSource();
+      rainSrc.buffer = createRainBuffer(ctx);
+      rainSrc.loop = true;
 
-      cleanupRef.current = () => {
-        try {
-          source.stop();
-          source.disconnect();
-          filter.disconnect();
-          master.disconnect();
-        } catch {
-          // ignore
-        }
-      };
+      const rainFilter = ctx.createBiquadFilter();
+      rainFilter.type = "lowpass";
+      rainFilter.frequency.value = 2100;
+
+      const rainGain = ctx.createGain();
+      rainGain.gain.value = 0.85;
+
+      const rumbleSrc = ctx.createBufferSource();
+      rumbleSrc.buffer = createBrownNoiseBuffer(ctx);
+      rumbleSrc.loop = true;
+
+      const rumbleFilter = ctx.createBiquadFilter();
+      rumbleFilter.type = "lowpass";
+      rumbleFilter.frequency.value = 210;
+
+      const rumbleGain = ctx.createGain();
+      rumbleGain.gain.value = 0.45;
+
+      rainSrc.connect(rainFilter);
+      rainFilter.connect(rainGain);
+      rainGain.connect(master);
+
+      rumbleSrc.connect(rumbleFilter);
+      rumbleFilter.connect(rumbleGain);
+      rumbleGain.connect(master);
+
+      rainSrc.start();
+      rumbleSrc.start();
+      trackStoppable(rainSrc);
+      trackStoppable(rumbleSrc);
+      trackNode(rainFilter);
+      trackNode(rainGain);
+      trackNode(rumbleFilter);
+      trackNode(rumbleGain);
+    } else if (preset === "ocean") {
+      const surfSrc = ctx.createBufferSource();
+      surfSrc.buffer = createPinkNoiseBuffer(ctx, 5);
+      surfSrc.loop = true;
+
+      const waveFilter = ctx.createBiquadFilter();
+      waveFilter.type = "lowpass";
+      waveFilter.frequency.value = 520;
+      waveFilter.Q.value = 0.7;
+
+      const waveGain = ctx.createGain();
+      waveGain.gain.value = 0.65;
+
+      const lfo = ctx.createOscillator();
+      lfo.type = "sine";
+      lfo.frequency.value = 0.11; // ~9-second wave cycle
+
+      const filterLfoGain = ctx.createGain();
+      filterLfoGain.gain.value = 380;
+
+      const ampLfoGain = ctx.createGain();
+      ampLfoGain.gain.value = 0.35;
+
+      lfo.connect(filterLfoGain);
+      filterLfoGain.connect(waveFilter.frequency);
+      lfo.connect(ampLfoGain);
+      ampLfoGain.connect(waveGain.gain);
+
+      surfSrc.connect(waveFilter);
+      waveFilter.connect(waveGain);
+      waveGain.connect(master);
+
+      surfSrc.start();
+      lfo.start();
+      trackStoppable(surfSrc);
+      trackStoppable(lfo);
+      trackNode(waveFilter);
+      trackNode(waveGain);
+      trackNode(filterLfoGain);
+      trackNode(ampLfoGain);
+    } else if (preset === "forest") {
+      const breezeSrc = ctx.createBufferSource();
+      breezeSrc.buffer = createPinkNoiseBuffer(ctx, 5);
+      breezeSrc.loop = true;
+
+      const breezeFilter = ctx.createBiquadFilter();
+      breezeFilter.type = "bandpass";
+      breezeFilter.frequency.value = 540;
+      breezeFilter.Q.value = 0.9;
+
+      const breezeLfo = ctx.createOscillator();
+      breezeLfo.type = "sine";
+      breezeLfo.frequency.value = 0.17;
+      const breezeMod = ctx.createGain();
+      breezeMod.gain.value = 220;
+      breezeLfo.connect(breezeMod);
+      breezeMod.connect(breezeFilter.frequency);
+
+      const streamSrc = ctx.createBufferSource();
+      streamSrc.buffer = createRainBuffer(ctx, 5);
+      streamSrc.loop = true;
+
+      const streamFilter = ctx.createBiquadFilter();
+      streamFilter.type = "bandpass";
+      streamFilter.frequency.value = 1450;
+      streamFilter.Q.value = 1.1;
+
+      const streamGain = ctx.createGain();
+      streamGain.gain.value = 0.42;
+
+      breezeSrc.connect(breezeFilter);
+      breezeFilter.connect(master);
+      streamSrc.connect(streamFilter);
+      streamFilter.connect(streamGain);
+      streamGain.connect(master);
+
+      breezeSrc.start();
+      breezeLfo.start();
+      streamSrc.start();
+      trackStoppable(breezeSrc);
+      trackStoppable(breezeLfo);
+      trackStoppable(streamSrc);
+      trackNode(breezeFilter);
+      trackNode(breezeMod);
+      trackNode(streamFilter);
+      trackNode(streamGain);
+    } else if (preset === "fireplace") {
+      const hearthSrc = ctx.createBufferSource();
+      hearthSrc.buffer = createBrownNoiseBuffer(ctx, 4);
+      hearthSrc.loop = true;
+
+      const hearthFilter = ctx.createBiquadFilter();
+      hearthFilter.type = "lowpass";
+      hearthFilter.frequency.value = 240;
+
+      const hearthGain = ctx.createGain();
+      hearthGain.gain.value = 0.9;
+
+      const crackleSrc = ctx.createBufferSource();
+      crackleSrc.buffer = createCrackleBuffer(ctx, 6);
+      crackleSrc.loop = true;
+
+      const crackleFilter = ctx.createBiquadFilter();
+      crackleFilter.type = "bandpass";
+      crackleFilter.frequency.value = 2600;
+      crackleFilter.Q.value = 0.9;
+
+      const crackleGain = ctx.createGain();
+      crackleGain.gain.value = 0.7;
+
+      hearthSrc.connect(hearthFilter);
+      hearthFilter.connect(hearthGain);
+      hearthGain.connect(master);
+
+      crackleSrc.connect(crackleFilter);
+      crackleFilter.connect(crackleGain);
+      crackleGain.connect(master);
+
+      hearthSrc.start();
+      crackleSrc.start();
+      trackStoppable(hearthSrc);
+      trackStoppable(crackleSrc);
+      trackNode(hearthFilter);
+      trackNode(hearthGain);
+      trackNode(crackleFilter);
+      trackNode(crackleGain);
+    } else if (preset === "cafe") {
+      const roomSrc = ctx.createBufferSource();
+      roomSrc.buffer = createBrownNoiseBuffer(ctx, 5);
+      roomSrc.loop = true;
+
+      const lowBand = ctx.createBiquadFilter();
+      lowBand.type = "bandpass";
+      lowBand.frequency.value = 320;
+      lowBand.Q.value = 0.7;
+
+      const murmurSrc = ctx.createBufferSource();
+      murmurSrc.buffer = createPinkNoiseBuffer(ctx, 5);
+      murmurSrc.loop = true;
+
+      const midBand = ctx.createBiquadFilter();
+      midBand.type = "bandpass";
+      midBand.frequency.value = 760;
+      midBand.Q.value = 1.2;
+
+      const midGain = ctx.createGain();
+      midGain.gain.value = 0.45;
+
+      const lfo = ctx.createOscillator();
+      lfo.type = "sine";
+      lfo.frequency.value = 0.25;
+      const lfoDepth = ctx.createGain();
+      lfoDepth.gain.value = 0.14;
+      lfo.connect(lfoDepth);
+      lfoDepth.connect(midGain.gain);
+
+      roomSrc.connect(lowBand);
+      lowBand.connect(master);
+      murmurSrc.connect(midBand);
+      midBand.connect(midGain);
+      midGain.connect(master);
+
+      roomSrc.start();
+      murmurSrc.start();
+      lfo.start();
+      trackStoppable(roomSrc);
+      trackStoppable(murmurSrc);
+      trackStoppable(lfo);
+      trackNode(lowBand);
+      trackNode(midBand);
+      trackNode(midGain);
+      trackNode(lfoDepth);
+    } else if (preset === "binaural") {
+      const leftOsc = ctx.createOscillator();
+      leftOsc.type = "sine";
+      leftOsc.frequency.value = 200;
+
+      const rightOsc = ctx.createOscillator();
+      rightOsc.type = "sine";
+      rightOsc.frequency.value = 210; // 10 Hz Alpha focus beat
+
+      const leftPan = ctx.createStereoPanner();
+      leftPan.pan.value = -0.85;
+      const rightPan = ctx.createStereoPanner();
+      rightPan.pan.value = 0.85;
+
+      const toneGain = ctx.createGain();
+      toneGain.gain.value = 0.18;
+
+      const cushionSrc = ctx.createBufferSource();
+      cushionSrc.buffer = createPinkNoiseBuffer(ctx, 4);
+      cushionSrc.loop = true;
+      const cushionFilter = ctx.createBiquadFilter();
+      cushionFilter.type = "lowpass";
+      cushionFilter.frequency.value = 650;
+      const cushionGain = ctx.createGain();
+      cushionGain.gain.value = 0.35;
+
+      leftOsc.connect(leftPan);
+      rightOsc.connect(rightPan);
+      leftPan.connect(toneGain);
+      rightPan.connect(toneGain);
+      toneGain.connect(master);
+
+      cushionSrc.connect(cushionFilter);
+      cushionFilter.connect(cushionGain);
+      cushionGain.connect(master);
+
+      leftOsc.start();
+      rightOsc.start();
+      cushionSrc.start();
+      trackStoppable(leftOsc);
+      trackStoppable(rightOsc);
+      trackStoppable(cushionSrc);
+      trackNode(leftPan);
+      trackNode(rightPan);
+      trackNode(toneGain);
+      trackNode(cushionFilter);
+      trackNode(cushionGain);
     } else {
-      const freqs = [174.61, 220.0, 261.63, 329.63];
-      const oscs = freqs.map((f) => {
+      // Warm breathing chord progression (Fmaj7 -> Am7 -> Dm9 -> Cmaj7)
+      const firstChord: [number, number, number, number] = [174.61, 220.0, 261.63, 329.63];
+      const chords: Array<[number, number, number, number]> = [
+        firstChord, // Fmaj7
+        [220.0, 261.63, 329.63, 392.0], // Am7
+        [146.83, 220.0, 261.63, 329.63], // Dm9(no3)
+        [130.81, 196.0, 246.94, 329.63], // Cmaj7
+      ];
+      const padFilter = ctx.createBiquadFilter();
+      padFilter.type = "lowpass";
+      padFilter.frequency.value = 780;
+      padFilter.connect(master);
+      trackNode(padFilter);
+
+      let step = 0;
+      const voices = firstChord.map((freq, idx) => {
         const osc = ctx.createOscillator();
-        const subGain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = f;
-        subGain.gain.value = 0.08;
-        osc.connect(subGain);
-        subGain.connect(master);
+        osc.type = idx === 0 ? "triangle" : "sine";
+        osc.frequency.value = freq;
+        const g = ctx.createGain();
+        g.gain.value = idx === 0 ? 0.08 : 0.065;
+        osc.connect(g);
+        g.connect(padFilter);
         osc.start();
-        return { osc, subGain };
+        trackStoppable(osc);
+        trackNode(g);
+        return osc;
       });
 
-      cleanupRef.current = () => {
-        for (const { osc, subGain } of oscs) {
-          try {
-            osc.stop();
-            osc.disconnect();
-            subGain.disconnect();
-          } catch {
-            // ignore
-          }
-        }
-        try {
-          master.disconnect();
-        } catch {
-          // ignore
-        }
-      };
+      const interval = window.setInterval(() => {
+        step = (step + 1) % chords.length;
+        const targetChord = chords[step] ?? firstChord;
+        const now = ctx.currentTime;
+        voices.forEach((osc, idx) => {
+          const nextFreq = targetChord[idx] ?? targetChord[0];
+          osc.frequency.setTargetAtTime(nextFreq, now, 1.2);
+        });
+      }, 6500);
+
+      cleanups.push(() => window.clearInterval(interval));
     }
+
+    cleanupRef.current = () => {
+      for (const fn of cleanups) fn();
+      try {
+        master.disconnect();
+      } catch {
+        // ignore
+      }
+    };
 
     return () => {
       stopAllAudio();
     };
   }, [preset]);
+
+  const activeDef = SOUNDSCAPE_PRESETS.find((item) => item.id === preset);
 
   return (
     <div className="mt-4 rounded-xl border border-line bg-surface-2/60 px-4 py-3">
@@ -152,6 +525,17 @@ export function FocusSoundscape() {
         <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
           <Headphones className="size-3.5 text-accent" />
           <span>{isVi ? "Âm thanh tập trung" : "Focus Soundscape"}</span>
+          {preset === "off" && lastPreset !== "off" && (
+            <button
+              type="button"
+              onClick={() => setPreset(lastPreset)}
+              className="rounded-md border border-line bg-surface px-2 py-0.5 text-[11px] font-medium text-accent transition-colors hover:bg-surface-2"
+            >
+              {isVi
+                ? `Phát lại: ${SOUNDSCAPE_PRESETS.find((p) => p.id === lastPreset)?.labelVi ?? ""}`
+                : `Resume: ${SOUNDSCAPE_PRESETS.find((p) => p.id === lastPreset)?.label ?? ""}`}
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {preset === "off" ? (
@@ -162,17 +546,21 @@ export function FocusSoundscape() {
           <input
             type="range"
             min={0.05}
-            max={0.6}
+            max={0.8}
             step={0.05}
             value={volume}
             onChange={(e) => setVolume(Number(e.target.value))}
-            aria-label="Soundscape volume"
-            className="h-1.5 w-20 accent-[var(--accent)]"
+            aria-label={isVi ? "Âm lượng âm thanh tập trung" : "Soundscape volume"}
+            className="h-1.5 w-24 accent-[var(--accent)]"
           />
+          <span className="w-8 text-right text-[11px] tabular-nums text-muted">
+            {Math.round(volume * 100)}%
+          </span>
         </div>
       </div>
+
       <div className="mt-2.5 flex flex-wrap gap-1.5">
-        {PRESETS.map((item) => (
+        {SOUNDSCAPE_PRESETS.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -191,6 +579,10 @@ export function FocusSoundscape() {
           </button>
         ))}
       </div>
+
+      <p className="mt-2 text-[11px] text-muted">
+        {activeDef ? (isVi ? activeDef.descriptionVi : activeDef.description) : ""}
+      </p>
     </div>
   );
 }
