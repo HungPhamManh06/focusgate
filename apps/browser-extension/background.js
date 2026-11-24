@@ -85,10 +85,11 @@ async function registerWebDevice(apiBaseUrl, accessToken) {
     throw new Error(`Device register failed (${res.status}): ${text}`);
   }
   const data = await res.json();
-  if (!data.id) {
-    throw new Error("Device register response missing id");
+  const deviceId = data.deviceId || data.id;
+  if (!deviceId) {
+    throw new Error("Device register response missing deviceId");
   }
-  return data.id;
+  return deviceId;
 }
 
 async function refreshSupabaseToken(refreshToken) {
