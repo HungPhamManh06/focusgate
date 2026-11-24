@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/ui/stat-card";
+import { getCategoryLabel } from "@/components/domain/labels";
 import { BarChart } from "@/components/charts/bar-chart";
 import { formatDate, formatMinutes, todayIso } from "@/lib/data/format";
 import { getHealthSummary } from "@/lib/data/health";
@@ -41,13 +42,13 @@ export default async function StatisticsPage({
   const requested = Number(params.period);
   const period = periods.some((option) => option.value === requested) ? requested : 7;
 
-  const [workspace, stats, v2Settings] = await Promise.all([
+  const [workspace, v2Settings] = await Promise.all([
     getWorkspace(),
-    getStatistics(period),
     getV2Settings().catch(() => null),
   ]);
   const locale = v2Settings?.language ?? "en";
   const isVi = locale === "vi";
+  const stats = await getStatistics(period, locale);
   const { timezone } = workspace.profile;
   const health = await getHealthSummary(period, timezone);
 
@@ -421,8 +422,10 @@ export default async function StatisticsPage({
                       return (
                         <div key={item.category}>
                           <div className="flex items-center justify-between text-[12px]">
-                            <span className="capitalize font-medium text-ink">
-                              {item.category.replace("_", " ")}
+                            <span className="font-medium text-ink">
+                              {item.category === "free_focus"
+                                ? isVi ? "Tập trung tự do" : "Free focus"
+                                : getCategoryLabel(item.category, locale)}
                             </span>
                             <span className="tabular-nums text-muted">
                               {formatMinutes(item.minutes)} ({pct}%)

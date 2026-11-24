@@ -53,7 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:border focus:border-accent focus:bg-surface focus:px-4 focus:py-2 focus:text-[12.5px] focus:font-medium focus:text-ink focus:shadow-lift"
       >
-        Skip to main content
+        {isVi ? "Chuyển tới nội dung chính" : "Skip to main content"}
       </a>
 
       <div className="min-h-screen lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
@@ -86,8 +86,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   : isVi ? "Ví thưởng" : "Wallet"}
               </Link>
               <span
-                title={`${workspace.profile.displayName} · Local workspace`}
-                aria-label={`Workspace user: ${workspace.profile.displayName}`}
+                title={`${workspace.profile.displayName} · ${isVi ? "Không gian làm việc" : "Local workspace"}`}
+                aria-label={`${isVi ? "Người dùng:" : "Workspace user:"} ${workspace.profile.displayName}`}
                 className="flex size-8 items-center justify-center rounded-full bg-ink text-[10.5px] font-semibold text-canvas"
               >
                 {initials(workspace.profile.displayName)}

@@ -124,6 +124,7 @@ export async function updateV2SettingsAction(input: {
   weekendRelaxedMode?: boolean;
   lastDailyReviewDate?: string | null;
   language?: "en" | "vi";
+  timezone?: string;
   dailyFocusGoalMinutes?: number;
   dailyStepsGoal?: number;
   dailySleepGoalHours?: number;

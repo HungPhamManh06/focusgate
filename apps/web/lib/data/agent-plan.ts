@@ -15,6 +15,14 @@ export interface AgentPlanTaskItem {
   focusDone: number;
 }
 
+export interface AgentOpenTaskItem {
+  taskId: string;
+  title: string;
+  kind: TaskKind;
+  status: TaskStatus;
+  requiredFocusMinutes: number;
+}
+
 export interface AgentPlanSnapshot {
   plan: {
     id: string;
@@ -25,6 +33,7 @@ export interface AgentPlanSnapshot {
     allCompleted: boolean;
     tasks: AgentPlanTaskItem[];
   } | null;
+  openTasks: AgentOpenTaskItem[];
   activeGrantMinutes: number;
   unlocked: boolean;
 }
@@ -36,7 +45,7 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
   if (!ctx) {
     const [plan, activeGrantMinutes] = await Promise.all([getTodayPlan(), getWalletSummary()]);
     if (!plan) {
-      return { plan: null, activeGrantMinutes, unlocked: activeGrantMinutes > 0 };
+      return { plan: null, openTasks: [], activeGrantMinutes, unlocked: activeGrantMinutes > 0 };
     }
     const tasks: AgentPlanTaskItem[] = plan.tasks.map((task) => ({
       planTaskId: task.id,
@@ -61,6 +70,7 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
         allCompleted,
         tasks,
       },
+      openTasks: [],
       activeGrantMinutes,
       unlocked,
     };
@@ -69,7 +79,7 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
   const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
   const today = localDateInTimezone(timezone);
 
-  const [planRes, grantsRes] = await Promise.all([
+  const [planRes, grantsRes, openTasksRes] = await Promise.all([
     ctx.supabase
       .from("daily_plans")
       .select("id, plan_date, status")
@@ -83,15 +93,40 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString())
       .gt("remaining_minutes", 0),
+    ctx.supabase
+      .from("tasks")
+      .select("id, title, kind, status, required_focus_minutes")
+      .eq("user_id", ctx.userId)
+      .in("status", ["todo", "in_progress"])
+      .order("created_at", { ascending: false })
+      .limit(30),
   ]);
 
   if (planRes.error) throw new Error(planRes.error.message);
   const grantRows = unwrapSupabase(grantsRes) as Array<{ remaining_minutes: number }>;
   const activeGrantMinutes = grantRows.reduce((sum, row) => sum + row.remaining_minutes, 0);
+  const rawOpenTasks = (openTasksRes.data ?? []) as Array<{
+    id: string;
+    title: string;
+    kind: TaskKind;
+    status: TaskStatus;
+    required_focus_minutes: number;
+  }>;
+  const sortOpenTasks = (items: AgentOpenTaskItem[]) =>
+    items.sort((a, b) => (KIND_ORDER[a.kind] ?? 2) - (KIND_ORDER[b.kind] ?? 2));
 
   const planRow = planRes.data as { id: string; plan_date: string; status: PlanStatus } | null;
   if (!planRow) {
-    return { plan: null, activeGrantMinutes, unlocked: activeGrantMinutes > 0 };
+    const openTasks = sortOpenTasks(
+      rawOpenTasks.map((t) => ({
+        taskId: t.id,
+        title: t.title,
+        kind: t.kind,
+        status: t.status,
+        requiredFocusMinutes: t.required_focus_minutes,
+      })),
+    );
+    return { plan: null, openTasks, activeGrantMinutes, unlocked: activeGrantMinutes > 0 };
   }
 
   const [tasksRes, focusRes] = await Promise.all([
@@ -152,6 +187,18 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
   const allTasksCompleted = tasks.filter((task) => task.status === "completed").length;
   const allCompleted = allTasksTotal > 0 && allTasksCompleted === allTasksTotal;
   const unlocked = allTasksTotal > 0 ? allCompleted : activeGrantMinutes > 0;
+  const plannedIds = new Set(tasks.map((t) => t.taskId));
+  const openTasks = sortOpenTasks(
+    rawOpenTasks
+      .filter((t) => !plannedIds.has(t.id))
+      .map((t) => ({
+        taskId: t.id,
+        title: t.title,
+        kind: t.kind,
+        status: t.status,
+        requiredFocusMinutes: t.required_focus_minutes,
+      })),
+  );
 
   return {
     plan: {
@@ -163,6 +210,7 @@ export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSna
       allCompleted,
       tasks,
     },
+    openTasks,
     activeGrantMinutes,
     unlocked,
   };

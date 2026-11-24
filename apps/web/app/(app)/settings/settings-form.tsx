@@ -6,8 +6,19 @@ import { updateV2SettingsAction } from "@/lib/actions/v2";
 import type { V2Settings } from "@/lib/data/v2-settings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+
+const TIMEZONE_OPTIONS = [
+  "Asia/Ho_Chi_Minh",
+  "Asia/Bangkok",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "UTC",
+  "Europe/London",
+  "America/New_York",
+  "America/Los_Angeles",
+];
 
 export function SettingsForm({
   settings,
@@ -22,6 +33,7 @@ export function SettingsForm({
   const toast = useToast();
 
   const [language, setLanguage] = useState<"en" | "vi">(settings.language);
+  const [selectedTimezone, setSelectedTimezone] = useState(timezone);
   const [dailyFocusGoalMinutes, setDailyFocusGoalMinutes] = useState(
     String(settings.dailyFocusGoalMinutes),
   );
@@ -40,6 +52,7 @@ export function SettingsForm({
     startTransition(async () => {
       const res = await updateV2SettingsAction({
         language,
+        timezone: selectedTimezone,
         dailyFocusGoalMinutes: Number(dailyFocusGoalMinutes) || 120,
         dailyStepsGoal: Number(dailyStepsGoal) || 8000,
         dailySleepGoalHours: Number(dailySleepGoalHours) || 7.5,
@@ -89,9 +102,25 @@ export function SettingsForm({
               <dt className="text-muted">{isVi ? "Tên hiển thị" : "Display name"}</dt>
               <dd className="font-medium text-ink">{displayName}</dd>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">{isVi ? "Múi giờ" : "Timezone"}</dt>
-              <dd className="font-medium text-ink">{timezone}</dd>
+              <dd className="w-[210px]">
+                <Select
+                  aria-label={isVi ? "Múi giờ" : "Timezone"}
+                  value={selectedTimezone}
+                  onChange={(e) => setSelectedTimezone(e.target.value)}
+                  className="h-8 text-[12px]"
+                >
+                  {(!TIMEZONE_OPTIONS.includes(selectedTimezone)
+                    ? [selectedTimezone, ...TIMEZONE_OPTIONS]
+                    : TIMEZONE_OPTIONS
+                  ).map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz === "Asia/Ho_Chi_Minh" ? "Asia/Ho_Chi_Minh (GMT+7)" : tz}
+                    </option>
+                  ))}
+                </Select>
+              </dd>
             </div>
           </dl>
         </CardContent>

@@ -68,8 +68,12 @@ function buildDayKeys(timezone: string, period: number): string[] {
   return keys;
 }
 
-export async function getStatistics(periodDays: number): Promise<Statistics> {
+export async function getStatistics(
+  periodDays: number,
+  locale: "en" | "vi" = "en",
+): Promise<Statistics> {
   const period = [7, 30, 90].includes(periodDays) ? periodDays : 7;
+  const dateLocale = locale === "vi" ? "vi-VN" : "en-GB";
 
   const ctx = await getSupabaseContext();
   if (ctx) {
@@ -214,7 +218,7 @@ export async function getStatistics(periodDays: number): Promise<Statistics> {
       const bucket = dayMap.get(key) ?? { focus: 0, tasks: 0, usageSeconds: 0 };
       return {
         date: key,
-        label: new Intl.DateTimeFormat("en-GB", {
+        label: new Intl.DateTimeFormat(dateLocale, {
           day: "numeric",
           month: "short",
           timeZone: "UTC",

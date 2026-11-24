@@ -119,6 +119,7 @@ export async function updateV2Settings(
     weekendRelaxedMode: boolean;
     lastDailyReviewDate: string | null;
     language: "en" | "vi";
+    timezone: string;
     dailyFocusGoalMinutes: number;
     dailyStepsGoal: number;
     dailySleepGoalHours: number;
@@ -155,6 +156,14 @@ export async function updateV2Settings(
 
   const ctx = await getSupabaseContext();
   if (ctx) {
+    if (input.timezone && input.timezone.trim()) {
+      assertSupabaseOk(
+        await ctx.supabase
+          .from("profiles")
+          .update({ timezone: input.timezone.trim() })
+          .eq("id", ctx.userId),
+      );
+    }
     assertSupabaseOk(
       await ctx.supabase.rpc("rpc_update_user_preferences", {
         p_language: input.language ?? null,
@@ -195,6 +204,12 @@ export async function updateV2Settings(
   }
 
   await withUser(async (db) => {
+    if (input.timezone && input.timezone.trim()) {
+      await db.query(
+        `update public.profiles set timezone = $1, updated_at = now() where id = $2`,
+        [input.timezone.trim(), LOCAL_USER_ID],
+      );
+    }
     await db.query(
       `insert into public.user_settings (user_id) values ($1) on conflict (user_id) do nothing`,
       [LOCAL_USER_ID],

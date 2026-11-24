@@ -54,8 +54,17 @@ data class RemoteDailyPlan(
     val tasks: List<RemotePlanTask>,
 )
 
+data class RemoteOpenTask(
+    val taskId: String,
+    val title: String,
+    val kind: String,
+    val status: String,
+    val requiredFocusMinutes: Int,
+)
+
 data class RemotePlanSnapshot(
     val plan: RemoteDailyPlan?,
+    val openTasks: List<RemoteOpenTask> = emptyList(),
     val activeGrantMinutes: Int,
     val unlocked: Boolean,
 )
@@ -301,9 +310,11 @@ class RemoteAgentSyncClient(
         val base = apiBaseUrl.trimEnd('/')
         val conn = (URL("$base/api/agent/policy?deviceId=$deviceId").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
+            useCaches = false
             connectTimeout = connectTimeoutMs
             readTimeout = readTimeoutMs
             setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Cache-Control", "no-cache")
         }
 
         val code = conn.responseCode
@@ -371,9 +382,11 @@ class RemoteAgentSyncClient(
         val base = apiBaseUrl.trimEnd('/')
         val conn = (URL("$base/api/agent/plan").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
+            useCaches = false
             connectTimeout = connectTimeoutMs
             readTimeout = readTimeoutMs
             setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Cache-Control", "no-cache")
         }
         val code = conn.responseCode
         val body = readResponseBody(conn, code)
@@ -530,10 +543,21 @@ class RemoteAgentSyncClient(
         val obj = RemotePolicySync.parseJsonObject(body)
         val activeGrantMinutes = (obj["activeGrantMinutes"] as? Number)?.toInt() ?: 0
         val unlocked = obj["unlocked"] as? Boolean ?: false
+        val openTasks = (obj["openTasks"] as? List<*>)?.mapNotNull { entry ->
+            val t = entry as? Map<*, *> ?: return@mapNotNull null
+            RemoteOpenTask(
+                taskId = t["taskId"] as? String ?: return@mapNotNull null,
+                title = t["title"] as? String ?: "Untitled task",
+                kind = t["kind"] as? String ?: "must_do",
+                status = t["status"] as? String ?: "todo",
+                requiredFocusMinutes = (t["requiredFocusMinutes"] as? Number)?.toInt() ?: 0,
+            )
+        }.orEmpty()
         val planObj = obj["plan"] as? Map<*, *>
         if (planObj == null) {
             return RemotePlanSnapshot(
                 plan = null,
+                openTasks = openTasks,
                 activeGrantMinutes = activeGrantMinutes,
                 unlocked = unlocked,
             )
@@ -563,6 +587,7 @@ class RemoteAgentSyncClient(
                 allCompleted = planObj["allCompleted"] as? Boolean ?: false,
                 tasks = rawTasks,
             ),
+            openTasks = openTasks,
             activeGrantMinutes = activeGrantMinutes,
             unlocked = unlocked,
         )

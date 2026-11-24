@@ -560,12 +560,19 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium,
                                     )
-                                    Text(
-                                        if (planUnlocked) {
+                                    val currentPlan = planSnapshot?.plan
+                                    val statusText = when {
+                                        currentPlan != null && currentPlan.allTasksTotal > 0 && currentPlan.allCompleted ->
                                             "Unlocked: all planned tasks completed"
-                                        } else {
+                                        planUnlocked && (currentPlan == null || currentPlan.allTasksTotal == 0) ->
+                                            "Unlocked: no active plan lock (or reward grant active)"
+                                        planUnlocked ->
+                                            "Unlocked: reward grant / pass active"
+                                        else ->
                                             "Locked until all planned tasks are completed"
-                                        },
+                                    }
+                                    Text(
+                                        statusText,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (planUnlocked) {
                                             MaterialTheme.colorScheme.primary
@@ -606,12 +613,19 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             val currentPlan = planSnapshot?.plan
+                            val openWebTasks = planSnapshot?.openTasks.orEmpty()
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    "Today's Planned Tasks",
+                                    if (currentPlan != null && currentPlan.tasks.isNotEmpty()) {
+                                        "Today's Planned Tasks"
+                                    } else if (openWebTasks.isNotEmpty()) {
+                                        "Open Web Tasks (${openWebTasks.size})"
+                                    } else {
+                                        "Today's Planned Tasks"
+                                    },
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -629,12 +643,55 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             }
                             Spacer(Modifier.height(6.dp))
                             when {
-                                currentPlan == null || currentPlan.tasks.isEmpty() -> {
+                                (currentPlan == null || currentPlan.tasks.isEmpty()) && openWebTasks.isEmpty() -> {
                                     Text(
                                         "No tasks in today's plan yet. Add tasks on FocusGate Web (Planner) and tap Sync.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
+                                }
+                                (currentPlan == null || currentPlan.tasks.isEmpty()) && openWebTasks.isNotEmpty() -> {
+                                    Text(
+                                        "Not added to Today's Plan yet — go to Planner on Web to lock them in today's gate:",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(bottom = 6.dp),
+                                    )
+                                    openWebTasks.take(10).forEach { task ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    task.title,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                val meta = buildString {
+                                                    append(
+                                                        when (task.kind) {
+                                                            "must_do" -> "Must do"
+                                                            "should_do" -> "Should do"
+                                                            else -> "Bonus"
+                                                        },
+                                                    )
+                                                    if (task.requiredFocusMinutes > 0) {
+                                                        append(" • Focus ${task.requiredFocusMinutes}m")
+                                                    }
+                                                }
+                                                Text(
+                                                    meta,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                                 else -> {
                                     currentPlan.tasks.forEach { task ->
