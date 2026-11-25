@@ -11,12 +11,35 @@ android {
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
+        val ciRunNumber = (System.getenv("ANDROID_VERSION_CODE") ?: System.getenv("GITHUB_RUN_NUMBER"))
+            ?.toIntOrNull()
+            ?.coerceAtLeast(1)
         applicationId = "com.focusgate.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-poc"
+        versionCode = ciRunNumber ?: 1
+        versionName = if (ciRunNumber != null) "0.1.$ciRunNumber" else "0.1.0-poc"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            val ksPath = System.getenv("ANDROID_KEYSTORE_PATH")
+            val ksPass = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            val kAlias = System.getenv("ANDROID_KEY_ALIAS")
+            val kPass = System.getenv("ANDROID_KEY_PASSWORD")
+            if (!ksPath.isNullOrBlank() &&
+                file(ksPath).exists() &&
+                !ksPass.isNullOrBlank() &&
+                !kAlias.isNullOrBlank() &&
+                !kPass.isNullOrBlank()
+            ) {
+                storeFile = file(ksPath)
+                storePassword = ksPass
+                keyAlias = kAlias
+                keyPassword = kPass
+            }
+        }
     }
 
     flavorDimensions += "deployment"
