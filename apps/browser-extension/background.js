@@ -22,7 +22,7 @@ function matchesDomain(host, pattern) {
   return host === normalized || host.endsWith(`.${normalized}`);
 }
 
-function shouldBlockUrl(rawUrl, policy, apiBaseUrl) {
+function shouldBlockUrl(rawUrl, policy, apiBaseUrl, youtubeStudyMode = false) {
   if (!policy || !policy.lockActive) {
     return { blocked: false };
   }
@@ -37,6 +37,20 @@ function shouldBlockUrl(rawUrl, policy, apiBaseUrl) {
     return { blocked: false };
   }
   if (host === "localhost" || host === "127.0.0.1") {
+    return { blocked: false };
+  }
+
+  // YouTube Study Mode: allow YouTube (feeds/Shorts/recommendations are stripped by youtube-study.css),
+  // but still hard-block /shorts URLs.
+  if (youtubeStudyMode && matchesDomain(host, "youtube.com")) {
+    try {
+      const pathname = new URL(rawUrl).pathname.toLowerCase();
+      if (pathname === "/shorts" || pathname.startsWith("/shorts/")) {
+        return { blocked: true, host: "youtube.com/shorts", reason: "blocklist" };
+      }
+    } catch {
+      // ignore URL parse error
+    }
     return { blocked: false };
   }
 
@@ -61,6 +75,7 @@ async function getState() {
     "policy",
     "lastSyncAt",
     "syncError",
+    "youtubeStudyMode",
   ]);
 }
 
@@ -209,10 +224,10 @@ async function enforceTab(tabId, rawUrl, policyOverride, apiBaseOverride) {
   const blockedPagePrefix = chrome.runtime.getURL("blocked.html");
   if (rawUrl.startsWith(blockedPagePrefix)) return;
 
-  const state = policyOverride
-    ? { policy: policyOverride, apiBaseUrl: apiBaseOverride }
-    : await getState();
-  const check = shouldBlockUrl(rawUrl, state.policy, state.apiBaseUrl);
+  const fullState = await getState();
+  const policy = policyOverride || fullState.policy;
+  const apiBaseUrl = apiBaseOverride || fullState.apiBaseUrl;
+  const check = shouldBlockUrl(rawUrl, policy, apiBaseUrl, Boolean(fullState.youtubeStudyMode));
   if (!check.blocked) return;
 
   const target = `${blockedPagePrefix}?site=${encodeURIComponent(check.host)}&reason=${encodeURIComponent(check.reason)}`;

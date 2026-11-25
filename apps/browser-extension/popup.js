@@ -107,8 +107,15 @@ async function render() {
 
 document.getElementById("ytStudyBtn")?.addEventListener("click", async () => {
   const { youtubeStudyMode } = await chrome.storage.local.get(["youtubeStudyMode"]);
-  await chrome.storage.local.set({ youtubeStudyMode: !youtubeStudyMode });
+  const next = !youtubeStudyMode;
+  await chrome.storage.local.set({ youtubeStudyMode: next });
   await render();
+  if (next) {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id && tab.url && tab.url.includes("blocked.html") && tab.url.includes("youtube.com")) {
+      await chrome.tabs.update(tab.id, { url: "https://www.youtube.com" });
+    }
+  }
 });
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
