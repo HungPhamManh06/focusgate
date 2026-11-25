@@ -11,6 +11,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { LanguageProvider } from "@/components/i18n/language-provider";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { Sidebar } from "@/components/shell/sidebar";
+import { CommandPalette } from "@/components/shell/command-palette";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <main id="main-content" tabIndex={-1} className="flex-1 pb-24 focus:outline-none lg:pb-0">
             {children}
           </main>
+          <CommandPalette />
 
           <MobileNav language={language} />
         </div>

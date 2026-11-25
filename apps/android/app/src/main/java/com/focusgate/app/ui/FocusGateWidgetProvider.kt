@@ -39,8 +39,10 @@ class FocusGateWidgetProvider : AppWidgetProvider() {
             appWidgetId: Int,
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_focusgate)
+            val isVi = AgentPreferences.getLanguage(context) == "vi"
             val summary = AgentPreferences.getPlanSummaryText(context)
             views.setTextViewText(R.id.widget_status, summary)
+            views.setTextViewText(R.id.widget_add_btn, if (isVi) "+ Thêm" else "+ Add")
 
             val launchIntent = Intent(context, MainActivity::class.java)
             val pendingIntent = PendingIntent.getActivity(
@@ -50,6 +52,19 @@ class FocusGateWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
+
+            val addTaskIntent = Intent(context, MainActivity::class.java).apply {
+                putExtra(MainActivity.EXTRA_OPEN_ADD_TASK, true)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val addTaskPendingIntent = PendingIntent.getActivity(
+                context,
+                1,
+                addTaskIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            views.setOnClickPendingIntent(R.id.widget_add_btn, addTaskPendingIntent)
+
             manager.updateAppWidget(appWidgetId, views)
         }
     }

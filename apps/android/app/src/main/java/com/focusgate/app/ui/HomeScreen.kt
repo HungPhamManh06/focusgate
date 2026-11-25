@@ -88,11 +88,14 @@ import kotlinx.coroutines.withContext
 import kotlin.math.ceil
 
 private enum class AppTab { RESTRICT, EXEMPT }
-private enum class HomeBottomTab { GUARD, WEB }
+private enum class HomeBottomTab { TODAY, WEB, GUARD }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onOpenSetup: () -> Unit) {
+fun HomeScreen(
+    onOpenSetup: () -> Unit,
+    openAddTaskOnLaunch: Boolean = false,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -151,8 +154,8 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var healthWeightInput by remember { mutableStateOf("") }
     var healthSyncBusy by remember { mutableStateOf(false) }
     var healthSyncMessage by remember { mutableStateOf<String?>(null) }
-    var bottomTab by remember { mutableStateOf(HomeBottomTab.GUARD) }
-    var showAddTaskDialog by remember { mutableStateOf(false) }
+    var bottomTab by remember { mutableStateOf(HomeBottomTab.TODAY) }
+    var showAddTaskDialog by remember { mutableStateOf(openAddTaskOnLaunch && signedInEmail != null) }
     var newTaskTitle by remember { mutableStateOf("") }
     var newTaskKind by remember { mutableStateOf("must_do") }
     var newTaskFocusMinutes by remember { mutableIntStateOf(0) }
@@ -621,21 +624,27 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
-                    selected = bottomTab == HomeBottomTab.GUARD,
+                    selected = bottomTab == HomeBottomTab.TODAY,
                     onClick = {
-                        if (bottomTab != HomeBottomTab.GUARD) {
-                            bottomTab = HomeBottomTab.GUARD
+                        if (bottomTab != HomeBottomTab.TODAY) {
+                            bottomTab = HomeBottomTab.TODAY
                             if (signedInEmail != null) syncPlanFromWeb()
                         }
                     },
-                    icon = { Text("●") },
-                    label = { Text(tr("Guard & Quick", "Bảo vệ & Nhanh")) },
+                    icon = { Text("⌂") },
+                    label = { Text(tr("Today", "Hôm nay")) },
                 )
                 NavigationBarItem(
                     selected = bottomTab == HomeBottomTab.WEB,
                     onClick = { bottomTab = HomeBottomTab.WEB },
                     icon = { Text("◎") },
-                    label = { Text(tr("Web Workspace", "Không gian Web")) },
+                    label = { Text(tr("Web", "Web")) },
+                )
+                NavigationBarItem(
+                    selected = bottomTab == HomeBottomTab.GUARD,
+                    onClick = { bottomTab = HomeBottomTab.GUARD },
+                    icon = { Text("◈") },
+                    label = { Text(tr("Guard", "Bảo vệ")) },
                 )
             }
         },
@@ -645,7 +654,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                 isVi = isVi,
                 onSyncToNative = {
                     if (signedInEmail != null) syncPlanFromWeb()
-                    bottomTab = HomeBottomTab.GUARD
+                    bottomTab = HomeBottomTab.TODAY
                 },
                 modifier = Modifier.padding(innerPadding),
             )
@@ -673,6 +682,27 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             }
                         }
                     }
+                }
+            }
+
+            if (bottomTab == HomeBottomTab.TODAY) {
+            if (signedInEmail != null) {
+                item {
+                    val heroPlan = planSnapshot?.plan
+                    val mustDoTasks = heroPlan?.tasks?.filter { it.kind == "must_do" }.orEmpty()
+                    val mustDoTotal = mustDoTasks.size
+                    val mustDoDone = mustDoTasks.count { it.status == "completed" }
+                    LivingGateHero(
+                        planStatus = heroPlan?.status,
+                        mustDoCompleted = mustDoDone,
+                        mustDoTotal = mustDoTotal,
+                        unlocked = planUnlocked,
+                        earnedMinutes = earnedMinutesBalance,
+                        isVi = isVi,
+                        onAddTask = { showAddTaskDialog = true },
+                        onSync = { syncPlanFromWeb() },
+                        syncBusy = planSyncBusy,
+                    )
                 }
             }
 
@@ -1191,7 +1221,9 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                     }
                 }
             }
+            } // end HomeBottomTab.TODAY
 
+            if (bottomTab == HomeBottomTab.GUARD) {
             item {
                 Card(
                     modifier = Modifier
@@ -1823,6 +1855,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                     modifier = Modifier.padding(20.dp),
                 )
             }
+            } // end HomeBottomTab.GUARD
         }
         }
     }

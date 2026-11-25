@@ -16,7 +16,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/ui/stat-card";
 import { getCategoryLabel } from "@/components/domain/labels";
+import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
+import { buildDailySeals } from "@/lib/domain/focus-passport";
 import { BarChart } from "@/components/charts/bar-chart";
 import { formatDate, formatMinutes, todayIso } from "@/lib/data/format";
 import { getHealthSummary } from "@/lib/data/health";
@@ -52,6 +54,7 @@ export default async function StatisticsPage({
   const stats = await getStatistics(period, locale);
   const { timezone } = workspace.profile;
   const health = await getHealthSummary(period, timezone);
+  const passportSummary = buildDailySeals(stats.days, health.days);
 
   const activeDays = stats.days.filter((day) => day.focusMinutes > 0).length;
   const averageFocus = Math.round(stats.focusMinutes / stats.periodDays);
@@ -162,6 +165,18 @@ export default async function StatisticsPage({
       <FocusPassportCard
         statsDays={stats.days}
         healthDays={health.days}
+        locale={locale}
+      />
+
+      <DailyReceiptCard
+        displayName={workspace.profile.displayName}
+        periodDays={stats.periodDays}
+        focusMinutes={stats.focusMinutes}
+        tasksCompleted={stats.tasksCompleted}
+        goldSeals={passportSummary.goldCount}
+        currentStreak={passportSummary.currentStreak}
+        avgSleepMinutes={health.avgSleepMinutes}
+        avgSteps={health.avgSteps}
         locale={locale}
       />
 

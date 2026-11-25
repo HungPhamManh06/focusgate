@@ -19,18 +19,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val openAddTask = intent?.getBooleanExtra(EXTRA_OPEN_ADD_TASK, false) == true
         setContent {
             FocusGateTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    FocusGateRoot()
+                    FocusGateRoot(openAddTaskOnLaunch = openAddTask)
                 }
             }
         }
     }
+
+    companion object {
+        const val EXTRA_OPEN_ADD_TASK = "open_add_task"
+    }
 }
 
 @Composable
-private fun FocusGateRoot() {
+private fun FocusGateRoot(openAddTaskOnLaunch: Boolean = false) {
     val context = LocalContext.current
     var onboardingComplete by remember {
         mutableStateOf(AgentPreferences.isOnboardingComplete(context))
@@ -42,6 +47,7 @@ private fun FocusGateRoot() {
                 AgentPreferences.setOnboardingComplete(context, false)
                 onboardingComplete = false
             },
+            openAddTaskOnLaunch = openAddTaskOnLaunch,
         )
     } else {
         OnboardingScreen(

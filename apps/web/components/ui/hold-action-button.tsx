@@ -3,6 +3,7 @@
 import { Loader2, Lock } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { ActionState } from "@/lib/actions/types";
+import { playGateLockSfx } from "@/lib/domain/gate-sfx";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +62,7 @@ export function HoldActionButton({
     firedRef.current = true;
     stopHolding(true);
     setReleasedEarly(false);
+    playGateLockSfx();
     try {
       if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
         navigator.vibrate(35);

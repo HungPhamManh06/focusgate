@@ -41,6 +41,8 @@ class LockActivity : ComponentActivity() {
                         AgentPreferences.markEmergencyUsedToday(this)
                         startEmergency()
                     },
+                    isVi = AgentPreferences.getLanguage(this) == "vi",
+                    planSummary = AgentPreferences.getPlanSummaryText(this),
                 )
             }
         }
