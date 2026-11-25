@@ -16,11 +16,12 @@ import {
 import {
   activatePlanAction,
   completePlanAction,
-  confirmPlanAction,
+  confirmAndActivatePlanAction,
   createPlanAction,
 } from "@/lib/actions/planner";
 import { claimRewardAction } from "@/lib/actions/rewards";
 import { ActionButton } from "@/components/ui/action-button";
+import { HoldActionButton } from "@/components/ui/hold-action-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -443,31 +444,23 @@ export function DailyMissionCard({
           </>
         ) : vm.phase === "draft_ready" && plan ? (
           <>
-            <div className="flex flex-wrap items-center gap-2">
-              <ActionButton
-                action={confirmPlanAction.bind(null, plan.id)}
-                variant="accent"
-                size="md"
-                confirmTitle={isVi ? "Chốt cổng hôm nay?" : "Lock today's gate?"}
-                confirmMessage={
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start">
+              <HoldActionButton
+                action={confirmAndActivatePlanAction.bind(null, plan.id)}
+                label={isVi ? "Giữ 1.5s để Khóa Cổng" : "Hold 1.5s to Lock Gate"}
+                holdingLabel={isVi ? "Đang khóa cổng…" : "Locking gate…"}
+                pendingLabel={isVi ? "Đang kích hoạt…" : "Activating…"}
+                hintLabel={
                   isVi
-                    ? "Xác nhận sẽ khóa các cam kết Bắt buộc trong ngày. Mọi thay đổi giảm cam kết sau đó đều được ghi nhận ngoại lệ."
-                    : "Confirming locks your Must-do commitments for the day. Any later downgrade requires an audited exception."
+                    ? "Bản nháp sẵn sàng — nhấn giữ 1.5s để khóa cam kết Bắt buộc."
+                    : "Draft ready — press and hold 1.5s to lock your Must-do commitments."
                 }
-                confirmLabel={isVi ? "Xác nhận & khóa" : "Confirm & lock plan"}
-                pendingLabel={isVi ? "Đang xác nhận…" : "Confirming…"}
-              >
-                <Lock className="size-4" /> {isVi ? "Xác nhận kế hoạch" : "Confirm plan"}
-              </ActionButton>
+                className="sm:w-[270px]"
+              />
               <Link href="/planner" className={buttonVariants({ variant: "outline", size: "md" })}>
                 {isVi ? "Sửa kế hoạch" : "Edit plan"}
               </Link>
             </div>
-            <p className="text-[11.5px] text-muted">
-              {isVi
-                ? "Bản nháp sẵn sàng — xác nhận để khóa cam kết Bắt buộc."
-                : "Draft ready — confirm to lock your Must-do commitments."}
-            </p>
           </>
         ) : vm.phase === "confirmed" && plan ? (
           <>

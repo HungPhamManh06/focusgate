@@ -44,11 +44,48 @@ export function AmbientStudioBackdrop({ preset }: { preset: SoundPreset }) {
     );
   }
 
-  if (preset === "binaural" || preset === "lofi") {
+  if (preset === "brown") {
     return (
       <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#151018] via-[#181116] to-[#130e10]" />
-        <div className="fg-animate-gate absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr from-rose-500/20 via-amber-400/12 to-indigo-400/18 blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1a120f] via-[#150f0d] to-[#221612]" />
+        <div className="fg-animate-hearth absolute left-1/2 top-1/2 h-[440px] w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-900/30 blur-3xl" />
+      </div>
+    );
+  }
+
+  if (preset === "pink") {
+    return (
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1b1116] via-[#160f14] to-[#21131b]" />
+        <div className="fg-animate-gate absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-pink-500/18 blur-3xl" />
+      </div>
+    );
+  }
+
+  if (preset === "cafe") {
+    return (
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1b1410] via-[#17110e] to-[#231912]" />
+        <div className="fg-animate-hearth absolute -top-24 right-1/4 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
+        <div className="fg-animate-gate absolute -bottom-24 left-1/4 h-80 w-80 rounded-full bg-orange-900/25 blur-3xl" />
+      </div>
+    );
+  }
+
+  if (preset === "binaural") {
+    return (
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#11101d] via-[#141122] to-[#0f0e17]" />
+        <div className="fg-animate-gate absolute left-1/2 top-1/2 h-[460px] w-[460px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr from-indigo-500/24 via-violet-500/16 to-cyan-400/14 blur-3xl" />
+      </div>
+    );
+  }
+
+  if (preset === "lofi") {
+    return (
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#181016] via-[#171115] to-[#1e1312]" />
+        <div className="fg-animate-gate absolute left-1/2 top-1/2 h-[440px] w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr from-rose-500/22 via-amber-400/14 to-purple-500/16 blur-3xl" />
       </div>
     );
   }
