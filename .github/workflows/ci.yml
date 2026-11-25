@@ -45,8 +45,9 @@ jobs:
           distribution: "temurin"
           java-version: "17"
           cache: "gradle"
-      - uses: android-actions/setup-android@v3
-      - name: Run unit tests for personal and managed flavors
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+      - name: Run unit tests and build Personal Debug APK
         working-directory: apps/android
         run: |
           chmod +x gradlew
