@@ -5,11 +5,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
-import { AccountabilityCard } from "@/components/domain/accountability-card";
 import { AiCoachCard } from "@/components/domain/ai-coach-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
 import { OnboardingTourModal } from "@/components/domain/onboarding-tour-modal";
-import { getPartnerOverview, getStalledTasks } from "@/lib/data/v4-ecosystem";
+import { getStalledTasks } from "@/lib/data/v4-ecosystem";
 import { getStatistics } from "@/lib/data/stats";
 import { getHealthSummary } from "@/lib/data/health";
 import { generateWeeklyCoachInsights } from "@/lib/domain/focus-coach";
@@ -42,7 +41,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   // Fetch 5 upcoming tasks with due dates so that if 1 is promoted to "Your Next Move",
   // "Due Soon" can still display up to 4 distinct remaining deadlines.
-  const [workspace, plan, focus, wallet, upcomingRaw, sessions, counts, v2Settings, stalledTasks, partnerOverview] = await Promise.all([
+  const [workspace, plan, focus, wallet, upcomingRaw, sessions, counts, v2Settings, stalledTasks] = await Promise.all([
     getWorkspace(),
     getTodayPlan(),
     getTodayFocusSummary(),
@@ -52,7 +51,6 @@ export default async function DashboardPage() {
     getTaskCounts(),
     getV2Settings().catch(() => null),
     getStalledTasks().catch(() => []),
-    getPartnerOverview().catch(() => ({ pendingInviteCode: null, partners: [] })),
   ]);
 
   const locale = v2Settings?.language ?? "en";
@@ -363,13 +361,9 @@ export default async function DashboardPage() {
         </Card>
       </section>
 
-      {/* AI Focus Coach & Accountability Partner */}
-      <section className="mt-6 grid gap-5 lg:grid-cols-2">
+      {/* AI Focus Coach */}
+      <section className="mt-6">
         <AiCoachCard stalledTasks={stalledTasks} insights={coachInsights} />
-        <AccountabilityCard
-          pendingInviteCode={partnerOverview.pendingInviteCode}
-          partners={partnerOverview.partners}
-        />
       </section>
 
       <OnboardingTourModal initiallyOpen={v2Settings !== null && !v2Settings.onboardingCompleted} />
