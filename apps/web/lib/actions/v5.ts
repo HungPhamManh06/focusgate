@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { friendlyDbError } from "@/lib/data/errors";
+import { addPlanTask, ensureTodayPlan } from "@/lib/data/planner";
+import { createTask } from "@/lib/data/tasks";
 import type { GateThemeId } from "@/lib/domain/gate-themes";
 import { joinFocusQuest, updateV5Settings } from "@/lib/data/v5-ecosystem";
 import type { ActionState } from "./types";
@@ -61,6 +63,29 @@ export async function completeOnboardingAction(): Promise<ActionState> {
     await updateV5Settings({ onboardingCompleted: true });
     revalidateAll();
     return { success: "Onboarding complete!" };
+  } catch (err) {
+    return { error: friendlyDbError(err) };
+  }
+}
+
+export async function quickAddTodayTaskAction(titleRaw: string): Promise<ActionState> {
+  const title = titleRaw.trim();
+  if (!title) return { error: "Please enter a task title." };
+  try {
+    const created = await createTask({
+      title,
+      description: null,
+      category: "work",
+      priority: "high",
+      kind: "must_do",
+      estimatedMinutes: 30,
+      requiredFocusMinutes: 0,
+      dueDate: null,
+    });
+    const planId = await ensureTodayPlan();
+    await addPlanTask(planId, created.id, "must_do");
+    revalidateAll();
+    return { success: "Added to today's plan." };
   } catch (err) {
     return { error: friendlyDbError(err) };
   }

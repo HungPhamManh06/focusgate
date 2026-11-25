@@ -28,6 +28,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { KindBadge, PlanStatusBadge } from "@/components/domain/labels";
 import { LivingGateVisual } from "@/components/domain/living-gate-visual";
+import { MissionInteractiveChecklist } from "@/components/domain/mission-interactive-checklist";
+import { getGateThemeSpec, type GateThemeId } from "@/lib/domain/gate-themes";
 import { formatMinutes, formatTime } from "@/lib/data/format";
 import type { FocusSession, Grant, Plan, RewardSettings } from "@/lib/data/types";
 import {
@@ -51,6 +53,7 @@ export function DailyMissionCard({
   latestSession,
   timezone,
   locale = "en",
+  themeId = "stone",
 }: {
   plan: Plan | null;
   settings: RewardSettings;
@@ -58,12 +61,24 @@ export function DailyMissionCard({
   latestSession?: FocusSession;
   timezone: string;
   locale?: "en" | "vi";
+  themeId?: GateThemeId;
 }) {
   const isVi = locale === "vi";
   const vm = buildMissionViewModel(plan, settings, todayGrant, locale);
+  const themeSpec = getGateThemeSpec(themeId);
+  const isUnlockedDay = Boolean(todayGrant) || plan?.status === "completed";
 
   return (
-    <Card className="overflow-hidden">
+    <Card
+      className="relative overflow-hidden"
+      style={{
+        backgroundImage: isUnlockedDay
+          ? "radial-gradient(circle at 12% 18%, rgba(16,185,129,0.09), transparent 52%)"
+          : plan && plan.status !== "draft"
+            ? `radial-gradient(circle at 12% 18%, ${themeSpec.glowHex}, transparent 52%)`
+            : undefined,
+      }}
+    >
       <div>
         {/* Card Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-4 sm:px-7">
@@ -287,6 +302,7 @@ export function DailyMissionCard({
                       mustDoTotal={plan.progress.mustDoTotal}
                       isUnlocked={Boolean(todayGrant) || plan.status === "completed"}
                       locale={locale}
+                      themeId={themeId}
                     />
                   ) : null}
 
@@ -333,80 +349,14 @@ export function DailyMissionCard({
                       </div>
                     )}
 
-                    {/* Committed Task List */}
+                    {/* Interactive Committed Task List (direct 1-click completion + expand + quick-add) */}
                     {plan.tasks.length > 0 ? (
-                      <div>
-                        <div className="mb-2 flex items-center justify-between text-[11px] text-muted">
-                          <span>
-                            {isVi ? "Nhiệm vụ đã cam kết (" : "Committed tasks ("}
-                            {
-                              plan.tasks.filter(
-                                (t) => Boolean(t.completedAt) || t.status === "completed",
-                              ).length
-                            }{" "}
-                            {isVi ? "/" : "of"} {plan.tasks.length} {isVi ? "xong)" : "done)"}
-                          </span>
-                          <span className="tabular-nums">
-                            {isVi ? "Thưởng ước tính:" : "Est. reward:"}{" "}
-                            {formatMinutes(vm.estimatedReward)}
-                          </span>
-                        </div>
-                        <ul className="divide-y divide-line rounded-xl border border-line bg-surface">
-                          {plan.tasks.slice(0, 4).map((task) => {
-                            const done =
-                              Boolean(task.completedAt) || task.status === "completed";
-                            const taskFocusLeft = Math.max(
-                              0,
-                              task.requiredFocusMinutes - task.focusDone,
-                            );
-                            return (
-                              <li
-                                key={task.id}
-                                className="flex items-center gap-3 px-3.5 py-2.5 text-[13px]"
-                              >
-                                {done ? (
-                                  <CheckCircle2
-                                    className="size-4 shrink-0 text-success"
-                                    strokeWidth={2}
-                                  />
-                                ) : (
-                                  <Circle
-                                    className="size-4 shrink-0 text-muted/60"
-                                    strokeWidth={1.8}
-                                  />
-                                )}
-                                <span
-                                  className={cn(
-                                    "min-w-0 flex-1 truncate",
-                                    done ? "text-muted line-through" : "font-medium text-ink",
-                                  )}
-                                >
-                                  {task.title}
-                                </span>
-                                {!done && task.requiredFocusMinutes > 0 ? (
-                                  <span className="hidden shrink-0 text-[11px] text-muted tabular-nums sm:inline">
-                                    {taskFocusLeft > 0
-                                      ? isVi
-                                        ? `còn ${formatMinutes(taskFocusLeft)} tập trung`
-                                        : `${formatMinutes(taskFocusLeft)} focus left`
-                                      : isVi
-                                        ? "đủ giờ tập trung"
-                                        : "focus met"}
-                                  </span>
-                                ) : null}
-                                <KindBadge kind={task.kind} locale={locale} />
-                              </li>
-                            );
-                          })}
-                        </ul>
-                        {plan.tasks.length > 4 ? (
-                          <p className="mt-2 text-[11px] text-muted">
-                            {isVi
-                              ? `+${plan.tasks.length - 4} nhiệm vụ khác trong kế hoạch hôm nay`
-                              : `+${plan.tasks.length - 4} more task${plan.tasks.length - 4 === 1 ? "" : "s"} in today's plan`}
-                          </p>
-                        ) : null}
-                      </div>
+                      <MissionInteractiveChecklist
+                        tasks={plan.tasks}
+                        planStatus={plan.status}
+                        estimatedReward={vm.estimatedReward}
+                        locale={locale}
+                      />
                     ) : null}
                   </div>
                 </div>
