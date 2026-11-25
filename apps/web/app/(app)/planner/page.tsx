@@ -35,6 +35,8 @@ import { getPlannerBacklog, getTodayPlan } from "@/lib/data/planner";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { listGoals, listPlanSchedules } from "@/lib/data/v3-features";
 import { listPlanTemplates, listRecurringRules } from "@/lib/data/v4-ecosystem";
+import { fetchTodayCalendarEvents } from "@/lib/data/v5-ecosystem";
+import { totalBusyMinutes } from "@/lib/domain/ics-parser";
 import { getWorkspace } from "@/lib/data/workspace";
 import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
@@ -140,15 +142,18 @@ export default async function PlannerPage() {
   ]);
   const locale = v2Settings?.language ?? "en";
   const isVi = locale === "vi";
-  const [backlog, schedules, planTemplates, recurringRules] = await Promise.all([
+  const [backlog, schedules, planTemplates, recurringRules, busyEvents] = await Promise.all([
     getPlannerBacklog(plan?.id ?? null),
     listPlanSchedules(plan?.id ?? null),
     listPlanTemplates(locale).catch(() => []),
     listRecurringRules().catch(() => []),
+    fetchTodayCalendarEvents(v2Settings?.calendarIcsUrl, todayIso(workspace.profile.timezone)),
   ]);
-  const pendingEstimatedMinutes = (plan?.tasks ?? [])
-    .filter((t) => !t.completedAt)
-    .reduce((sum, t) => sum + Math.max(15, t.requiredFocusMinutes || 30), 0);
+  const pendingEstimatedMinutes =
+    (plan?.tasks ?? [])
+      .filter((t) => !t.completedAt)
+      .reduce((sum, t) => sum + Math.max(15, t.requiredFocusMinutes || 30), 0) +
+    (v2Settings?.calendarAutoLock ? totalBusyMinutes(busyEvents) : 0);
   const { timezone, displayName } = workspace.profile;
   const today = todayIso(timezone);
   const planDate = plan?.planDate ?? today;

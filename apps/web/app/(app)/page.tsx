@@ -8,6 +8,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { AccountabilityCard } from "@/components/domain/accountability-card";
 import { AiCoachCard } from "@/components/domain/ai-coach-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
+import { OnboardingTourModal } from "@/components/domain/onboarding-tour-modal";
 import { getPartnerOverview, getStalledTasks } from "@/lib/data/v4-ecosystem";
 import { getStatistics } from "@/lib/data/stats";
 import { getHealthSummary } from "@/lib/data/health";
@@ -370,6 +371,8 @@ export default async function DashboardPage() {
           partners={partnerOverview.partners}
         />
       </section>
+
+      <OnboardingTourModal initiallyOpen={v2Settings !== null && !v2Settings.onboardingCompleted} />
     </div>
   );
 }

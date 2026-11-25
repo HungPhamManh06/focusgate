@@ -46,9 +46,18 @@ async function render() {
     "policy",
     "syncError",
     "apiBaseUrl",
+    "youtubeStudyMode",
   ]);
   const lang = state.policy?.language === "vi" ? "vi" : "en";
   const t = STRINGS[lang];
+  const ytStudyBtn = document.getElementById("ytStudyBtn");
+  if (ytStudyBtn) {
+    const on = Boolean(state.youtubeStudyMode);
+    ytStudyBtn.textContent =
+      lang === "vi"
+        ? `Chế độ YouTube Học tập: ${on ? "BẬT" : "TẮT"}`
+        : `YouTube Study Mode: ${on ? "ON" : "OFF"}`;
+  }
 
   document.getElementById("subtitle").textContent = t.subtitle;
   document.getElementById("passwordLabel").textContent = t.password;
@@ -95,6 +104,12 @@ async function render() {
 
   document.getElementById("syncError").textContent = state.syncError || "";
 }
+
+document.getElementById("ytStudyBtn")?.addEventListener("click", async () => {
+  const { youtubeStudyMode } = await chrome.storage.local.get(["youtubeStudyMode"]);
+  await chrome.storage.local.set({ youtubeStudyMode: !youtubeStudyMode });
+  await render();
+});
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();

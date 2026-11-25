@@ -31,6 +31,12 @@ export interface V2Settings {
   strictModeEnabled: boolean;
   bedtimeEnabled: boolean;
   displayName: string | null;
+  calendarIcsUrl: string | null;
+  calendarAutoLock: boolean;
+  telegramChatId: string | null;
+  discordWebhookUrl: string | null;
+  gateTheme: "stone" | "bronze" | "obsidian" | "emerald" | "gold";
+  onboardingCompleted: boolean;
 }
 
 export interface DiscoveredAppRecord {
@@ -80,6 +86,18 @@ function mapSettingsRow(row: Record<string, unknown> | null | undefined): V2Sett
     strictModeEnabled: Boolean(r.strict_mode_enabled ?? false),
     bedtimeEnabled: Boolean(r.bedtime_enabled ?? false),
     displayName: (r.display_name as string | null | undefined) ?? null,
+    calendarIcsUrl: (r.calendar_ics_url as string | null | undefined) ?? null,
+    calendarAutoLock: Boolean(r.calendar_auto_lock ?? false),
+    telegramChatId: (r.telegram_chat_id as string | null | undefined) ?? null,
+    discordWebhookUrl: (r.discord_webhook_url as string | null | undefined) ?? null,
+    gateTheme:
+      r.gate_theme === "bronze" ||
+      r.gate_theme === "obsidian" ||
+      r.gate_theme === "emerald" ||
+      r.gate_theme === "gold"
+        ? r.gate_theme
+        : "stone",
+    onboardingCompleted: Boolean(r.onboarding_completed ?? false),
   };
 }
 

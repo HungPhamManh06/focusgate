@@ -1,4 +1,5 @@
 import type { PlanStatus } from "@/lib/data/types";
+import { getGateThemeSpec, type GateThemeId } from "@/lib/domain/gate-themes";
 import { cn } from "@/lib/utils";
 
 export function LivingGateVisual({
@@ -7,14 +8,17 @@ export function LivingGateVisual({
   mustDoTotal,
   isUnlocked,
   locale = "en",
+  themeId = "stone",
 }: {
   status: PlanStatus | null;
   mustDoCompleted: number;
   mustDoTotal: number;
   isUnlocked: boolean;
   locale?: "en" | "vi";
+  themeId?: GateThemeId;
 }) {
   const isVi = locale === "vi";
+  const theme = getGateThemeSpec(themeId);
   const isDraft = status === "draft" || status === null;
   const open = isUnlocked || status === "completed";
   const percent = mustDoTotal > 0 ? Math.min(100, Math.round((mustDoCompleted / mustDoTotal) * 100)) : 0;
@@ -65,8 +69,8 @@ export function LivingGateVisual({
             <radialGradient id="fg-living-glow" cx="80" cy="74" r="56" gradientUnits="userSpaceOnUse">
               <stop
                 offset="0"
-                stopColor={open ? "#10b981" : "#dc2626"}
-                stopOpacity={open ? "0.34" : isDraft ? "0.08" : "0.28"}
+                stopColor={open ? "#10b981" : theme.accentHex}
+                stopOpacity={open ? "0.34" : isDraft ? "0.08" : "0.32"}
               />
               <stop offset="1" stopColor={open ? "#10b981" : "#dc2626"} stopOpacity="0" />
             </radialGradient>

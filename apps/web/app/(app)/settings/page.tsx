@@ -1,3 +1,4 @@
+import { V5IntegrationsCard } from "@/components/domain/v5-integrations-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
@@ -25,6 +26,13 @@ export default async function SettingsPage() {
         settings={settings}
         displayName={workspace.profile.displayName}
         timezone={workspace.profile.timezone}
+      />
+
+      <V5IntegrationsCard
+        initialCalendarIcsUrl={settings.calendarIcsUrl}
+        initialCalendarAutoLock={settings.calendarAutoLock}
+        initialDiscordWebhookUrl={settings.discordWebhookUrl}
+        initialTelegramChatId={settings.telegramChatId}
       />
     </div>
   );

@@ -19,9 +19,11 @@ import { getCategoryLabel } from "@/components/domain/labels";
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
+import { FocusQuestsAndGateCard } from "@/components/domain/focus-quests-card";
 import { WeeklyReviewCard } from "@/components/domain/weekly-review-modal";
 import { buildDailySeals } from "@/lib/domain/focus-passport";
 import { getWeeklyReviewContext } from "@/lib/data/v4-ecosystem";
+import { listFocusQuests } from "@/lib/data/v5-ecosystem";
 import { BarChart } from "@/components/charts/bar-chart";
 import { formatDate, formatMinutes, todayIso } from "@/lib/data/format";
 import { getHealthSummary } from "@/lib/data/health";
@@ -57,7 +59,10 @@ export default async function StatisticsPage({
   const stats = await getStatistics(period, locale);
   const { timezone } = workspace.profile;
   const health = await getHealthSummary(period, timezone);
-  const weeklyReview = await getWeeklyReviewContext().catch(() => null);
+  const [weeklyReview, focusQuests] = await Promise.all([
+    getWeeklyReviewContext().catch(() => null),
+    listFocusQuests().catch(() => []),
+  ]);
   const passportSummary = buildDailySeals(stats.days, health.days);
 
   const activeDays = stats.days.filter((day) => day.focusMinutes > 0).length;
@@ -573,6 +578,13 @@ export default async function StatisticsPage({
         healthDays={health.days}
         hourlyFocus={stats.hourlyBreakdown ?? []}
         blockedAttempts={stats.blockedAttempts ?? 0}
+      />
+
+      <FocusQuestsAndGateCard
+        activeTheme={v2Settings?.gateTheme ?? "stone"}
+        bestStreak={stats.bestStreak ?? stats.currentStreak ?? 0}
+        weeklyFocusMinutes={stats.focusMinutes}
+        quests={focusQuests}
       />
 
       {weeklyReview && (

@@ -32,6 +32,7 @@ public sealed class TrayAgentContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _enforceTimer;
     private readonly EnforcementEngine _enforcementEngine;
     private BlockOverlayForm? _overlayForm;
+    private FloatingTimerForm? _floatingTimer;
 
     private AgentCredentials? _credentials;
     private AgentPolicySnapshot? _lastPolicy;
@@ -73,6 +74,7 @@ public sealed class TrayAgentContext : ApplicationContext
             else StartupRegistrar.Uninstall();
         };
         _showStatusItem = new ToolStripMenuItem("Show status", null, (_, _) => ShowStatusDialog());
+        var checkUpdatesItem = new ToolStripMenuItem("Check for updates", null, async (_, _) => await CheckForUpdatesAsync());
         _openLogsItem = new ToolStripMenuItem("Open logs folder", null, (_, _) => OpenLogsFolder());
         _exitItem = new ToolStripMenuItem("Exit", null, (_, _) => ConfirmExit());
 
@@ -86,6 +88,7 @@ public sealed class TrayAgentContext : ApplicationContext
             _unlockPassItem,
             _startupItem,
             _showStatusItem,
+            checkUpdatesItem,
             _openLogsItem,
             new ToolStripSeparator(),
             _exitItem,
@@ -435,6 +438,49 @@ public sealed class TrayAgentContext : ApplicationContext
         }
     }
 
+    private async Task CheckForUpdatesAsync()
+    {
+        var update = await WindowsAppUpdater.CheckLatestReleaseAsync();
+        if (update is null)
+        {
+            MessageBox.Show(
+                Tr("Could not check GitHub Releases right now.", "Không thể kiểm tra bản cập nhật lúc này."),
+                "FocusGate",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+        var answer = MessageBox.Show(
+            Tr(
+                $"Latest FocusGate release: {update.TagName}. Open download in browser?",
+                $"Phiên bản mới nhất: {update.TagName}. Mở trình duyệt để tải về ngay?"),
+            "FocusGate Updater",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Information);
+        if (answer == DialogResult.Yes)
+        {
+            WindowsAppUpdater.OpenDownload(update.DownloadUrl);
+        }
+    }
+
+    private void SyncFloatingTimer()
+    {
+        var active = _lastPolicy?.ActiveFocusSession;
+        if (active is not null && string.Equals(active.Status, "running", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_floatingTimer is null || _floatingTimer.IsDisposed)
+            {
+                _floatingTimer = new FloatingTimerForm();
+                _floatingTimer.CompleteRequested += (_, _) => ShowDesktopWindow();
+            }
+            _floatingTimer.UpdateSession(active.TaskTitle, string.Equals(_lastPolicy?.Language, "vi", StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            _floatingTimer?.HideSession();
+        }
+    }
+
     private void ConfirmExit()
     {
         if (_lastPolicy?.LockActive == true)
@@ -458,6 +504,8 @@ public sealed class TrayAgentContext : ApplicationContext
         _syncTimer.Stop();
         _syncTimer.Dispose();
         _desktopForm?.ForceClose();
+        _floatingTimer?.Close();
+        _floatingTimer?.Dispose();
         HideOverlay();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
