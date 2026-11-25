@@ -5,6 +5,8 @@ import {
   Check,
   Clock3,
   Loader2,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
   RotateCcw,
@@ -34,6 +36,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FocusSoundscape } from "@/components/focus-soundscape";
+import { AmbientStudioBackdrop } from "@/components/domain/ambient-studio-backdrop";
+import type { SoundPreset } from "@/lib/domain/soundscapes";
 import { ProgressRing } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -52,6 +56,17 @@ export function FocusTimer({
   const [pending, startTransition] = useTransition();
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [zenMode, setZenMode] = useState(false);
+  const [activeSound, setActiveSound] = useState<SoundPreset>("off");
+
+  useEffect(() => {
+    if (!zenMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setZenMode(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [zenMode]);
   const [optimisticSession, setOptimisticSession] = useState<{
     status: "running" | "paused";
     pausedAt: string | null;
@@ -214,9 +229,22 @@ export function FocusTimer({
         : "bg-accent";
 
   return (
-    <div className="surface-card overflow-hidden">
+    <div
+      className={cn(
+        zenMode
+          ? "fixed inset-0 z-50 flex flex-col overflow-y-auto text-[#f5eeee]"
+          : "surface-card overflow-hidden",
+      )}
+    >
+      {zenMode ? <AmbientStudioBackdrop preset={activeSound} /> : null}
+
       {/* Top Status Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-7">
+      <div
+        className={cn(
+          "relative z-10 flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 sm:px-7",
+          zenMode ? "border-white/10 bg-black/20 backdrop-blur-sm" : "border-line",
+        )}
+      >
         <div className="flex items-center gap-2.5">
           <span className="relative flex size-2">
             <span
@@ -227,7 +255,12 @@ export function FocusTimer({
             />
             <span className={cn("relative inline-flex size-2 rounded-full", headerDotTone)} />
           </span>
-          <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink">
+          <p
+            className={cn(
+              "text-[11.5px] font-semibold uppercase tracking-[0.08em]",
+              zenMode ? "text-[#f5eeee]" : "text-ink",
+            )}
+          >
             {timerState.statusHeader}
           </p>
           {timerState.isPaused ? (
@@ -242,15 +275,48 @@ export function FocusTimer({
             </Badge>
           ) : null}
         </div>
-        <p className="text-[11.5px] text-muted tabular-nums">
-          {session.mode === "open_ended"
-            ? `${formatFocusModeLabel(session.mode)} · ${formatMinutes(effectiveMinValidMinutes)} min threshold`
-            : `${formatFocusModeLabel(session.mode)} · ${session.plannedMinutes} min planned · ${formatMinutes(effectiveMinValidMinutes)} min threshold (max ${timerState.maxCreditedMinutes}m credit)`}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p
+            className={cn(
+              "text-[11.5px] tabular-nums",
+              zenMode ? "text-white/70" : "text-muted",
+            )}
+          >
+            {session.mode === "open_ended"
+              ? `${formatFocusModeLabel(session.mode)} · ${formatMinutes(effectiveMinValidMinutes)} min threshold`
+              : `${formatFocusModeLabel(session.mode)} · ${session.plannedMinutes} min planned · ${formatMinutes(effectiveMinValidMinutes)} min threshold (max ${timerState.maxCreditedMinutes}m credit)`}
+          </p>
+          <button
+            type="button"
+            onClick={() => setZenMode((prev) => !prev)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+              zenMode
+                ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                : "border-line bg-surface-2 text-ink hover:border-accent/40 hover:text-accent",
+            )}
+          >
+            {zenMode ? (
+              <>
+                <Minimize2 className="size-3.5" />
+                {isVi ? "Thoát Studio (Esc)" : "Exit Studio (Esc)"}
+              </>
+            ) : (
+              <>
+                <Maximize2 className="size-3.5" />
+                {isVi ? "Buồng lái Studio" : "Studio Mode"}
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Main Clock Area */}
-      <div className="flex flex-col items-center px-6 py-9 sm:py-11">
+      <div
+        className={cn(
+          "relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-9 sm:py-11",
+        )}
+      >
         <ProgressRing
           value={timerState.ringProgress}
           size={252}
@@ -498,7 +564,7 @@ export function FocusTimer({
           )}
         </div>
 
-        <FocusSoundscape />
+        <FocusSoundscape onPresetChange={setActiveSound} darkSurface={zenMode} />
 
         <p className="mt-5 flex items-center gap-1.5 text-[11px] text-muted">
           <Clock3 className="size-3" />

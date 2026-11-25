@@ -24,8 +24,9 @@ import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress, ProgressRing } from "@/components/ui/progress";
+import { Progress } from "@/components/ui/progress";
 import { KindBadge, PlanStatusBadge } from "@/components/domain/labels";
+import { LivingGateVisual } from "@/components/domain/living-gate-visual";
 import { formatMinutes, formatTime } from "@/lib/data/format";
 import type { FocusSession, Grant, Plan, RewardSettings } from "@/lib/data/types";
 import {
@@ -279,26 +280,13 @@ export function DailyMissionCard({
                 /* STATES B2, C, D, E — POPULATED PLAN WITH MUST-DOS */
                 <div className="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
                   {vm.hasMustDos && vm.mustDoPercent !== null ? (
-                    <div className="flex flex-col items-center">
-                      <ProgressRing
-                        value={vm.mustDoPercent}
-                        size={124}
-                        stroke={8}
-                        label={isVi ? "Tiến độ hoàn thành việc Bắt buộc" : "Must-do completion progress"}
-                      >
-                        <span className="font-display text-[28px] leading-none tabular-nums">
-                          {plan.progress.mustDoCompleted}/{plan.progress.mustDoTotal}
-                        </span>
-                        <span className="label-xs mt-1.5 text-muted">
-                          {isVi ? "bắt buộc" : "must-do"}
-                        </span>
-                      </ProgressRing>
-                      <p className="mt-2 text-[11px] text-muted tabular-nums">
-                        {vm.mustDoPercent === 0 && plan.status === "draft"
-                          ? isVi ? "Sẵn sàng xác nhận" : "Ready to confirm"
-                          : isVi ? `Hoàn thành ${vm.mustDoPercent}%` : `${vm.mustDoPercent}% complete`}
-                      </p>
-                    </div>
+                    <LivingGateVisual
+                      status={plan.status}
+                      mustDoCompleted={plan.progress.mustDoCompleted}
+                      mustDoTotal={plan.progress.mustDoTotal}
+                      isUnlocked={Boolean(todayGrant) || plan.status === "completed"}
+                      locale={locale}
+                    />
                   ) : null}
 
                   <div className="min-w-0 space-y-4">

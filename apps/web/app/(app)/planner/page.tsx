@@ -22,6 +22,7 @@ import {
 } from "@/lib/actions/planner";
 import { claimRewardAction } from "@/lib/actions/rewards";
 import { ActionButton } from "@/components/ui/action-button";
+import { HoldActionButton } from "@/components/ui/hold-action-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -524,30 +525,22 @@ export default async function PlannerPage() {
                   <div className="mt-5 space-y-2">
                     {plan.status === "draft" ? (
                       <>
-                        <ActionButton
+                        <HoldActionButton
                           action={confirmAndActivatePlanAction.bind(null, plan.id)}
-                          variant="accent"
-                          className="w-full"
-                          confirmTitle={isVi ? "Xác nhận & bắt đầu hôm nay?" : "Confirm & start today's gate?"}
-                          confirmMessage={
-                            isVi
-                              ? "Xác nhận sẽ khóa kế hoạch hôm nay và kích hoạt chế độ tập trung ngay lập tức. Các điều chỉnh sau đó sẽ được ghi vào Lịch sử cổng."
-                              : "Confirming locks today's plan as a contract and activates verified focus immediately. Amendments afterward are logged in Gate History."
+                          label={isVi ? "Giữ 1.5s để Khóa Cổng hôm nay" : "Hold 1.5s to Lock Today's Gate"}
+                          holdingLabel={isVi ? "Đang khóa cổng…" : "Locking gate…"}
+                          pendingLabel={isVi ? "Đang kích hoạt…" : "Activating…"}
+                          hintLabel={
+                            plan.progress.mustDoTotal === 0
+                              ? isVi
+                                ? "Thêm ít nhất 1 việc Bắt buộc để mở khóa nút cam kết."
+                                : "Add at least one must-do to enable locking."
+                              : isVi
+                                ? "Nghi thức cam kết: nhấn giữ 1.5 giây để chốt việc Bắt buộc và mở chế độ tập trung."
+                                : "Commitment ritual: press and hold 1.5s to lock Must-dos and activate focus."
                           }
-                          confirmLabel={isVi ? "Xác nhận & bắt đầu" : "Confirm & start plan"}
                           disabled={plan.progress.mustDoTotal === 0}
-                          pendingLabel={isVi ? "Đang bắt đầu…" : "Starting…"}
-                        >
-                          <Lock className="size-4" />{" "}
-                          {isVi ? "Xác nhận & bắt đầu" : "Confirm & start plan"}
-                        </ActionButton>
-                        {plan.progress.mustDoTotal === 0 ? (
-                          <p className="text-center text-[10.5px] text-muted">
-                            {isVi
-                              ? "Thêm ít nhất 1 việc Bắt buộc để xác nhận."
-                              : "Add at least one must-do to confirm."}
-                          </p>
-                        ) : null}
+                        />
                       </>
                     ) : null}
 

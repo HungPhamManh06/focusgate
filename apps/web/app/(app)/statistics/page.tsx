@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/ui/stat-card";
 import { getCategoryLabel } from "@/components/domain/labels";
+import { FocusPassportCard } from "@/components/domain/focus-passport-card";
 import { BarChart } from "@/components/charts/bar-chart";
 import { formatDate, formatMinutes, todayIso } from "@/lib/data/format";
 import { getHealthSummary } from "@/lib/data/health";
@@ -157,6 +158,12 @@ export default async function StatisticsPage({
           icon={Flame}
         />
       </section>
+
+      <FocusPassportCard
+        statsDays={stats.days}
+        healthDays={health.days}
+        locale={locale}
+      />
 
       {!hasActivity ? (
         <Card className="mt-4">

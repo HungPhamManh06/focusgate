@@ -77,7 +77,13 @@ function createCrackleBuffer(ctx: AudioContext, seconds = 6): AudioBuffer {
   return buffer;
 }
 
-export function FocusSoundscape() {
+export function FocusSoundscape({
+  onPresetChange,
+  darkSurface = false,
+}: {
+  onPresetChange?: (preset: SoundPreset) => void;
+  darkSurface?: boolean;
+} = {}) {
   const isVi = useLocale() === "vi";
   const [preset, setPreset] = useState<SoundPreset>("off");
   const [lastPreset, setLastPreset] = useState<SoundPreset>("brown");
@@ -137,6 +143,7 @@ export function FocusSoundscape() {
   }, [volume]);
 
   useEffect(() => {
+    onPresetChange?.(preset);
     stopAllAudio();
     if (preset === "off") return;
 
@@ -520,7 +527,14 @@ export function FocusSoundscape() {
   const activeDef = SOUNDSCAPE_PRESETS.find((item) => item.id === preset);
 
   return (
-    <div className="mt-4 rounded-xl border border-line bg-surface-2/60 px-4 py-3">
+    <div
+      className={cn(
+        "mt-4 w-full max-w-xl rounded-xl border px-4 py-3",
+        darkSurface
+          ? "border-white/15 bg-black/35 text-[#f5eeee] backdrop-blur-md"
+          : "border-line bg-surface-2/60",
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
           <Headphones className="size-3.5 text-accent" />

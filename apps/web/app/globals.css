@@ -127,3 +127,74 @@
     scrollbar-color: var(--line) transparent;
   }
 }
+
+@keyframes fg-gate-breathe {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes fg-ocean-swell {
+  0%, 100% {
+    transform: translateY(14px) scaleY(0.96);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-10px) scaleY(1.06);
+    opacity: 0.65;
+  }
+}
+
+@keyframes fg-rain-drift {
+  0% {
+    background-position: 0 0, 24px -120px;
+  }
+  100% {
+    background-position: -40px 260px, -16px 140px;
+  }
+}
+
+@keyframes fg-hearth-flicker {
+  0%, 100% {
+    opacity: 0.48;
+    transform: scale(1);
+  }
+  35% {
+    opacity: 0.72;
+    transform: scale(1.04);
+  }
+  70% {
+    opacity: 0.56;
+    transform: scale(0.98);
+  }
+}
+
+.fg-animate-gate {
+  animation: fg-gate-breathe 4.5s ease-in-out infinite;
+}
+
+.fg-animate-ocean {
+  animation: fg-ocean-swell 9s ease-in-out infinite;
+}
+
+.fg-animate-rain {
+  animation: fg-rain-drift 1.8s linear infinite;
+}
+
+.fg-animate-hearth {
+  animation: fg-hearth-flicker 3.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fg-animate-gate,
+  .fg-animate-ocean,
+  .fg-animate-rain,
+  .fg-animate-hearth {
+    animation: none !important;
+  }
+}
