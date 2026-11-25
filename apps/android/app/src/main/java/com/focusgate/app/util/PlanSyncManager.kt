@@ -98,6 +98,61 @@ object PlanSyncManager {
         }
     }
 
+    fun createTaskAndSync(
+        context: Context,
+        title: String,
+        kind: String,
+        requiredFocusMinutes: Int,
+        addToTodayPlan: Boolean,
+    ): RemotePlanSnapshot {
+        return withValidToken(context) { token ->
+            val snap = client.createTaskAndOptionallyPlan(
+                apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
+                accessToken = token,
+                title = title,
+                kind = kind,
+                requiredFocusMinutes = requiredFocusMinutes,
+                addToTodayPlan = addToTodayPlan,
+            )
+            AgentPreferences.setPlanUnlocked(context, snap.unlocked)
+            AgentPreferences.setLastSyncAt(context, System.currentTimeMillis())
+            updateWidgetState(context, snap, snap.unlocked)
+            snap
+        }
+    }
+
+    fun confirmAndActivatePlanAndSync(context: Context): RemotePlanSnapshot {
+        return withValidToken(context) { token ->
+            val deviceId = ensureRegisteredDevice(context, token)
+            val (snap, _) = client.runPlanLifecycle(
+                apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
+                accessToken = token,
+                action = "confirm_and_activate",
+                deviceId = deviceId,
+            )
+            AgentPreferences.setPlanUnlocked(context, snap.unlocked)
+            AgentPreferences.setLastSyncAt(context, System.currentTimeMillis())
+            updateWidgetState(context, snap, snap.unlocked)
+            snap
+        }
+    }
+
+    fun completePlanAndClaimAndSync(context: Context): Pair<RemotePlanSnapshot, Int> {
+        return withValidToken(context) { token ->
+            val deviceId = ensureRegisteredDevice(context, token)
+            val (snap, granted) = client.runPlanLifecycle(
+                apiBaseUrl = AgentPreferences.DEFAULT_API_BASE_URL,
+                accessToken = token,
+                action = "complete_and_claim",
+                deviceId = deviceId,
+            )
+            AgentPreferences.setPlanUnlocked(context, snap.unlocked)
+            AgentPreferences.setLastSyncAt(context, System.currentTimeMillis())
+            updateWidgetState(context, snap, snap.unlocked)
+            snap to granted
+        }
+    }
+
     fun saveHealthMetricAndSync(
         context: Context,
         steps: Int,

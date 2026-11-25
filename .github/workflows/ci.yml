@@ -50,4 +50,9 @@ jobs:
         working-directory: apps/android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon testPersonalDebugUnitTest testManagedDebugUnitTest
+          ./gradlew --no-daemon testPersonalDebugUnitTest testManagedDebugUnitTest assemblePersonalDebug
+      - name: Upload Personal Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: focusgate-android-personal-debug
+          path: apps/android/app/build/outputs/apk/personal/debug/*.apk

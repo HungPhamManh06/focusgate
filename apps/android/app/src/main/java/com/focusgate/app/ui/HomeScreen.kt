@@ -25,6 +25,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -86,6 +88,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.ceil
 
 private enum class AppTab { RESTRICT, EXEMPT }
+private enum class HomeBottomTab { GUARD, WEB }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,6 +151,13 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
     var healthWeightInput by remember { mutableStateOf("") }
     var healthSyncBusy by remember { mutableStateOf(false) }
     var healthSyncMessage by remember { mutableStateOf<String?>(null) }
+    var bottomTab by remember { mutableStateOf(HomeBottomTab.GUARD) }
+    var showAddTaskDialog by remember { mutableStateOf(false) }
+    var newTaskTitle by remember { mutableStateOf("") }
+    var newTaskKind by remember { mutableStateOf("must_do") }
+    var newTaskFocusMinutes by remember { mutableIntStateOf(0) }
+    var newTaskAddToToday by remember { mutableStateOf(true) }
+    var addTaskBusy by remember { mutableStateOf(false) }
     var passwordInput by remember { mutableStateOf("") }
     var planSnapshot by remember { mutableStateOf<RemotePlanSnapshot?>(null) }
     var planUnlocked by remember { mutableStateOf(AgentPreferences.isPlanUnlocked(context)) }
@@ -460,6 +470,117 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
         )
     }
 
+    if (showAddTaskDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!addTaskBusy) showAddTaskDialog = false },
+            title = { Text(tr("Add new task", "Thêm nhiệm vụ mới")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newTaskTitle,
+                        onValueChange = { newTaskTitle = it },
+                        label = { Text(tr("Task title", "Tên nhiệm vụ")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            "must_do" to tr("Must do", "Bắt buộc"),
+                            "should_do" to tr("Should do", "Nên làm"),
+                            "bonus" to tr("Bonus", "Thưởng"),
+                        ).forEach { (kindKey, label) ->
+                            FilterChip(
+                                selected = newTaskKind == kindKey,
+                                onClick = { newTaskKind = kindKey },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(0, 25, 50).forEach { mins ->
+                            FilterChip(
+                                selected = newTaskFocusMinutes == mins,
+                                onClick = { newTaskFocusMinutes = mins },
+                                label = {
+                                    Text(
+                                        if (mins == 0) {
+                                            tr("0m focus", "0p tập trung")
+                                        } else {
+                                            "${mins}m"
+                                        },
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            tr("Add to today's plan", "Thêm vào kế hoạch hôm nay"),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(
+                            checked = newTaskAddToToday,
+                            onCheckedChange = { newTaskAddToToday = it },
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !addTaskBusy && newTaskTitle.trim().isNotEmpty(),
+                    onClick = {
+                        val title = newTaskTitle.trim()
+                        if (title.isEmpty()) return@TextButton
+                        addTaskBusy = true
+                        syncError = null
+                        scope.launch {
+                            try {
+                                val snap = withContext(Dispatchers.IO) {
+                                    PlanSyncManager.createTaskAndSync(
+                                        context = context,
+                                        title = title,
+                                        kind = newTaskKind,
+                                        requiredFocusMinutes = newTaskFocusMinutes,
+                                        addToTodayPlan = newTaskAddToToday,
+                                    )
+                                }
+                                planSnapshot = snap
+                                planUnlocked = snap.unlocked
+                                language = AgentPreferences.getLanguage(context)
+                                newTaskTitle = ""
+                                showAddTaskDialog = false
+                                banner = tr(
+                                    "Task saved and synced to FocusGate Web.",
+                                    "Đã thêm nhiệm vụ và đồng bộ lên FocusGate Web.",
+                                )
+                            } catch (t: Throwable) {
+                                syncError = t.message ?: tr("Could not add task", "Không thể thêm nhiệm vụ")
+                                showAddTaskDialog = false
+                            } finally {
+                                addTaskBusy = false
+                            }
+                        }
+                    },
+                ) {
+                    Text(if (addTaskBusy) tr("Saving...", "Đang lưu...") else tr("Save", "Lưu"))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !addTaskBusy,
+                    onClick = { showAddTaskDialog = false },
+                ) {
+                    Text(tr("Cancel", "Hủy"))
+                }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -497,7 +618,38 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                 },
             )
         },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = bottomTab == HomeBottomTab.GUARD,
+                    onClick = {
+                        if (bottomTab != HomeBottomTab.GUARD) {
+                            bottomTab = HomeBottomTab.GUARD
+                            if (signedInEmail != null) syncPlanFromWeb()
+                        }
+                    },
+                    icon = { Text("●") },
+                    label = { Text(tr("Guard & Quick", "Bảo vệ & Nhanh")) },
+                )
+                NavigationBarItem(
+                    selected = bottomTab == HomeBottomTab.WEB,
+                    onClick = { bottomTab = HomeBottomTab.WEB },
+                    icon = { Text("◎") },
+                    label = { Text(tr("Web Workspace", "Không gian Web")) },
+                )
+            }
+        },
     ) { innerPadding ->
+        if (bottomTab == HomeBottomTab.WEB) {
+            WebDashboardScreen(
+                isVi = isVi,
+                onSyncToNative = {
+                    if (signedInEmail != null) syncPlanFromWeb()
+                    bottomTab = HomeBottomTab.GUARD
+                },
+                modifier = Modifier.padding(innerPadding),
+            )
+        } else {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -645,18 +797,21 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                             ) {
                                 Text(
                                     if (currentPlan != null && currentPlan.tasks.isNotEmpty()) {
-                                        "Today's Planned Tasks"
+                                        tr("Today's Planned Tasks", "Kế hoạch hôm nay")
                                     } else if (openWebTasks.isNotEmpty()) {
-                                        "Open Web Tasks (${openWebTasks.size})"
+                                        tr(
+                                            "Open Web Tasks (${openWebTasks.size})",
+                                            "Nhiệm vụ đang mở (${openWebTasks.size})",
+                                        )
                                     } else {
-                                        "Today's Planned Tasks"
+                                        tr("Today's Planned Tasks", "Kế hoạch hôm nay")
                                     },
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.weight(1f),
                                 )
                                 if (currentPlan != null && currentPlan.allTasksTotal > 0) {
                                     Text(
-                                        "${currentPlan.allTasksCompleted}/${currentPlan.allTasksTotal} done",
+                                        "${currentPlan.allTasksCompleted}/${currentPlan.allTasksTotal}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (currentPlan.allCompleted) {
                                             MaterialTheme.colorScheme.primary
@@ -664,6 +819,12 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         },
                                     )
+                                }
+                                TextButton(
+                                    onClick = { showAddTaskDialog = true },
+                                    enabled = !planSyncBusy,
+                                ) {
+                                    Text(tr("+ Add", "+ Thêm"))
                                 }
                             }
                             Spacer(Modifier.height(6.dp))
@@ -834,6 +995,75 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                                     )
                                                 }
                                             }
+                                        }
+                                    }
+
+                                    val mustDos = currentPlan.tasks.filter { it.kind == "must_do" }
+                                    val allMustDosDone = mustDos.isNotEmpty() && mustDos.all { it.status == "completed" }
+                                    if ((currentPlan.status == "draft" || currentPlan.status == "confirmed") && mustDos.isNotEmpty()) {
+                                        Spacer(Modifier.height(10.dp))
+                                        Button(
+                                            enabled = !planSyncBusy,
+                                            onClick = {
+                                                planSyncBusy = true
+                                                syncError = null
+                                                scope.launch {
+                                                    try {
+                                                        val snap = withContext(Dispatchers.IO) {
+                                                            PlanSyncManager.confirmAndActivatePlanAndSync(context)
+                                                        }
+                                                        planSnapshot = snap
+                                                        planUnlocked = snap.unlocked
+                                                        banner = tr(
+                                                            "Today's plan confirmed and started.",
+                                                            "Đã chốt và bắt đầu kế hoạch hôm nay.",
+                                                        )
+                                                    } catch (t: Throwable) {
+                                                        syncError = t.message ?: tr("Could not start plan", "Không thể bắt đầu kế hoạch")
+                                                    } finally {
+                                                        planSyncBusy = false
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Text(tr("Confirm & Start Plan", "Xác nhận & bắt đầu kế hoạch"))
+                                        }
+                                    } else if (currentPlan.status == "active" && allMustDosDone) {
+                                        Spacer(Modifier.height(10.dp))
+                                        Button(
+                                            enabled = !planSyncBusy,
+                                            onClick = {
+                                                planSyncBusy = true
+                                                syncError = null
+                                                scope.launch {
+                                                    try {
+                                                        val (snap, granted) = withContext(Dispatchers.IO) {
+                                                            PlanSyncManager.completePlanAndClaimAndSync(context)
+                                                        }
+                                                        planSnapshot = snap
+                                                        planUnlocked = snap.unlocked
+                                                        banner = if (granted > 0) {
+                                                            tr(
+                                                                "Day completed! Unlocked with +${granted}m reward.",
+                                                                "Hoàn thành ngày! Đã nhận +${granted} phút thưởng.",
+                                                            )
+                                                        } else {
+                                                            tr(
+                                                                "Today's plan completed!",
+                                                                "Đã hoàn thành kế hoạch hôm nay!",
+                                                            )
+                                                        }
+                                                    } catch (t: Throwable) {
+                                                        syncError = t.message ?: tr("Could not complete day", "Không thể chốt hoàn thành ngày")
+                                                    } finally {
+                                                        planSyncBusy = false
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Text(tr("Finish Day & Claim Reward", "Hoàn thành ngày & nhận thưởng"))
                                         }
                                     }
                                 }
@@ -1593,6 +1823,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                     modifier = Modifier.padding(20.dp),
                 )
             }
+        }
         }
     }
 }

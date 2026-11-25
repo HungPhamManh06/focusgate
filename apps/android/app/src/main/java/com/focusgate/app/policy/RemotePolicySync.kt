@@ -544,6 +544,10 @@ class RemoteAgentSyncClient(
 
     private fun parsePlanSnapshot(body: String): RemotePlanSnapshot {
         val obj = RemotePolicySync.parseJsonObject(body)
+        return parsePlanSnapshotObject(obj)
+    }
+
+    private fun parsePlanSnapshotObject(obj: Map<*, *>): RemotePlanSnapshot {
         val activeGrantMinutes = (obj["activeGrantMinutes"] as? Number)?.toInt() ?: 0
         val unlocked = obj["unlocked"] as? Boolean ?: false
         val openTasks = (obj["openTasks"] as? List<*>)?.mapNotNull { entry ->
@@ -627,7 +631,75 @@ class RemoteAgentSyncClient(
         val body = readResponseBody(conn, code)
         if (code == 401) throw UnauthorizedApiException()
         if (code !in 200..299) throw IllegalStateException("Plan build failed ($code): $body")
-        return parsePlanJson(body)
+        return parsePlanSnapshot(body)
+    }
+
+    fun createTaskAndOptionallyPlan(
+        apiBaseUrl: String,
+        accessToken: String,
+        title: String,
+        kind: String,
+        requiredFocusMinutes: Int,
+        addToTodayPlan: Boolean,
+    ): RemotePlanSnapshot {
+        val base = apiBaseUrl.trimEnd('/')
+        val conn = (URL("$base/api/agent/tasks").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        val payload = """{"title":${quoteJson(title.trim())},"kind":${quoteJson(kind)},"requiredFocusMinutes":${requiredFocusMinutes.coerceIn(0, 240)},"addToTodayPlan":$addToTodayPlan}"""
+        try {
+            conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val body = readResponseBody(conn, code)
+            if (code == 401) throw UnauthorizedApiException()
+            if (code !in 200..299) {
+                throw IOException(parseErrorMessage(body, "Task creation failed ($code)"))
+            }
+            val obj = RemotePolicySync.parseJsonObject(body)
+            val snapObj = obj["snapshot"] as? Map<*, *> ?: obj
+            return parsePlanSnapshotObject(snapObj)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    fun runPlanLifecycle(
+        apiBaseUrl: String,
+        accessToken: String,
+        action: String,
+        deviceId: String?,
+    ): Pair<RemotePlanSnapshot, Int> {
+        val base = apiBaseUrl.trimEnd('/')
+        val conn = (URL("$base/api/agent/plan/lifecycle").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        val devJson = if (deviceId != null) quoteJson(deviceId) else "null"
+        val payload = """{"action":${quoteJson(action)},"deviceId":$devJson}"""
+        try {
+            conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val body = readResponseBody(conn, code)
+            if (code == 401) throw UnauthorizedApiException()
+            if (code !in 200..299) {
+                throw IOException(parseErrorMessage(body, "Plan action failed ($code)"))
+            }
+            val obj = RemotePolicySync.parseJsonObject(body)
+            val granted = (obj["grantedMinutes"] as? Number)?.toInt() ?: 0
+            val snapObj = obj["snapshot"] as? Map<*, *> ?: obj
+            return parsePlanSnapshotObject(snapObj) to granted
+        } finally {
+            conn.disconnect()
+        }
     }
 
     fun pushDailyHealthMetric(
