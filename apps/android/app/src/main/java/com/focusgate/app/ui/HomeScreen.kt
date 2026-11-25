@@ -942,7 +942,7 @@ fun HomeScreen(onOpenSetup: () -> Unit) {
                                         )
                                     }
                                 }
-                                else -> {
+                                currentPlan != null -> {
                                     currentPlan.tasks.forEach { task ->
                                         val isDone = task.status == "completed"
                                         Row(
