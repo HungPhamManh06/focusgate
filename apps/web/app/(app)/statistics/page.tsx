@@ -17,8 +17,11 @@ import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/ui/stat-card";
 import { getCategoryLabel } from "@/components/domain/labels";
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
+import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
+import { WeeklyReviewCard } from "@/components/domain/weekly-review-modal";
 import { buildDailySeals } from "@/lib/domain/focus-passport";
+import { getWeeklyReviewContext } from "@/lib/data/v4-ecosystem";
 import { BarChart } from "@/components/charts/bar-chart";
 import { formatDate, formatMinutes, todayIso } from "@/lib/data/format";
 import { getHealthSummary } from "@/lib/data/health";
@@ -54,6 +57,7 @@ export default async function StatisticsPage({
   const stats = await getStatistics(period, locale);
   const { timezone } = workspace.profile;
   const health = await getHealthSummary(period, timezone);
+  const weeklyReview = await getWeeklyReviewContext().catch(() => null);
   const passportSummary = buildDailySeals(stats.days, health.days);
 
   const activeDays = stats.days.filter((day) => day.focusMinutes > 0).length;
@@ -563,6 +567,22 @@ export default async function StatisticsPage({
           focusDays={stats.days.map((d) => ({ date: d.date, focusMinutes: d.focusMinutes }))}
         />
       </section>
+
+      <DistractionSleepCard
+        days={stats.days}
+        healthDays={health.days}
+        hourlyFocus={stats.hourlyBreakdown ?? []}
+        blockedAttempts={stats.blockedAttempts ?? 0}
+      />
+
+      {weeklyReview && (
+        <WeeklyReviewCard
+          weekStart={weeklyReview.weekStart}
+          latestReview={weeklyReview.latestReview}
+          completedThisWeek={weeklyReview.completedThisWeek}
+          staleBacklog={weeklyReview.staleBacklog}
+        />
+      )}
 
       <p className="mt-6 text-[10.5px] text-muted">
         {isVi

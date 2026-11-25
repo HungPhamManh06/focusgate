@@ -269,4 +269,106 @@ object PlanSyncManager {
             block(refreshed.accessToken)
         }
     }
+
+    fun syncRemoteFocusSession(context: Context): Boolean {
+        return runCatching {
+            withValidToken(context) { token ->
+                val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/focus-session")
+                val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8_000
+                    readTimeout = 8_000
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+                try {
+                    if (conn.responseCode !in 200..299) return@withValidToken false
+                    val body = conn.inputStream.bufferedReader().use { it.readText() }
+                    val json = org.json.JSONObject(body)
+                    val active = json.optBoolean("active", false)
+                    val session = json.optJSONObject("session")
+                    if (active && session != null) {
+                        val id = session.optString("id", "")
+                        val title = session.optString("taskTitle", "").ifBlank { "Focus Sprint" }
+                        val remainingSec = session.optLong("remainingSeconds", 0L)
+                        val status = session.optString("status", "running")
+                        val endsAt = System.currentTimeMillis() + remainingSec * 1000L
+                        AgentPreferences.setActiveFocusRunning(context, status == "running")
+                        AgentPreferences.setActiveFocusSessionId(context, id)
+                        AgentPreferences.setActiveFocusTitle(context, title)
+                        AgentPreferences.setActiveFocusEndsAt(context, endsAt)
+                        Notifications.showLiveFocusNotification(
+                            context = context,
+                            taskTitle = title,
+                            endsAtEpochMs = endsAt,
+                            isPaused = status == "paused",
+                        )
+                        true
+                    } else {
+                        AgentPreferences.setActiveFocusRunning(context, false)
+                        AgentPreferences.setActiveFocusSessionId(context, null)
+                        AgentPreferences.setActiveFocusEndsAt(context, 0L)
+                        Notifications.cancelLiveFocusNotification(context)
+                        false
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            }
+        }.getOrDefault(false)
+    }
+
+    fun startRemoteFocusSession(context: Context, plannedMinutes: Int = 25) {
+        withValidToken(context) { token ->
+            val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/focus-session")
+            val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 8_000
+                readTimeout = 8_000
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Content-Type", "application/json")
+            }
+            try {
+                val payload = org.json.JSONObject()
+                    .put("action", "start")
+                    .put("plannedMinutes", plannedMinutes)
+                    .put("mode", "pomodoro_25_5")
+                    .toString()
+                conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                if (conn.responseCode in 200..299) {
+                    val body = conn.inputStream.bufferedReader().use { it.readText() }
+                    val session = org.json.JSONObject(body).optJSONObject("session")
+                    if (session != null) {
+                        AgentPreferences.setActiveFocusSessionId(context, session.optString("id", ""))
+                    }
+                }
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
+    fun updateRemoteFocusSession(context: Context, action: String, sessionId: String) {
+        withValidToken(context) { token ->
+            val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/focus-session")
+            val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 8_000
+                readTimeout = 8_000
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Content-Type", "application/json")
+            }
+            try {
+                val payload = org.json.JSONObject()
+                    .put("action", action)
+                    .put("sessionId", sessionId)
+                    .toString()
+                conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                conn.responseCode
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
 }

@@ -88,8 +88,8 @@ function mapSupabaseSession(row: SupabaseSessionRow): FocusSession {
   return mapSession({ ...row, task_title: taskTitle });
 }
 
-export async function getActiveSession(): Promise<FocusSession | null> {
-  const ctx = await getSupabaseContext();
+export async function getActiveSession(request?: Request): Promise<FocusSession | null> {
+  const ctx = await getSupabaseContext(request);
   if (ctx) {
     const rows = unwrapSupabase(
       await ctx.supabase
@@ -320,8 +320,8 @@ export async function startFocusSession(input: {
   taskId: string | null;
   mode: FocusMode;
   plannedMinutes: number;
-}): Promise<{ id: string }> {
-  const ctx = await getSupabaseContext();
+}, request?: Request): Promise<{ id: string }> {
+  const ctx = await getSupabaseContext(request);
   if (ctx) {
     const devices = unwrapSupabase(
       await ctx.supabase
@@ -415,8 +415,8 @@ export async function startFocusSession(input: {
   });
 }
 
-export async function cancelFocusSession(sessionId: string): Promise<void> {
-  const ctx = await getSupabaseContext();
+export async function cancelFocusSession(sessionId: string, request?: Request): Promise<void> {
+  const ctx = await getSupabaseContext(request);
   if (ctx) {
     assertSupabaseOk(
       await ctx.supabase.rpc("rpc_cancel_focus_session", { p_session_id: sessionId }),
@@ -429,11 +429,11 @@ export async function cancelFocusSession(sessionId: string): Promise<void> {
   });
 }
 
-export async function pauseFocusSession(sessionId: string): Promise<{
+export async function pauseFocusSession(sessionId: string, request?: Request): Promise<{
   pausedAt: string;
   pausedSeconds: number;
 }> {
-  const ctx = await getSupabaseContext();
+  const ctx = await getSupabaseContext(request);
   if (ctx) {
     const payload = (
       await ctx.supabase.rpc("rpc_pause_focus_session", { p_session_id: sessionId })
@@ -458,10 +458,10 @@ export async function pauseFocusSession(sessionId: string): Promise<{
   });
 }
 
-export async function resumeFocusSession(sessionId: string): Promise<{
+export async function resumeFocusSession(sessionId: string, request?: Request): Promise<{
   pausedSeconds: number;
 }> {
-  const ctx = await getSupabaseContext();
+  const ctx = await getSupabaseContext(request);
   if (ctx) {
     const payload = await ctx.supabase.rpc("rpc_resume_focus_session", {
       p_session_id: sessionId,
@@ -484,6 +484,7 @@ export async function resumeFocusSession(sessionId: string): Promise<{
 
 export async function completeFocusSession(
   sessionId: string,
+  request?: Request,
 ): Promise<{
   sessionId: string;
   actualMinutes: number;
@@ -493,7 +494,7 @@ export async function completeFocusSession(
   isValid: boolean;
   idempotent: boolean;
 }> {
-  const ctx = await getSupabaseContext();
+  const ctx = await getSupabaseContext(request);
   if (ctx) {
     const payload = unwrapSupabase(
       await ctx.supabase.rpc("rpc_complete_focus_session", { p_session_id: sessionId }),

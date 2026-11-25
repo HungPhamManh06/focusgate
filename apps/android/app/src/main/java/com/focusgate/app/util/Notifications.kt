@@ -19,6 +19,7 @@ object NotificationIds {
     const val PROTECTION_ALERT = 1002
     const val BLOCK_FAILED_ALERT = 1003
     const val EMERGENCY_ALERT = 1004
+    const val LIVE_FOCUS_NOTIFICATION = 1005
 }
 
 object Notifications {
@@ -133,6 +134,78 @@ object Notifications {
             .setAutoCancel(true)
             .build()
         post(context, NotificationIds.BLOCK_FAILED_ALERT, notification)
+    }
+
+    fun showLiveFocusNotification(
+        context: Context,
+        taskTitle: String,
+        endsAtEpochMs: Long,
+        isPaused: Boolean = false,
+    ) {
+        val isVi = AgentPreferences.getLanguage(context) == "vi"
+        val openIntent = PendingIntent.getActivity(
+            context,
+            20,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val completeIntent = PendingIntent.getBroadcast(
+            context,
+            21,
+            Intent(context, com.focusgate.app.service.FocusNotificationActionReceiver::class.java).apply {
+                action = com.focusgate.app.service.FocusNotificationActionReceiver.ACTION_COMPLETE_FOCUS
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val pauseIntent = PendingIntent.getBroadcast(
+            context,
+            22,
+            Intent(context, com.focusgate.app.service.FocusNotificationActionReceiver::class.java).apply {
+                action = com.focusgate.app.service.FocusNotificationActionReceiver.ACTION_PAUSE_FOCUS
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val builder = NotificationCompat.Builder(context, NotificationIds.CHANNEL_PROTECTION)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle(if (isVi) "Đang tập trung · $taskTitle" else "Focusing · $taskTitle")
+            .setContentText(
+                if (isPaused) {
+                    if (isVi) "Đã tạm dừng — chạm để tiếp tục" else "Paused — tap to resume"
+                } else {
+                    if (isVi) "Cổng giải trí đang khóa cho đến khi xong phiên" else "Leisure gate locked until sprint ends"
+                },
+            )
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(openIntent)
+            .addAction(
+                android.R.drawable.ic_menu_save,
+                if (isVi) "Hoàn thành" else "Complete",
+                completeIntent,
+            )
+            .addAction(
+                android.R.drawable.ic_media_pause,
+                if (isVi) "Nghỉ ngắn" else "Short break",
+                pauseIntent,
+            )
+
+        if (!isPaused && endsAtEpochMs > System.currentTimeMillis()) {
+            builder
+                .setWhen(endsAtEpochMs)
+                .setShowWhen(true)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
+        }
+
+        post(context, NotificationIds.LIVE_FOCUS_NOTIFICATION, builder.build())
+    }
+
+    fun cancelLiveFocusNotification(context: Context) {
+        NotificationManagerCompat.from(context).cancel(NotificationIds.LIVE_FOCUS_NOTIFICATION)
     }
 
     private fun post(context: Context, id: Int, notification: Notification) {

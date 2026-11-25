@@ -152,16 +152,14 @@ object AgentPreferences {
     }
 
     fun isCurrentlyBedtime(context: Context): Boolean {
-        if (!isBedtimeEnabled(context)) return false
         val cal = Calendar.getInstance()
         val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-        val startMin = parseHhMm(getBedtimeStart(context), 23 * 60)
-        val endMin = parseHhMm(getBedtimeEnd(context), 6 * 60)
-        return if (startMin <= endMin) {
-            nowMinutes in startMin until endMin
-        } else {
-            nowMinutes >= startMin || nowMinutes < endMin
-        }
+        return com.focusgate.app.policy.BedtimeScheduleEvaluator.isInBedtimeWindow(
+            nowMinutesOfDay = nowMinutes,
+            startHhMm = getBedtimeStart(context),
+            endHhMm = getBedtimeEnd(context),
+            enabled = isBedtimeEnabled(context),
+        )
     }
 
     private fun parseHhMm(raw: String?, fallbackMinutes: Int): Int {
@@ -227,5 +225,33 @@ object AgentPreferences {
     fun setLanguage(context: Context, language: String) {
         val normalized = if (language == "vi") "vi" else "en"
         prefs(context).edit().putString("policy_language", normalized).apply()
+    }
+
+    fun isStrictFrictionMode(context: Context): Boolean =
+        prefs(context).getBoolean("strict_friction_mode", false)
+
+    fun setStrictFrictionMode(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean("strict_friction_mode", enabled).apply()
+    }
+
+    fun getActiveFocusSessionId(context: Context): String? =
+        prefs(context).getString("active_focus_session_id", null)?.takeIf { it.isNotBlank() }
+
+    fun setActiveFocusSessionId(context: Context, sessionId: String?) {
+        prefs(context).edit().putString("active_focus_session_id", sessionId).apply()
+    }
+
+    fun getActiveFocusEndsAt(context: Context): Long =
+        prefs(context).getLong("active_focus_ends_at", 0L)
+
+    fun setActiveFocusEndsAt(context: Context, endsAtMs: Long) {
+        prefs(context).edit().putLong("active_focus_ends_at", endsAtMs).apply()
+    }
+
+    fun getActiveFocusTitle(context: Context): String? =
+        prefs(context).getString("active_focus_title", null)?.takeIf { it.isNotBlank() }
+
+    fun setActiveFocusTitle(context: Context, title: String?) {
+        prefs(context).edit().putString("active_focus_title", title).apply()
     }
 }

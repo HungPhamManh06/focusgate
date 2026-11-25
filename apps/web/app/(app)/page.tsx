@@ -5,7 +5,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
+import { AccountabilityCard } from "@/components/domain/accountability-card";
+import { AiCoachCard } from "@/components/domain/ai-coach-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
+import { getPartnerOverview, getStalledTasks } from "@/lib/data/v4-ecosystem";
+import { getStatistics } from "@/lib/data/stats";
+import { getHealthSummary } from "@/lib/data/health";
+import { generateWeeklyCoachInsights } from "@/lib/domain/focus-coach";
 import { KindBadge } from "@/components/domain/labels";
 import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
 import { NextMoveCard } from "@/components/domain/next-move-card";
@@ -35,7 +41,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   // Fetch 5 upcoming tasks with due dates so that if 1 is promoted to "Your Next Move",
   // "Due Soon" can still display up to 4 distinct remaining deadlines.
-  const [workspace, plan, focus, wallet, upcomingRaw, sessions, counts, v2Settings] = await Promise.all([
+  const [workspace, plan, focus, wallet, upcomingRaw, sessions, counts, v2Settings, stalledTasks, partnerOverview] = await Promise.all([
     getWorkspace(),
     getTodayPlan(),
     getTodayFocusSummary(),
@@ -44,10 +50,26 @@ export default async function DashboardPage() {
     getRecentSessions(4),
     getTaskCounts(),
     getV2Settings().catch(() => null),
+    getStalledTasks().catch(() => []),
+    getPartnerOverview().catch(() => ({ pendingInviteCode: null, partners: [] })),
   ]);
 
   const locale = v2Settings?.language ?? "en";
   const isVi = locale === "vi";
+
+  const [weeklyStats, weeklyHealth] = await Promise.all([
+    getStatistics(7, locale).catch(() => null),
+    getHealthSummary(7, workspace.profile.timezone).catch(() => null),
+  ]);
+  const coachInsights = weeklyStats
+    ? generateWeeklyCoachInsights({
+        days: weeklyStats.days,
+        healthDays: weeklyHealth?.days ?? [],
+        hourlyFocus: weeklyStats.hourlyBreakdown ?? [],
+        blockedAttempts: weeklyStats.blockedAttempts ?? 0,
+        completionRate: weeklyStats.completionRate,
+      })
+    : [];
 
   const nextMove = await getNextMoveCandidate(plan);
   const dueSoonTasks = filterDueSoonTasks(upcomingRaw, nextMove?.task.id, 4);
@@ -338,6 +360,15 @@ export default async function DashboardPage() {
             )}
           </div>
         </Card>
+      </section>
+
+      {/* AI Focus Coach & Accountability Partner */}
+      <section className="mt-6 grid gap-5 lg:grid-cols-2">
+        <AiCoachCard stalledTasks={stalledTasks} insights={coachInsights} />
+        <AccountabilityCard
+          pendingInviteCode={partnerOverview.pendingInviteCode}
+          partners={partnerOverview.partners}
+        />
       </section>
     </div>
   );

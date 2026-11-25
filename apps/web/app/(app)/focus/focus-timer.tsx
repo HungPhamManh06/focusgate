@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   cancelFocusAction,
@@ -50,6 +51,7 @@ export function FocusTimer({
   minValidMinutes: number;
 }) {
   const isVi = useLocale() === "vi";
+  const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   const [keepFocusingOvertime, setKeepFocusingOvertime] = useState(false);
   const [submission, setSubmission] = useState<FocusSubmissionState>({ status: "idle" });
@@ -117,6 +119,35 @@ export function FocusTimer({
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [session.startedAt, optimisticSession.status]);
+
+  // Cross-device live sync: if Android/another client pauses, resumes, or completes this session, refresh UI.
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/agent/focus-session", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          active: boolean;
+          session?: { id: string; status: string } | null;
+        };
+        if (
+          !data.active ||
+          data.session?.id !== session.id ||
+          data.session?.status !== optimisticSession.status
+        ) {
+          router.refresh();
+        }
+      } catch {
+        // Ignore transient network errors during background sync.
+      }
+    };
+    const timer = window.setInterval(poll, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [session.id, optimisticSession.status, router]);
 
   const timerState = computeFocusTimerState({
     startedAtIso: session.startedAt,

@@ -28,6 +28,9 @@ export interface V2Settings {
   dailyStepsGoal: number;
   dailySleepGoalHours: number;
   targetWeightKg: number | null;
+  strictModeEnabled: boolean;
+  bedtimeEnabled: boolean;
+  displayName: string | null;
 }
 
 export interface DiscoveredAppRecord {
@@ -74,6 +77,9 @@ function mapSettingsRow(row: Record<string, unknown> | null | undefined): V2Sett
       r.target_weight_kg !== null && r.target_weight_kg !== undefined
         ? Number(r.target_weight_kg)
         : null,
+    strictModeEnabled: Boolean(r.strict_mode_enabled ?? false),
+    bedtimeEnabled: Boolean(r.bedtime_enabled ?? false),
+    displayName: (r.display_name as string | null | undefined) ?? null,
   };
 }
 
@@ -124,6 +130,9 @@ export async function updateV2Settings(
     dailyStepsGoal: number;
     dailySleepGoalHours: number;
     targetWeightKg: number | null;
+    strictModeEnabled: boolean;
+    bedtimeEnabled: boolean;
+    displayName: string | null;
   }>,
 ): Promise<void> {
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -152,6 +161,11 @@ export async function updateV2Settings(
       input.targetWeightKg !== null && input.targetWeightKg > 0
         ? Math.round(input.targetWeightKg * 100) / 100
         : null;
+  }
+  if (input.strictModeEnabled !== undefined) patch.strict_mode_enabled = input.strictModeEnabled;
+  if (input.bedtimeEnabled !== undefined) patch.bedtime_enabled = input.bedtimeEnabled;
+  if (input.displayName !== undefined) {
+    patch.display_name = input.displayName ? input.displayName.trim().slice(0, 48) : null;
   }
 
   const ctx = await getSupabaseContext();
@@ -200,6 +214,19 @@ export async function updateV2Settings(
         p_last_daily_review_date: input.lastDailyReviewDate ?? null,
       }),
     );
+    if (
+      input.strictModeEnabled !== undefined ||
+      input.bedtimeEnabled !== undefined ||
+      input.displayName !== undefined
+    ) {
+      assertSupabaseOk(
+        await ctx.supabase.rpc("rpc_update_v4_settings", {
+          p_strict_mode_enabled: input.strictModeEnabled ?? null,
+          p_bedtime_enabled: input.bedtimeEnabled ?? null,
+          p_display_name: input.displayName !== undefined ? (input.displayName ?? "") : null,
+        }),
+      );
+    }
     return;
   }
 

@@ -34,11 +34,13 @@ import { buildPlannerSummaryViewModel } from "@/lib/domain/tasks-planner-state";
 import { getPlannerBacklog, getTodayPlan } from "@/lib/data/planner";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { listGoals, listPlanSchedules } from "@/lib/data/v3-features";
+import { listPlanTemplates, listRecurringRules } from "@/lib/data/v4-ecosystem";
 import { getWorkspace } from "@/lib/data/workspace";
 import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { AddPlanTask } from "./add-plan-task";
 import { PlanTaskRow } from "./plan-task-row";
+import { TemplatesRoutinesCard } from "./templates-routines-card";
 import { V2PlannerTools } from "./v2-planner-tools";
 import { V3GoalsTimeline } from "./v3-goals-timeline";
 
@@ -138,10 +140,15 @@ export default async function PlannerPage() {
   ]);
   const locale = v2Settings?.language ?? "en";
   const isVi = locale === "vi";
-  const [backlog, schedules] = await Promise.all([
+  const [backlog, schedules, planTemplates, recurringRules] = await Promise.all([
     getPlannerBacklog(plan?.id ?? null),
     listPlanSchedules(plan?.id ?? null),
+    listPlanTemplates(locale).catch(() => []),
+    listRecurringRules().catch(() => []),
   ]);
+  const pendingEstimatedMinutes = (plan?.tasks ?? [])
+    .filter((t) => !t.completedAt)
+    .reduce((sum, t) => sum + Math.max(15, t.requiredFocusMinutes || 30), 0);
   const { timezone, displayName } = workspace.profile;
   const today = todayIso(timezone);
   const planDate = plan?.planDate ?? today;
@@ -623,7 +630,16 @@ export default async function PlannerPage() {
         focusMinutes={plan?.progress.focusDone ?? 0}
       />
 
-      <V3GoalsTimeline goals={goals} schedules={schedules} />
+      <V3GoalsTimeline
+        goals={goals}
+        schedules={schedules}
+        pendingEstimatedMinutes={pendingEstimatedMinutes}
+      />
+
+      <TemplatesRoutinesCard
+        templates={planTemplates}
+        recurringRules={recurringRules}
+      />
     </div>
   );
 }

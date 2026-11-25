@@ -22,6 +22,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
       We intentionally do NOT request QUERY_ALL_PACKAGES. Android 11+ package
@@ -80,6 +81,26 @@
             android:exported="false" />
 
         <receiver
+            android:name=".service.FocusNotificationActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.focusgate.app.ACTION_COMPLETE_FOCUS" />
+                <action android:name="com.focusgate.app.ACTION_PAUSE_FOCUS" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".service.FocusGateTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_lock_lock"
+            android:label="FocusGate"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
             android:name=".service.BootReceiver"
             android:enabled="true"
             android:exported="true">
@@ -99,5 +120,15 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/focusgate_widget_info" />
         </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

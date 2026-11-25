@@ -26,6 +26,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,9 +58,15 @@ fun BlockOverlayContent(
     onEmergency: () -> Unit,
     isVi: Boolean = false,
     planSummary: String = "",
+    strictFrictionMode: Boolean = false,
+    isBedtimeMode: Boolean = false,
 ) {
     var confirmEmergency by remember { mutableStateOf(false) }
     var countdownSeconds by remember { mutableIntStateOf(30) }
+    var typedPledge by remember { mutableStateOf("") }
+    val requiredPledge = if (isVi) "Toi chon xao nhang" else "I choose distraction"
+    val pledgeMatched = !strictFrictionMode ||
+        typedPledge.trim().equals(requiredPledge, ignoreCase = true)
 
     val transition = rememberInfiniteTransition(label = "mindful_breath")
     val breathScale by transition.animateFloat(
@@ -206,13 +214,28 @@ fun BlockOverlayContent(
                         .padding(top = 14.dp),
                 ) {
                     Column(Modifier.padding(16.dp)) {
+                        if (isBedtimeMode) {
+                            Text(
+                                text = if (isVi) "🌙 Đang trong Giờ Ngủ (Bedtime Gate)" else "🌙 Bedtime Gate Active",
+                                color = Color(0xFFFDE68A),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                        }
                         Text(
                             text = if (isVi) "Dùng quyền khẩn cấp 10 phút?" else "Use 10-minute emergency access?",
                             color = Color(0xFFFAF7F5),
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            text = if (isVi) {
+                            text = if (strictFrictionMode) {
+                                if (isVi) {
+                                    "Chế độ Nghiêm khắc: chờ hết 30 giây VÀ gõ chính xác câu \"$requiredPledge\" để xác nhận."
+                                } else {
+                                    "Strict Friction Mode: wait 30s AND type \"$requiredPledge\" to unlock."
+                                }
+                            } else if (isVi) {
                                 "Chỉ dùng khi thật sự khẩn cấp (tối đa 1 lần/ngày). Chờ hết 30 giây để xác nhận."
                             } else {
                                 "Use only for urgent access (max 1/day). Wait 30 seconds to confirm."
@@ -221,21 +244,44 @@ fun BlockOverlayContent(
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 6.dp),
                         )
+                        if (strictFrictionMode) {
+                            OutlinedTextField(
+                                value = typedPledge,
+                                onValueChange = { typedPledge = it },
+                                singleLine = true,
+                                placeholder = {
+                                    Text(requiredPledge, color = Color(0xFF7A686B))
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color(0xFFFAF7F5),
+                                    unfocusedTextColor = Color(0xFFFAF7F5),
+                                    focusedBorderColor = Color(0xFFF87171),
+                                    unfocusedBorderColor = Color(0xFF4A3438),
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp),
+                            )
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 10.dp),
                             horizontalArrangement = Arrangement.End,
                         ) {
-                            TextButton(onClick = { confirmEmergency = false }) {
+                            TextButton(onClick = {
+                                confirmEmergency = false
+                                typedPledge = ""
+                            }) {
                                 Text(if (isVi) "Hủy" else "Cancel", color = Color(0xFFD9CBCD))
                             }
                             Button(
                                 onClick = {
                                     confirmEmergency = false
+                                    typedPledge = ""
                                     onEmergency()
                                 },
-                                enabled = countdownSeconds == 0,
+                                enabled = countdownSeconds == 0 && pledgeMatched,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFFF87171),
                                     contentColor = Color(0xFF120C0D),

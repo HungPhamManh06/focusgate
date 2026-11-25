@@ -73,6 +73,8 @@ import com.focusgate.app.policy.ProtectionLevel
 import com.focusgate.app.policy.RemotePlanSnapshot
 import com.focusgate.app.service.AppUsageMonitorService
 import com.focusgate.app.util.AgentPreferences
+import com.focusgate.app.util.AppUpdateInfo
+import com.focusgate.app.util.AppUpdater
 import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.FocusSoundscapePlayer
 import com.focusgate.app.util.SoundscapeMode
@@ -116,6 +118,20 @@ fun HomeScreen(
 
     var usageGranted by remember { mutableStateOf(PermissionChecks.hasUsageAccess(context)) }
     var overlayGranted by remember { mutableStateOf(PermissionChecks.hasOverlayAccess(context)) }
+    var availableUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    var updatingApp by remember { mutableStateOf(false) }
+    var strictFrictionMode by remember {
+        mutableStateOf(AgentPreferences.isStrictFrictionMode(context))
+    }
+
+    LaunchedEffect(Unit) {
+        availableUpdate = AppUpdater.checkForUpdate()
+        if (AgentPreferences.getAccessToken(context) != null) {
+            withContext(Dispatchers.IO) {
+                PlanSyncManager.syncRemoteFocusSession(context)
+            }
+        }
+    }
     var notificationsGranted by remember {
         mutableStateOf(PermissionChecks.hasNotificationPermission(context))
     }
@@ -686,6 +702,66 @@ fun HomeScreen(
             }
 
             if (bottomTab == HomeBottomTab.TODAY) {
+            availableUpdate?.let { update ->
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    tr(
+                                        "Update available: ${update.versionName}",
+                                        "Có bản cập nhật mới: ${update.versionName}",
+                                    ),
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    tr(
+                                        "Tap to download & install directly (no uninstall needed).",
+                                        "Chạm để tải & cài đè trực tiếp (không cần gỡ app cũ).",
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Button(
+                                enabled = !updatingApp,
+                                onClick = {
+                                    updatingApp = true
+                                    scope.launch {
+                                        val res = AppUpdater.downloadAndInstall(context, update)
+                                        updatingApp = false
+                                        res.onFailure {
+                                            banner = tr(
+                                                "Update download failed: ${it.message}",
+                                                "Tải cập nhật thất bại: ${it.message}",
+                                            )
+                                        }
+                                    }
+                                },
+                            ) {
+                                Text(
+                                    if (updatingApp) {
+                                        tr("Downloading...", "Đang tải...")
+                                    } else {
+                                        tr("Update", "Cập nhật")
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             if (signedInEmail != null) {
                 item {
                     val heroPlan = planSnapshot?.plan
@@ -703,6 +779,43 @@ fun HomeScreen(
                         onSync = { syncPlanFromWeb() },
                         syncBusy = planSyncBusy,
                     )
+                }
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    tr("Strict Friction Challenge", "Chế độ Nghiêm khắc (Ma sát)"),
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    tr(
+                                        "Require typing commitment phrase to emergency-unlock.",
+                                        "Bắt buộc gõ câu cam kết khi xin mở khẩn cấp.",
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = strictFrictionMode,
+                                onCheckedChange = { enabled ->
+                                    strictFrictionMode = enabled
+                                    AgentPreferences.setStrictFrictionMode(context, enabled)
+                                },
+                            )
+                        }
+                    }
                 }
             }
 

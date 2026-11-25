@@ -38,6 +38,8 @@ jobs:
   android:
     name: Android Unit Tests (JDK 17)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -69,3 +71,12 @@ jobs:
         with:
           name: focusgate-android-personal-debug
           path: apps/android/app/build/outputs/apk/personal/debug/*.apk
+      - name: Publish Android Release APK (for In-App Updater)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v0.1.${{ github.run_number }}
+          name: FocusGate Android v0.1.${{ github.run_number }}
+          body: Automated persistent-signed Android build #${{ github.run_number }}.
+          files: apps/android/app/build/outputs/apk/personal/debug/*.apk
+          make_latest: true

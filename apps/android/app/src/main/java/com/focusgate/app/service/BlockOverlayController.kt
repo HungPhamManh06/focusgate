@@ -49,6 +49,10 @@ class BlockOverlayController(private val context: Context) {
                     BlockOverlayContent(
                         appLabel = appLabel,
                         allowEmergency = AgentPreferences.canUseEmergencyToday(context),
+                        isVi = AgentPreferences.getLanguage(context) == "vi",
+                        planSummary = AgentPreferences.getPlanSummaryText(context),
+                        strictFrictionMode = AgentPreferences.isStrictFrictionMode(context),
+                        isBedtimeMode = AgentPreferences.isCurrentlyBedtime(context),
                         onBackHome = onBackHome,
                         onOpenFocusGate = onOpenFocusGate,
                         onEmergency = {
@@ -91,13 +95,18 @@ class BlockOverlayController(private val context: Context) {
     fun isShowingFor(packageName: String): Boolean =
         view != null && shownPackage == packageName
 
-    private fun layoutParams(): WindowManager.LayoutParams =
-        WindowManager.LayoutParams(
+    private fun layoutParams(): WindowManager.LayoutParams {
+        val flags = if (AgentPreferences.isStrictFrictionMode(context)) {
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+        } else {
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+        }
+        return WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            flags,
             PixelFormat.OPAQUE,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -107,6 +116,7 @@ class BlockOverlayController(private val context: Context) {
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
+    }
 
     private class OverlayLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
         private val lifecycleRegistry = LifecycleRegistry(this)
