@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Palette } from "lucide-react";
+import { Check, LayoutGrid, Palette, Type } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/i18n/language-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +78,8 @@ const PRESETS: Array<{
 export function ThemePreviewPicker() {
   const isVi = useLocale() === "vi";
   const [preset, setPreset] = useState<VisualPreset>("crimson");
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
+  const [fontStyle, setFontStyle] = useState<"serif" | "sans">("serif");
 
   useEffect(() => {
     const saved = window.localStorage.getItem("focusgate-preset") as VisualPreset | null;
@@ -86,7 +88,41 @@ export function ThemePreviewPicker() {
     } else if (document.documentElement.classList.contains("dark")) {
       setPreset("espresso");
     }
+    if (window.localStorage.getItem("focusgate-density") === "compact") {
+      setDensity("compact");
+    }
+    if (window.localStorage.getItem("focusgate-font") === "sans") {
+      setFontStyle("sans");
+    }
   }, []);
+
+  const applyDensity = (next: "comfortable" | "compact") => {
+    setDensity(next);
+    if (next === "compact") {
+      document.documentElement.setAttribute("data-density", "compact");
+    } else {
+      document.documentElement.removeAttribute("data-density");
+    }
+    try {
+      window.localStorage.setItem("focusgate-density", next);
+    } catch {
+      // ignore
+    }
+  };
+
+  const applyFont = (next: "serif" | "sans") => {
+    setFontStyle(next);
+    if (next === "sans") {
+      document.documentElement.setAttribute("data-font", "sans");
+    } else {
+      document.documentElement.removeAttribute("data-font");
+    }
+    try {
+      window.localStorage.setItem("focusgate-font", next);
+    } catch {
+      // ignore
+    }
+  };
 
   const applyPreset = (target: (typeof PRESETS)[number]) => {
     setPreset(target.id);
@@ -159,6 +195,62 @@ export function ThemePreviewPicker() {
             </button>
           );
         })}
+
+        <div className="col-span-full mt-2 grid gap-3 border-t border-line pt-4 sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+              <LayoutGrid className="size-3.5 text-accent" />
+              <span>{isVi ? "Mật độ hiển thị" : "Display density"}</span>
+            </div>
+            <div className="inline-flex rounded-full border border-line bg-surface p-0.5 text-[11px]">
+              {(
+                [
+                  { id: "comfortable", label: isVi ? "Thoáng" : "Comfortable" },
+                  { id: "compact", label: isVi ? "Gọn" : "Compact" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => applyDensity(opt.id)}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                    density === opt.id ? "bg-ink text-canvas" : "text-muted hover:text-ink",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+              <Type className="size-3.5 text-accent" />
+              <span>{isVi ? "Phong cách tiêu đề" : "Heading typography"}</span>
+            </div>
+            <div className="inline-flex rounded-full border border-line bg-surface p-0.5 text-[11px]">
+              {(
+                [
+                  { id: "serif", label: "Editorial Serif" },
+                  { id: "sans", label: "Modern Sans" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => applyFont(opt.id)}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                    fontStyle === opt.id ? "bg-ink text-canvas" : "text-muted hover:text-ink",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

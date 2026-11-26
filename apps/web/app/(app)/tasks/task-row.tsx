@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { getCategoryLabel, getKindLabel } from "@/components/domain/labels";
+import { HabitStreakStrip } from "@/components/domain/habit-streak-strip";
 import { TaskInspectorDrawer } from "@/components/domain/task-inspector-drawer";
 import { formatTaskRowStatus } from "@/lib/domain/tasks-planner-state";
 import { cn } from "@/lib/utils";
@@ -157,6 +158,7 @@ export function TaskRow({
               {isVi ? "Trong kế hoạch hôm nay" : "In today's plan"} · {getKindLabel(planTask.kind, locale)}
             </Badge>
           ) : null}
+          {task.isDailyHabit ? <HabitStreakStrip completedToday={completed} /> : null}
         </div>
 
         {task.description ? (

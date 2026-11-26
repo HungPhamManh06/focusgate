@@ -1,10 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ArrowUpRight, PictureInPicture2, Timer } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  ArrowUpRight,
+  Check,
+  Pause,
+  PictureInPicture2,
+  Play,
+  Timer,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/i18n/language-provider";
+import { DEBRIEF_STORAGE_KEY } from "@/components/domain/session-debrief-modal";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 type ActiveSessionPayload = {
@@ -51,10 +60,13 @@ function formatClock(totalSeconds: number): string {
 
 export function FloatingFocusPill() {
   const pathname = usePathname();
+  const router = useRouter();
   const isVi = useLocale() === "vi";
+  const toast = useToast();
   const [session, setSession] = useState<ActiveSessionPayload | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [pipSupported, setPipSupported] = useState(false);
+  const [busyAction, setBusyAction] = useState<"pause" | "complete" | null>(null);
 
   useEffect(() => {
     setPipSupported(
@@ -114,6 +126,67 @@ export function FloatingFocusPill() {
   const radius = 11;
   const circ = 2 * Math.PI * radius;
 
+  async function togglePause() {
+    if (!session || busyAction) return;
+    const nextAction = isPaused ? "resume" : "pause";
+    setBusyAction("pause");
+    const prev = session;
+    setSession({
+      ...session,
+      status: isPaused ? "running" : "paused",
+      pausedAt: isPaused ? null : new Date().toISOString(),
+    });
+    try {
+      const res = await fetch("/api/agent/focus-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: nextAction, sessionId: session.id }),
+      });
+      if (!res.ok) {
+        setSession(prev);
+        toast.push("error", isVi ? "Không thể cập nhật phiên." : "Could not update session.");
+      }
+    } catch {
+      setSession(prev);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function quickComplete() {
+    if (!session || busyAction) return;
+    setBusyAction("complete");
+    try {
+      const res = await fetch("/api/agent/focus-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "complete", sessionId: session.id }),
+      });
+      if (!res.ok) {
+        toast.push("error", isVi ? "Không thể hoàn thành phiên." : "Could not complete session.");
+        return;
+      }
+      try {
+        window.sessionStorage.setItem(
+          DEBRIEF_STORAGE_KEY,
+          JSON.stringify({
+            sessionId: session.id,
+            taskTitle: session.taskTitle ?? null,
+            minutes: Math.max(1, Math.round(elapsedSec / 60)),
+            completedAt: Date.now(),
+          }),
+        );
+      } catch {
+        // Ignore storage errors
+      }
+      setSession(null);
+      toast.push("success", isVi ? "Đã hoàn thành phiên tập trung." : "Focus session completed.");
+      router.refresh();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function openPictureInPicture() {
     const pip = (window as DocumentPiPWindow).documentPictureInPicture;
     if (!pip || !session) return;
@@ -164,7 +237,7 @@ export function FloatingFocusPill() {
 
   return (
     <div className="fixed bottom-20 right-4 z-40 lg:bottom-5 lg:right-5">
-      <div className="fg-animate-in flex items-center gap-2.5 rounded-full border border-line bg-surface/92 py-2 pl-3 pr-2.5 shadow-lift backdrop-blur-xl">
+      <div className="fg-animate-in flex items-center gap-2 rounded-full border border-line bg-surface/94 py-2 pl-3 pr-2.5 shadow-lift backdrop-blur-xl">
         <div className="relative flex size-7 shrink-0 items-center justify-center">
           <svg className="size-7 -rotate-90" viewBox="0 0 28 28" aria-hidden>
             <circle
@@ -202,10 +275,32 @@ export function FloatingFocusPill() {
               {formatClock(elapsedSec)}
             </span>
           </div>
-          <p className="max-w-[140px] truncate text-[10.5px] text-muted">
+          <p className="max-w-[130px] truncate text-[10.5px] text-muted">
             {session.taskTitle || (isVi ? "Đang tập trung" : "Active focus")}
           </p>
         </Link>
+
+        <button
+          type="button"
+          onClick={togglePause}
+          disabled={busyAction !== null}
+          title={isPaused ? (isVi ? "Tiếp tục" : "Resume") : isVi ? "Tạm dừng" : "Pause"}
+          aria-label={isPaused ? (isVi ? "Tiếp tục" : "Resume") : isVi ? "Tạm dừng" : "Pause"}
+          className="flex size-7 items-center justify-center rounded-full border border-line bg-surface-2 text-ink-soft transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
+        >
+          {isPaused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={quickComplete}
+          disabled={busyAction !== null}
+          title={isVi ? "Hoàn thành phiên" : "Complete session"}
+          aria-label={isVi ? "Hoàn thành phiên" : "Complete session"}
+          className="flex size-7 items-center justify-center rounded-full border border-success/35 bg-success-soft text-success transition-colors hover:bg-success hover:text-white disabled:opacity-50"
+        >
+          <Check className="size-3.5" strokeWidth={2.6} />
+        </button>
 
         {pipSupported ? (
           <button

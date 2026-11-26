@@ -8,6 +8,7 @@ import { isSidebarWalletActive } from "@/lib/domain/dashboard-state";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { SidebarAmbientPlayer } from "@/components/shell/sidebar-ambient-player";
 import { isNavActive, navItems } from "./nav-items";
 
 export function Sidebar({
@@ -123,7 +124,8 @@ export function Sidebar({
         </ul>
       </nav>
 
-      <div className="space-y-4 px-4 pb-5">
+      <div className="space-y-3 px-4 pb-5">
+        <SidebarAmbientPlayer isVi={isVi} />
         <div className="rounded-2xl border border-line bg-surface-2 p-4">
           <div className="flex items-center justify-between">
             <p className="label-xs text-muted">{isVi ? "Thời gian khả dụng" : "Available time"}</p>

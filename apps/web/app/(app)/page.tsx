@@ -5,6 +5,7 @@ import { DailyMissionCard } from "@/components/domain/daily-mission-card";
 import { DashboardActivityTabs } from "@/components/domain/dashboard-activity-tabs";
 import { DayTimelineRibbon } from "@/components/domain/day-timeline-ribbon";
 import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
+import { MorningRitualBanner } from "@/components/domain/morning-ritual-banner";
 import { NextMoveCard } from "@/components/domain/next-move-card";
 import { OnboardingTourModal } from "@/components/domain/onboarding-tour-modal";
 import { RewardWalletCard } from "@/components/domain/reward-wallet-card";
@@ -152,6 +153,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* 2. Live Focus Banner & Day-Progress Timeline Ribbon (08:00 -> 22:00) */}
+      {!plan ? <MorningRitualBanner suggestedTasks={upcomingRaw} /> : null}
       <section className="mt-5">
         <DayTimelineRibbon
           schedules={schedules}

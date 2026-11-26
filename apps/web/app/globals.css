@@ -269,3 +269,17 @@
     animation: none !important;
   }
 }
+
+/* FocusGate Web 2.2: Density & Typography Preferences */
+:root[data-font="sans"] {
+  --font-display: "Inter Variable", "Inter", system-ui, -apple-system, sans-serif;
+}
+
+:root[data-density="compact"] main {
+  font-size: 0.94rem;
+}
+
+:root[data-density="compact"] .group.border-b.py-4 {
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
