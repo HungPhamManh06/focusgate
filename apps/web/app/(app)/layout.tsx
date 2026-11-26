@@ -59,7 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {isVi ? "Chuyển tới nội dung chính" : "Skip to main content"}
       </a>
 
-      <div className="min-h-screen lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
+      <div className="min-h-screen lg:grid lg:grid-cols-[var(--sidebar-w,250px)_minmax(0,1fr)]">
         <Sidebar
           displayName={effectiveDisplayName}
           availableMinutes={walletSummaryResult.minutes}

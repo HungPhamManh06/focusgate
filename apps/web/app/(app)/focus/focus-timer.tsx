@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FocusSoundscape } from "@/components/focus-soundscape";
 import { AmbientStudioBackdrop } from "@/components/domain/ambient-studio-backdrop";
+import { FocusSanctuaryTools } from "@/components/domain/focus-sanctuary-tools";
 import { DEBRIEF_STORAGE_KEY } from "@/components/domain/session-debrief-modal";
 import type { SoundPreset } from "@/lib/domain/soundscapes";
 import { ProgressRing } from "@/components/ui/progress";
@@ -395,9 +396,10 @@ export function FocusTimer({
         )}
       >
         {/* 3 Clock Style Switcher */}
+        <FocusSanctuaryTools darkSurface={zenMode} />
         <div
           className={cn(
-            "mb-5 inline-flex gap-1 rounded-full border p-1 text-[11px] font-medium transition-opacity duration-500",
+            "mb-5 mt-4 inline-flex gap-1 rounded-full border p-1 text-[11px] font-medium transition-opacity duration-500",
             zenMode ? "border-white/15 bg-white/5 text-white/75" : "border-line bg-surface-2/80 text-muted",
             zenMode && zenControlsDimmed ? "opacity-20 hover:opacity-100" : "opacity-100",
           )}

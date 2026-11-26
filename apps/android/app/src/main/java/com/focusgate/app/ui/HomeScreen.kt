@@ -876,6 +876,137 @@ fun HomeScreen(
                         syncBusy = planSyncBusy,
                     )
                 }
+                item {
+                    var focusRunning by remember { mutableStateOf(AgentPreferences.isActiveFocusRunning(context)) }
+                    var focusEndsAt by remember { mutableLongStateOf(AgentPreferences.getActiveFocusEndsAt(context)) }
+                    var focusSessionId by remember { mutableStateOf(AgentPreferences.getActiveFocusSessionId(context)) }
+                    var focusTitle by remember { mutableStateOf(AgentPreferences.getActiveFocusTitle(context)) }
+                    var focusBusy by remember { mutableStateOf(false) }
+                    var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+                    LaunchedEffect(focusRunning) {
+                        while (focusRunning) {
+                            nowTick = System.currentTimeMillis()
+                            delay(1_000L)
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    tr("Quick Focus Timer", "Tập trung nhanh"),
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                if (focusRunning) {
+                                    val remSec = ((focusEndsAt - nowTick).coerceAtLeast(0L) / 1000L).toInt()
+                                    val mm = remSec / 60
+                                    val ss = remSec % 60
+                                    Text(
+                                        text = "%02d:%02d".format(mm, ss),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = if (focusRunning) {
+                                    focusTitle ?: tr("Session synced with FocusGate Web", "Đang đồng bộ với FocusGate Web")
+                                } else {
+                                    tr("Start a synced focus block right from your phone.", "Bắt đầu phiên tập trung đồng bộ ngay trên điện thoại.")
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            if (!focusRunning) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf(25, 50).forEach { mins ->
+                                        Button(
+                                            enabled = !focusBusy,
+                                            onClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                focusBusy = true
+                                                scope.launch {
+                                                    try {
+                                                        withContext(Dispatchers.IO) {
+                                                            PlanSyncManager.startRemoteFocusSession(context, mins)
+                                                            PlanSyncManager.syncRemoteFocusSession(context)
+                                                        }
+                                                        focusRunning = AgentPreferences.isActiveFocusRunning(context)
+                                                        focusEndsAt = AgentPreferences.getActiveFocusEndsAt(context)
+                                                        focusSessionId = AgentPreferences.getActiveFocusSessionId(context)
+                                                        focusTitle = AgentPreferences.getActiveFocusTitle(context)
+                                                    } finally {
+                                                        focusBusy = false
+                                                    }
+                                                }
+                                            },
+                                        ) {
+                                            Text(tr("${mins}m Focus", "Tập trung ${mins}p"))
+                                        }
+                                    }
+                                }
+                            } else {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        enabled = !focusBusy && !focusSessionId.isNullOrBlank(),
+                                        onClick = {
+                                            val sid = focusSessionId ?: return@Button
+                                            focusBusy = true
+                                            scope.launch {
+                                                try {
+                                                    withContext(Dispatchers.IO) {
+                                                        PlanSyncManager.updateRemoteFocusSession(context, "complete", sid)
+                                                        PlanSyncManager.syncRemoteFocusSession(context)
+                                                    }
+                                                    focusRunning = AgentPreferences.isActiveFocusRunning(context)
+                                                    focusSessionId = AgentPreferences.getActiveFocusSessionId(context)
+                                                    syncPlanFromWeb()
+                                                } finally {
+                                                    focusBusy = false
+                                                }
+                                            }
+                                        },
+                                    ) {
+                                        Text(tr("Complete", "Hoàn thành"))
+                                    }
+                                    OutlinedButton(
+                                        enabled = !focusBusy && !focusSessionId.isNullOrBlank(),
+                                        onClick = {
+                                            val sid = focusSessionId ?: return@OutlinedButton
+                                            focusBusy = true
+                                            scope.launch {
+                                                try {
+                                                    withContext(Dispatchers.IO) {
+                                                        PlanSyncManager.updateRemoteFocusSession(context, "cancel", sid)
+                                                        PlanSyncManager.syncRemoteFocusSession(context)
+                                                    }
+                                                    focusRunning = AgentPreferences.isActiveFocusRunning(context)
+                                                    focusSessionId = AgentPreferences.getActiveFocusSessionId(context)
+                                                } finally {
+                                                    focusBusy = false
+                                                }
+                                            }
+                                        },
+                                    ) {
+                                        Text(tr("Cancel", "Hủy"))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             if (signedInEmail == null) {

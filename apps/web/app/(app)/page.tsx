@@ -4,6 +4,7 @@ import { AiCoachCard } from "@/components/domain/ai-coach-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
 import { DashboardActivityTabs } from "@/components/domain/dashboard-activity-tabs";
 import { DayTimelineRibbon } from "@/components/domain/day-timeline-ribbon";
+import { EveningWrapupTrigger } from "@/components/domain/evening-wrapup-modal";
 import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
 import { MorningRitualBanner } from "@/components/domain/morning-ritual-banner";
 import { NextMoveCard } from "@/components/domain/next-move-card";
@@ -101,16 +102,24 @@ export default async function DashboardPage() {
     <div className="mx-auto w-full max-w-[1280px] overflow-x-hidden px-4 py-6 sm:px-8 sm:py-8 lg:px-10">
       {/* 1. Greeting Header + Compact Metric Strip */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <LiveGreetingHeader
-          firstName={firstName}
-          initialDateLabel={dateLabel}
-          initialGreeting={greeting(timezone, locale)}
-          description={
-            isVi
-              ? "Hoàn thành việc quan trọng ngay tại đây, tập trung sâu và mở khóa thời gian tự do."
-              : "Finish what matters right here, focus deeply, and unlock guilt-free freedom."
-          }
-        />
+        <div className="space-y-2.5">
+          <LiveGreetingHeader
+            firstName={firstName}
+            initialDateLabel={dateLabel}
+            initialGreeting={greeting(timezone, locale)}
+            description={
+              isVi
+                ? "Hoàn thành việc quan trọng ngay tại đây, tập trung sâu và mở khóa thời gian tự do."
+                : "Finish what matters right here, focus deeply, and unlock guilt-free freedom."
+            }
+          />
+          <EveningWrapupTrigger
+            focusMinutes={focus.minutes}
+            completedCount={(plan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).length}
+            earnedMinutes={wallet.availableMinutes}
+            remainingTasks={(plan?.tasks ?? []).filter((t) => !t.completedAt)}
+          />
+        </div>
 
         <div
           className="grid grid-cols-3 gap-2 rounded-2xl border border-line bg-surface p-2 sm:w-auto sm:min-w-[390px]"

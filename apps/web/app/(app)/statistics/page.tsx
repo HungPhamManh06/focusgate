@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/ui/stat-card";
 import { getCategoryLabel } from "@/components/domain/labels";
+import { AnalyticsStudioCharts } from "@/components/domain/analytics-studio-charts";
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
@@ -173,6 +174,16 @@ export default async function StatisticsPage({
           icon={Flame}
         />
       </section>
+
+      <AnalyticsStudioCharts
+        days={stats.days}
+        categoryBreakdown={stats.categoryBreakdown ?? []}
+        completionRate={stats.completionRate}
+        avgSleepMinutes={health.avgSleepMinutes}
+        avgSteps={health.avgSteps}
+        currentStreak={passportSummary.currentStreak}
+        locale={locale}
+      />
 
       <FocusPassportCard
         statsDays={stats.days}

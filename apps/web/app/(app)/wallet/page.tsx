@@ -31,6 +31,7 @@ import { getWallet } from "@/lib/data/rewards";
 import { getWorkspace } from "@/lib/data/workspace";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { EarnedTimeCard } from "./earned-time-card";
+import { QuickRedeemVault } from "./quick-redeem-vault";
 import { SpendForm } from "./spend-form";
 
 export const dynamic = "force-dynamic";
@@ -110,6 +111,12 @@ export default async function WalletPage() {
             </Link>
           </>
         }
+      />
+
+      <QuickRedeemVault
+        grants={activeGrants}
+        availableMinutes={wallet.availableMinutes}
+        dailyCapMinutes={workspace.settings.dailyCapMinutes}
       />
 
       {plan?.status === "completed" ? (
