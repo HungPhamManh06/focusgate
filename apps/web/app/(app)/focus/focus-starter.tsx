@@ -216,6 +216,44 @@ export function FocusStarter({
             </div>
           ) : null}
 
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {(
+              [
+                { label: isVi ? "⚡ Sprint 15p" : "⚡ Sprint 15m", mode: "custom" as const, mins: 15 },
+                { label: "🍅 Pomodoro 25p", mode: "pomodoro_25_5" as const, mins: 25 },
+                { label: isVi ? "🧠 Sâu 50p" : "🧠 Deep 50m", mode: "pomodoro_50_10" as const, mins: 50 },
+                { label: "🌊 Flow 90p", mode: "custom" as const, mins: 90 },
+                { label: isVi ? "⏱ Bấm giờ" : "⏱ Stopwatch", mode: "open_ended" as const, mins: 600 },
+              ]
+            ).map((chip) => {
+              const disabled =
+                chip.mode !== "open_ended" && chip.mins < starterConfig.minAllowedCustomMinutes;
+              const active =
+                chip.mode === "custom"
+                  ? mode === "custom" && customMinutes === chip.mins
+                  : mode === chip.mode;
+              return (
+                <button
+                  key={chip.label}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    setMode(chip.mode);
+                    if (chip.mode === "custom") setCustomMinutes(chip.mins);
+                  }}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-[11.5px] font-medium transition-all",
+                    active
+                      ? "border-accent bg-accent text-white"
+                      : "border-line bg-surface-2/70 text-ink-soft hover:border-accent/40 hover:text-ink disabled:opacity-40",
+                  )}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4" role="group" aria-label="Session length presets">
             {starterConfig.presets.map((preset) => (
               <button

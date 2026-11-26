@@ -11,6 +11,7 @@ import { getWorkspace } from "@/lib/data/workspace";
 import type { TaskKind } from "@/lib/data/types";
 import { getKindLabel } from "@/components/domain/labels";
 import { cn } from "@/lib/utils";
+import { QuickAddTaskBar } from "./quick-add-task-bar";
 import { TaskFormDialog } from "./task-form-dialog";
 import { TaskSearch } from "./task-search";
 import { TasksWorkspaceClient } from "./tasks-workspace-client";
@@ -100,7 +101,9 @@ export default async function TasksPage({
         <span>{counts.mustDoOpen} {isVi ? "việc Bắt buộc còn lại" : "must-do remaining"}</span>
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 rounded-[18px] border border-line bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
+      <QuickAddTaskBar />
+
+      <div className="mt-4 flex flex-col gap-3 rounded-[18px] border border-line bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-1">
           {viewTabs.map((tab) => (
             <Link

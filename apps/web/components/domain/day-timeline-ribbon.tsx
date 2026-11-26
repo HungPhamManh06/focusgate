@@ -39,6 +39,7 @@ export function DayTimelineRibbon({
     const d = new Date();
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   });
+  const [hoverInfo, setHoverInfo] = useState<{ pct: number; label: string } | null>(null);
 
   useEffect(() => {
     const tick = () => {
@@ -109,12 +110,44 @@ export function DayTimelineRibbon({
           </div>
         </div>
 
-        <div className="relative mt-2.5 h-3 w-full overflow-hidden rounded-full bg-surface-2">
+        <div
+          className="relative mt-2.5 h-3.5 w-full cursor-crosshair overflow-visible rounded-full bg-surface-2"
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+            const minsFromStart = Math.round((pct / 100) * 840);
+            const totalMins = 8 * 60 + minsFromStart;
+            const hh = String(Math.floor(totalMins / 60)).padStart(2, "0");
+            const mm = String(totalMins % 60).padStart(2, "0");
+            setHoverInfo({ pct, label: `${hh}:${mm}` });
+          }}
+          onMouseLeave={() => setHoverInfo(null)}
+        >
+          {/* Subtle hourly tick marks */}
+          {[9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].map((h) => (
+            <span
+              key={h}
+              aria-hidden
+              className="pointer-events-none absolute top-0 h-full w-px bg-line/60"
+              style={{ left: `${((h - 8) / 14) * 100}%` }}
+            />
+          ))}
+
           {/* Elapsed day fill */}
           <div
             className="h-full rounded-full bg-line/70 transition-all"
             style={{ width: `${nowPct}%` }}
           />
+
+          {/* Interactive Hover Scrubber Tooltip */}
+          {hoverInfo ? (
+            <div
+              className="pointer-events-none absolute -top-7 z-20 -translate-x-1/2 rounded-md bg-ink px-1.5 py-0.5 font-mono text-[10px] font-semibold text-canvas shadow"
+              style={{ left: `${hoverInfo.pct}%` }}
+            >
+              {hoverInfo.label}
+            </div>
+          ) : null}
 
           {/* Busy ICS Calendar events */}
           {busyEvents.map((evt) => {

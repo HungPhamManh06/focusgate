@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, Flame, Sparkles, Timer, X } from "lucide-react";
+import { CheckCircle2, Flame, Sparkles, Timer, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/i18n/language-provider";
+import {
+  CelebrationBurst,
+  CHIME_MUTED_KEY,
+  playZenChime,
+} from "@/components/domain/celebration-fx";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -22,20 +27,35 @@ export function SessionDebriefModal() {
   const isVi = useLocale() === "vi";
   const [payload, setPayload] = useState<DebriefPayload | null>(null);
   const [quality, setQuality] = useState<FocusQuality | null>(null);
+  const [chimeMuted, setChimeMuted] = useState(false);
 
   useEffect(() => {
     try {
+      setChimeMuted(window.localStorage.getItem(CHIME_MUTED_KEY) === "1");
       const raw = window.sessionStorage.getItem(DEBRIEF_STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as DebriefPayload;
       if (parsed && Date.now() - parsed.completedAt < 120_000) {
         setPayload(parsed);
+        playZenChime();
       }
       window.sessionStorage.removeItem(DEBRIEF_STORAGE_KEY);
     } catch {
       // Ignore storage errors
     }
   }, []);
+
+  function toggleMute() {
+    setChimeMuted((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(CHIME_MUTED_KEY, next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }
 
   if (!payload) return null;
 
@@ -64,16 +84,28 @@ export function SessionDebriefModal() {
       aria-modal="true"
       aria-label={isVi ? "Tổng kết phiên tập trung" : "Focus session debrief"}
     >
+      <CelebrationBurst />
       <div className="fg-animate-in relative w-full max-w-md overflow-hidden rounded-3xl border border-line bg-surface shadow-2xl">
         <div className="bg-gradient-to-br from-accent/15 via-surface to-success/10 px-6 pb-5 pt-6">
-          <button
-            type="button"
-            onClick={() => setPayload(null)}
-            aria-label={isVi ? "Đóng" : "Close"}
-            className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <X className="size-4" />
-          </button>
+          <div className="absolute right-4 top-4 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={toggleMute}
+              title={chimeMuted ? (isVi ? "Bật chuông" : "Unmute chime") : isVi ? "Tắt chuông" : "Mute chime"}
+              aria-label={chimeMuted ? "Unmute chime" : "Mute chime"}
+              className="flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              {chimeMuted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayload(null)}
+              aria-label={isVi ? "Đóng" : "Close"}
+              className="flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
 
           <div className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-3 py-1 text-[11px] font-semibold text-success">
             <CheckCircle2 className="size-3.5" />

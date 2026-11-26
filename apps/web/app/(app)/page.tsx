@@ -10,6 +10,7 @@ import { MorningRitualBanner } from "@/components/domain/morning-ritual-banner";
 import { NextMoveCard } from "@/components/domain/next-move-card";
 import { OnboardingTourModal } from "@/components/domain/onboarding-tour-modal";
 import { RewardWalletCard } from "@/components/domain/reward-wallet-card";
+import { WeeklyPeekStrip } from "@/components/domain/weekly-peek-strip";
 import { getNextMoveCandidate, getUpcomingTasks } from "@/lib/data/dashboard";
 import { formatMinutes, greeting, todayIso } from "@/lib/data/format";
 import { getActiveSession, getRecentSessions, getTodayFocusSummary } from "@/lib/data/focus";
@@ -170,6 +171,7 @@ export default async function DashboardPage() {
           activeSession={activeSession}
           locale={locale}
         />
+        {weeklyStats ? <WeeklyPeekStrip days={weeklyStats.days} locale={locale} /> : null}
       </section>
 
       {/* 3. Hero Bento Stage — Interactive Living Gate Mission (~66%) + Wallet & Next Move (~34%) */}

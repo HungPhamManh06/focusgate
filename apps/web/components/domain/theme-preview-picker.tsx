@@ -80,6 +80,8 @@ export function ThemePreviewPicker() {
   const [preset, setPreset] = useState<VisualPreset>("crimson");
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [fontStyle, setFontStyle] = useState<"serif" | "sans">("serif");
+  const [accent, setAccent] = useState<string>("default");
+  const [radius, setRadius] = useState<"soft" | "sharp">("soft");
 
   useEffect(() => {
     const saved = window.localStorage.getItem("focusgate-preset") as VisualPreset | null;
@@ -94,7 +96,34 @@ export function ThemePreviewPicker() {
     if (window.localStorage.getItem("focusgate-font") === "sans") {
       setFontStyle("sans");
     }
+    const savedAccent = window.localStorage.getItem("focusgate-accent");
+    if (savedAccent) setAccent(savedAccent);
+    if (window.localStorage.getItem("focusgate-radius") === "sharp") {
+      setRadius("sharp");
+    }
   }, []);
+
+  const applyAccent = (next: string) => {
+    setAccent(next);
+    if (next === "default") document.documentElement.removeAttribute("data-accent");
+    else document.documentElement.setAttribute("data-accent", next);
+    try {
+      window.localStorage.setItem("focusgate-accent", next);
+    } catch {
+      // ignore
+    }
+  };
+
+  const applyRadius = (next: "soft" | "sharp") => {
+    setRadius(next);
+    if (next === "sharp") document.documentElement.setAttribute("data-radius", "sharp");
+    else document.documentElement.removeAttribute("data-radius");
+    try {
+      window.localStorage.setItem("focusgate-radius", next);
+    } catch {
+      // ignore
+    }
+  };
 
   const applyDensity = (next: "comfortable" | "compact") => {
     setDensity(next);
@@ -243,6 +272,64 @@ export function ThemePreviewPicker() {
                   className={cn(
                     "rounded-full px-2.5 py-0.5 font-medium transition-colors",
                     fontStyle === opt.id ? "bg-ink text-canvas" : "text-muted hover:text-ink",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+              <Palette className="size-3.5 text-accent" />
+              <span>{isVi ? "Màu nhấn (Accent)" : "Custom accent"}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {(
+                [
+                  { id: "default", color: "#78716c", label: isVi ? "Mặc định" : "Default" },
+                  { id: "ruby", color: "#b91c1c", label: "Ruby" },
+                  { id: "emerald", color: "#0d7a58", label: "Emerald" },
+                  { id: "sapphire", color: "#2563eb", label: "Sapphire" },
+                  { id: "amethyst", color: "#7c3aed", label: "Amethyst" },
+                  { id: "amber", color: "#d97706", label: "Amber" },
+                ] as const
+              ).map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => applyAccent(c.id)}
+                  title={c.label}
+                  aria-label={c.label}
+                  className={cn(
+                    "size-5 rounded-full border border-white/40 transition-transform hover:scale-115",
+                    accent === c.id && "ring-2 ring-ink ring-offset-1 ring-offset-surface",
+                  )}
+                  style={{ backgroundColor: c.color }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+              <LayoutGrid className="size-3.5 text-accent" />
+              <span>{isVi ? "Kiểu bo góc" : "Corner style"}</span>
+            </div>
+            <div className="inline-flex rounded-full border border-line bg-surface p-0.5 text-[11px]">
+              {(
+                [
+                  { id: "soft", label: isVi ? "Mềm mại" : "Soft" },
+                  { id: "sharp", label: isVi ? "Sắc nét" : "Sharp" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => applyRadius(opt.id)}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                    radius === opt.id ? "bg-ink text-canvas" : "text-muted hover:text-ink",
                   )}
                 >
                   {opt.label}
