@@ -467,6 +467,13 @@ export function FocusTimer({
                 ✓ {isVi ? "Đã đạt ngưỡng phiên hợp lệ" : "Verified threshold reached"}
               </span>
             ) : null}
+            {session.mode !== "open_ended" &&
+            session.plannedMinutes * 60 - timerState.elapsedSeconds > 0 &&
+            session.plannedMinutes * 60 - timerState.elapsedSeconds <= 300 ? (
+              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning-soft px-2.5 py-0.5 text-[11px] font-semibold text-warning">
+                ⏳ {isVi ? "Còn dưới 5 phút — chuẩn bị gói gọn" : "Under 5m left — wrap up cleanly"}
+              </span>
+            ) : null}
           </div>
         ) : clockStyle === "minimal" ? (
           <div className="flex flex-col items-center py-6">

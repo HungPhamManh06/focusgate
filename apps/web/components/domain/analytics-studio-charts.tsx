@@ -270,9 +270,13 @@ export function AnalyticsStudioCharts({
                     <button
                       key={s.category}
                       type="button"
+                      onClick={() => setHoveredCat(s.category)}
                       onMouseEnter={() => setHoveredCat(s.category)}
                       onFocus={() => setHoveredCat(s.category)}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left transition-colors hover:bg-surface-2"
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left transition-colors hover:bg-surface-2",
+                        activeSlice?.category === s.category && "bg-accent-soft/60",
+                      )}
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <span

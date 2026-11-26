@@ -8,7 +8,9 @@ import {
   completeTaskAction,
   deleteTaskAction,
   reopenTaskAction,
+  updateTaskAction,
 } from "@/lib/actions/tasks";
+import { EMPTY_ACTION_STATE } from "@/lib/actions/types";
 import { formatMinutes } from "@/lib/data/format";
 import type { PlanStatus, PlanTask, Task } from "@/lib/data/types";
 import { useLocale } from "@/components/i18n/language-provider";
@@ -99,6 +101,28 @@ export function TaskRow({
     });
   }
 
+  function cycleEstimate() {
+    const steps = [15, 25, 45, 60];
+    const nextIdx = (steps.indexOf(task.estimatedMinutes) + 1) % steps.length;
+    const nextMins = steps[nextIdx] ?? 25;
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("id", task.id);
+      fd.set("title", task.title);
+      fd.set("description", task.description ?? "");
+      fd.set("category", task.category);
+      fd.set("kind", task.kind);
+      fd.set("priority", task.priority);
+      fd.set("estimatedMinutes", String(nextMins));
+      fd.set("requiredFocusMinutes", String(Math.min(task.requiredFocusMinutes, nextMins)));
+      fd.set("dueDate", task.dueDate ? task.dueDate.slice(0, 10) : "");
+      if (task.isDailyHabit) fd.set("isDailyHabit", "on");
+      const res = await updateTaskAction(EMPTY_ACTION_STATE, fd);
+      if (res.error) toast.push("error", res.error);
+      else toast.push("success", isVi ? `Đã đổi ước tính thành ${nextMins}p.` : `Estimate set to ${nextMins}m.`);
+    });
+  }
+
   function addToTodayPlan() {
     startTransition(async () => {
       const result = await addSuggestedTaskToTodayPlanAction({
@@ -182,9 +206,15 @@ export function TaskRow({
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
           <span>{getCategoryLabel(task.category, locale)}</span>
           <span aria-hidden>·</span>
-          <span>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={cycleEstimate}
+            title={isVi ? "Bấm để đổi nhanh thời lượng (15→25→45→60p)" : "Click to cycle estimate (15→25→45→60m)"}
+            className="rounded-md px-1 py-0.5 transition-colors hover:bg-surface-2 hover:text-accent"
+          >
             {isVi ? `ước tính ${task.estimatedMinutes}m` : `${task.estimatedMinutes}m estimate`}
-          </span>
+          </button>
           {planTask && planTask.requiredFocusMinutes > 0 ? (
             <>
               <span aria-hidden>·</span>

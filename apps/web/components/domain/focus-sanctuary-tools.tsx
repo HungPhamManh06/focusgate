@@ -34,6 +34,7 @@ export function FocusSanctuaryTools({ darkSurface = true }: { darkSurface?: bool
   const [breathPhase, setBreathPhase] = useState<0 | 1 | 2>(0); // 0=Inhale, 1=Hold, 2=Exhale
   const [mantraIdx, setMantraIdx] = useState(0);
   const [showMantra, setShowMantra] = useState(true);
+  const [dimmer, setDimmer] = useState(0);
 
   const todayKey = `focusgate:scratchpad:${new Date().toISOString().slice(0, 10)}`;
 
@@ -112,6 +113,15 @@ export function FocusSanctuaryTools({ darkSurface = true }: { darkSurface?: bool
 
   return (
     <div className="mt-3 flex flex-col items-center gap-3">
+      {dimmer > 0 ? (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-[5] transition-opacity duration-300"
+          style={{
+            background: `radial-gradient(circle at center, transparent 35%, rgba(0,0,0,${(dimmer / 100) * 0.78}) 100%)`,
+          }}
+        />
+      ) : null}
       <div className="flex flex-wrap items-center justify-center gap-2">
         <button
           type="button"
@@ -154,6 +164,25 @@ export function FocusSanctuaryTools({ darkSurface = true }: { darkSurface?: bool
           <Wind className="size-3.5" />
           {isVi ? "Nhịp thở 4-4-4" : "4-4-4 Breath"}
         </button>
+
+        <label
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium",
+            btnClass,
+          )}
+        >
+          <span>{isVi ? "Viền tối" : "Vignette"}</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={10}
+            value={dimmer}
+            onChange={(e) => setDimmer(Number(e.target.value))}
+            aria-label={isVi ? "Độ tối viền Studio" : "Studio vignette dimmer"}
+            className="h-1 w-14 accent-[var(--accent)]"
+          />
+        </label>
       </div>
 
       {scratchOpen ? (

@@ -19,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -109,6 +110,12 @@ fun OnboardingScreen(onFinished: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { (step + 1).toFloat() / STEP_COUNT.toFloat() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+            )
 
             when (step) {
                 0 -> IntroStep(

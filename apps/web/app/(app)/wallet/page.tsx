@@ -32,6 +32,7 @@ import { getWorkspace } from "@/lib/data/workspace";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { EarnedTimeCard } from "./earned-time-card";
 import { QuickRedeemVault } from "./quick-redeem-vault";
+import { RewardWishlistCard } from "./reward-wishlist-card";
 import { SpendForm } from "./spend-form";
 
 export const dynamic = "force-dynamic";
@@ -120,6 +121,8 @@ export default async function WalletPage() {
         earnedMinutes={wallet.earnedMinutes}
         spentMinutes={wallet.consumedMinutes}
       />
+
+      <RewardWishlistCard availableMinutes={wallet.availableMinutes} />
 
       {plan?.status === "completed" ? (
         <div className="mt-7 flex flex-col gap-3 rounded-[18px] border border-accent/25 bg-accent-soft/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">

@@ -1,6 +1,7 @@
 package com.focusgate.app.ui
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -797,6 +798,13 @@ fun HomeScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp),
         ) {
             item {
+                AnimatedVisibility(visible = planSyncBusy) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp),
+                    )
+                }
                 banner?.let { message ->
                     Card(
                         modifier = Modifier

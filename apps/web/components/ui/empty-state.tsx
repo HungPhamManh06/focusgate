@@ -22,20 +22,29 @@ export function EmptyState({
         className,
       )}
     >
-      {/* Subtle FocusGate arch watermark */}
+      {/* Minimalist FocusGate arch + horizon SVG art */}
       <svg
         aria-hidden
-        viewBox="0 0 120 120"
-        className="pointer-events-none absolute -bottom-4 -right-2 size-32 text-line/45"
+        viewBox="0 0 180 120"
+        className="pointer-events-none absolute -bottom-3 right-1 h-28 w-40 text-accent/25"
         fill="none"
       >
+        <circle cx="118" cy="46" r="24" fill="currentColor" fillOpacity="0.18" />
         <path
-          d="M24 112V58a36 36 0 0 1 72 0v54"
+          d="M78 114V60a40 40 0 0 1 80 0v54"
           stroke="currentColor"
-          strokeWidth="6"
+          strokeWidth="3.5"
           strokeLinecap="round"
         />
-        <circle cx="60" cy="40" r="4" fill="currentColor" />
+        <path
+          d="M92 114V62a26 26 0 0 1 52 0v52"
+          stroke="currentColor"
+          strokeOpacity="0.45"
+          strokeWidth="2"
+          strokeDasharray="4 4"
+        />
+        <line x1="20" y1="112" x2="170" y2="112" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
+        <circle cx="118" cy="46" r="3.5" fill="currentColor" />
       </svg>
 
       <span className="relative z-10 flex size-11 items-center justify-center rounded-2xl bg-accent-soft text-accent">

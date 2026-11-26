@@ -185,6 +185,17 @@ export function MissionInteractiveChecklist({
                 </Link>
               ) : null}
 
+              {!done ? (
+                <Link
+                  href={`/focus?taskId=${task.taskId}`}
+                  title={isVi ? "Bắt đầu tập trung việc này" : "Focus on this task"}
+                  className="hidden shrink-0 items-center gap-1 rounded-full border border-accent/35 bg-accent-soft px-2 py-0.5 text-[10.5px] font-semibold text-accent opacity-0 transition-opacity hover:bg-accent hover:text-white group-hover:opacity-100 sm:inline-flex"
+                >
+                  <Timer className="size-2.5" />
+                  {isVi ? "Tập trung" : "Focus"}
+                </Link>
+              ) : null}
+
               <KindBadge kind={task.kind} locale={locale} />
             </li>
           );

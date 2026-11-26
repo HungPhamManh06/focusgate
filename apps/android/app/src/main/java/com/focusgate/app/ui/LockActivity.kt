@@ -10,6 +10,7 @@ import com.focusgate.app.FocusGateApp
 import com.focusgate.app.ui.theme.FocusGateTheme
 import com.focusgate.app.util.AgentPreferences
 import com.focusgate.app.util.EmergencyAccess
+import com.focusgate.app.util.PlanSyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,6 +42,15 @@ class LockActivity : ComponentActivity() {
                     onEmergency = {
                         AgentPreferences.markEmergencyUsedToday(this)
                         startEmergency()
+                    },
+                    onQuickFocus15 = {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            runCatching {
+                                PlanSyncManager.startRemoteFocusSession(this@LockActivity, 15)
+                                PlanSyncManager.syncRemoteFocusSession(this@LockActivity)
+                            }
+                        }
+                        openFocusGate()
                     },
                     isVi = AgentPreferences.getLanguage(this) == "vi",
                     planSummary = AgentPreferences.getPlanSummaryText(this),

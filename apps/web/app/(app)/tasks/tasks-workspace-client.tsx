@@ -58,7 +58,8 @@ export function TasksWorkspaceClient({
   const locale = useLocale();
   const isVi = locale === "vi";
   const toast = useToast();
-  const [layout, setLayout] = useState<"list" | "board">("list");
+  const [layout, setLayout] = useState<"list" | "board" | "matrix">("list");
+  const [smartFilter, setSmartFilter] = useState<"all" | "habit" | "due" | "high">("all");
   const [sortBy, setSortBy] = useState<"default" | "priority" | "shortest" | "due">("default");
   const [customOrder, setCustomOrder] = useState<string[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -94,8 +95,15 @@ export function TasksWorkspaceClient({
 
   const planTaskByTaskId = new Map<string, PlanTask>(planTasks.map((pt) => [pt.taskId, pt]));
 
+  const filteredTasks = tasks.filter((t) => {
+    if (smartFilter === "habit") return Boolean(t.isDailyHabit);
+    if (smartFilter === "due") return Boolean(t.dueDate);
+    if (smartFilter === "high") return t.priority === "urgent" || t.priority === "high";
+    return true;
+  });
+
   const priorityRank: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-  const sortedTasks = [...tasks].sort((a, b) => {
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (sortBy === "priority") {
       return (priorityRank[a.priority] ?? 2) - (priorityRank[b.priority] ?? 2);
     }
@@ -191,6 +199,41 @@ export function TasksWorkspaceClient({
             <Columns3 className="size-3.5" />
             {isVi ? "Bảng 3 cột" : "Board"}
           </button>
+          <button
+            type="button"
+            onClick={() => setLayout("matrix")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-colors",
+              layout === "matrix" ? "bg-ink text-canvas" : "text-muted hover:text-ink",
+            )}
+          >
+            {isVi ? "Ma trận 2×2" : "Matrix"}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1">
+          {(
+            [
+              { id: "all", label: isVi ? "Tất cả" : "All" },
+              { id: "habit", label: isVi ? "Thói quen" : "Habits" },
+              { id: "due", label: isVi ? "Có hạn" : "Has due" },
+              { id: "high", label: isVi ? "Ưu tiên cao" : "High priority" },
+            ] as const
+          ).map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setSmartFilter(f.id)}
+              className={cn(
+                "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                smartFilter === f.id
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-line bg-surface text-muted hover:text-ink",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -309,6 +352,63 @@ export function TasksWorkspaceClient({
                 </Card>
               </section>
             ))}
+        </div>
+      ) : layout === "matrix" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(
+            [
+              {
+                id: "q1",
+                title: isVi ? "🔥 Làm ngay (Khẩn & Quan trọng)" : "🔥 Do First (Urgent & Important)",
+                items: sortedTasks.filter((t) => t.kind === "must_do" && (t.priority === "urgent" || t.priority === "high")),
+              },
+              {
+                id: "q2",
+                title: isVi ? "📅 Lên lịch (Quan trọng)" : "📅 Schedule (Important)",
+                items: sortedTasks.filter((t) => t.kind === "must_do" && t.priority !== "urgent" && t.priority !== "high"),
+              },
+              {
+                id: "q3",
+                title: isVi ? "⚡ Làm nhanh (Nên làm)" : "⚡ Quick Wins (Should-do)",
+                items: sortedTasks.filter((t) => t.kind === "should_do"),
+              },
+              {
+                id: "q4",
+                title: isVi ? "🎁 Để sau / Thưởng (Tùy chọn)" : "🎁 Bonus / Later",
+                items: sortedTasks.filter((t) => t.kind === "bonus"),
+              },
+            ] as const
+          ).map((quad) => (
+            <div key={quad.id} className="rounded-2xl border border-line bg-surface p-4">
+              <div className="mb-2.5 flex items-center justify-between">
+                <h3 className="text-[12.5px] font-semibold text-ink">{quad.title}</h3>
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-muted">
+                  {quad.items.length}
+                </span>
+              </div>
+              {quad.items.length === 0 ? (
+                <p className="py-4 text-center text-[11.5px] text-muted">
+                  {isVi ? "Trống" : "Empty"}
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {quad.items.map((task) => (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => setInspectTask(task)}
+                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-surface-2/50 px-3 py-2 text-left text-[12.5px] transition-colors hover:border-accent/40 hover:text-accent"
+                    >
+                      <span className={cn("truncate font-medium", task.status === "completed" && "text-muted line-through")}>
+                        {task.title}
+                      </span>
+                      <span className="shrink-0 font-mono text-[11px] text-muted">{task.estimatedMinutes}m</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">

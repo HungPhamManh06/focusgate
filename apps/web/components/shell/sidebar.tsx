@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SidebarAmbientPlayer } from "@/components/shell/sidebar-ambient-player";
+import { ActivityBellDrawer } from "@/components/shell/activity-bell-drawer";
 import { isNavActive, navItems } from "./nav-items";
 
 const QUICK_THEMES = [
@@ -312,6 +313,7 @@ export function Sidebar({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            <ActivityBellDrawer collapsed={collapsed} />
             {authEmail && !collapsed ? (
               <form action="/auth/signout" method="post">
                 <button

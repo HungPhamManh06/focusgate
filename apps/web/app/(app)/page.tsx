@@ -4,6 +4,7 @@ import { AiCoachCard } from "@/components/domain/ai-coach-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
 import { DashboardActivityTabs } from "@/components/domain/dashboard-activity-tabs";
 import { DayTimelineRibbon } from "@/components/domain/day-timeline-ribbon";
+import { EnergyCheckinPill } from "@/components/domain/energy-checkin-pill";
 import { EveningWrapupTrigger } from "@/components/domain/evening-wrapup-modal";
 import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
 import { MorningRitualBanner } from "@/components/domain/morning-ritual-banner";
@@ -180,6 +181,7 @@ export default async function DashboardPage() {
           locale={locale}
         />
         {weeklyStats ? <WeeklyPeekStrip days={weeklyStats.days} locale={locale} /> : null}
+        <EnergyCheckinPill />
       </section>
 
       {/* 3. Hero Bento Stage — Interactive Living Gate Mission (~66%) + Wallet & Next Move (~34%) */}

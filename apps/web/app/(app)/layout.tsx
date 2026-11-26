@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatMinutes, initials } from "@/lib/data/format";
+import { getTodayPlan } from "@/lib/data/planner";
 import { getWalletSummary } from "@/lib/data/rewards";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
@@ -10,15 +11,17 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ToastProvider } from "@/components/ui/toast";
 import { LanguageProvider } from "@/components/i18n/language-provider";
 import { MobileNav } from "@/components/shell/mobile-nav";
+import { MobileQuickFab } from "@/components/shell/mobile-quick-fab";
 import { Sidebar } from "@/components/shell/sidebar";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { FloatingFocusPill } from "@/components/shell/floating-focus-pill";
 import { KeyboardShortcuts } from "@/components/shell/keyboard-shortcuts";
+import { TopProgressBar } from "@/components/shell/top-progress-bar";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [workspaceResult, walletSummaryResult, authUser, v2Settings] = await Promise.all([
+  const [workspaceResult, walletSummaryResult, authUser, v2Settings, todayPlan] = await Promise.all([
     getWorkspace()
       .then((data) => ({ ok: true as const, data }))
       .catch((error: unknown) => ({
@@ -30,7 +33,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .catch(() => ({ minutes: null, error: true })),
     getAuthenticatedUser().catch(() => null),
     getV2Settings().catch(() => null),
+    getTodayPlan().catch(() => null),
   ]);
+
+  const planTotal = todayPlan?.tasks.length ?? 0;
+  const planDone = (todayPlan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).length;
+  const topProgressPct = planTotal > 0 ? Math.round((planDone / planTotal) * 100) : 0;
 
   if (!workspaceResult.ok) {
     if (workspaceResult.message.toLowerCase().includes("unauthorized")) {
@@ -102,8 +110,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <main id="main-content" tabIndex={-1} className="flex-1 pb-24 focus:outline-none lg:pb-0">
             {children}
           </main>
+          <TopProgressBar percent={topProgressPct} />
           <CommandPalette />
           <FloatingFocusPill />
+          <MobileQuickFab />
           <KeyboardShortcuts />
 
           <MobileNav language={language} />

@@ -9,10 +9,10 @@ namespace FocusGate.Agent.Poc.UI;
 /// </summary>
 public sealed class BlockOverlayForm : Form
 {
-    private static readonly Color Background = Color.FromArgb(15, 17, 23);
-    private static readonly Color Foreground = Color.FromArgb(237, 239, 244);
-    private static readonly Color Muted = Color.FromArgb(140, 148, 165);
-    private static readonly Color Accent = Color.FromArgb(122, 162, 247);
+    private static readonly Color Background = Color.FromArgb(18, 12, 14);
+    private static readonly Color Foreground = Color.FromArgb(247, 241, 241);
+    private static readonly Color Muted = Color.FromArgb(180, 163, 166);
+    private static readonly Color Accent = Color.FromArgb(248, 113, 113);
 
     private readonly Label _appLabel;
     private readonly Label _titleLabel;

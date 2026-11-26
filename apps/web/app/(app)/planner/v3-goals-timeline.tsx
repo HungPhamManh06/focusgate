@@ -161,6 +161,38 @@ export function V3GoalsTimeline({
                 <p className="text-[11px] font-medium uppercase tracking-wider text-muted">
                   {isVi ? `Chưa gán giờ (${unscheduled.length})` : `Unscheduled (${unscheduled.length})`}
                 </p>
+                {unscheduled.length > 0 ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      const startHour = Math.max(8, Math.min(20, (nowClock?.hour ?? 9) + 1));
+                      let cursor = startHour;
+                      startTransition(async () => {
+                        for (const item of unscheduled.slice(0, 4)) {
+                          while (scheduledByHour.has(cursor) && cursor < 22) cursor += 1;
+                          const s = `${String(cursor).padStart(2, "0")}:00`;
+                          const e = addMinutesToTime(s, 60);
+                          await setPlanTaskScheduleAction({
+                            planTaskId: item.planTaskId,
+                            start: s,
+                            end: e,
+                          });
+                          cursor = Math.min(22, cursor + 1);
+                        }
+                        toast.push(
+                          "success",
+                          isVi
+                            ? "Đã tự động xếp giờ cho các việc chưa có lịch!"
+                            : "Auto-scheduled unscheduled tasks!",
+                        );
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border border-accent/35 bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
+                  >
+                    ✨ {isVi ? "Tự động xếp giờ" : "Auto-schedule"}
+                  </button>
+                ) : null}
                 {unscheduled.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-line p-3 text-[11.5px] text-muted">
                     {isVi ? "Mọi nhiệm vụ đều đã có khung giờ!" : "All tasks are time-blocked!"}
@@ -342,7 +374,16 @@ export function V3GoalsTimeline({
                   <div key={g.id} className="rounded-xl border border-line bg-surface-2/40 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-[12.5px] font-medium text-ink">{g.title}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="truncate text-[12.5px] font-medium text-ink">{g.title}</p>
+                          {pct >= 100 ? (
+                            <Badge tone="success">{isVi ? "Hoàn thành!" : "Done!"}</Badge>
+                          ) : pct >= 80 ? (
+                            <Badge tone="accent">{isVi ? "Sắp cán đích" : "Almost there"}</Badge>
+                          ) : pct >= 50 ? (
+                            <Badge tone="neutral">50%+</Badge>
+                          ) : null}
+                        </div>
                         <p className="text-[11px] text-muted">
                           {g.currentValue} / {g.targetValue} {g.unit} ({pct}%)
                         </p>

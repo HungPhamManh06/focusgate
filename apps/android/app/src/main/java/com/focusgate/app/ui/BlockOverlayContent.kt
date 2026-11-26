@@ -57,6 +57,7 @@ fun BlockOverlayContent(
     onBackHome: () -> Unit,
     onOpenFocusGate: () -> Unit,
     onEmergency: () -> Unit,
+    onQuickFocus15: (() -> Unit)? = null,
     isVi: Boolean = false,
     planSummary: String = "",
     strictFrictionMode: Boolean = false,
@@ -210,6 +211,21 @@ fun BlockOverlayContent(
                     if (isVi) "Mở FocusGate & làm nốt việc" else "Open FocusGate & finish tasks",
                     fontWeight = FontWeight.SemiBold,
                 )
+            }
+
+            if (onQuickFocus15 != null) {
+                OutlinedButton(
+                    onClick = onQuickFocus15,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                ) {
+                    Text(
+                        if (isVi) "⚡ Bắt đầu tập trung ngay 15p" else "⚡ Start 15m Focus Sprint now",
+                        color = overlayAccent,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
 
             OutlinedButton(
