@@ -1257,7 +1257,7 @@ fun HomeScreen(
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.01f))
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                                                     .padding(vertical = 6.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
@@ -1338,20 +1338,25 @@ fun HomeScreen(
                                                 state = swipeState,
                                                 enableDismissFromEndToStart = false,
                                                 backgroundContent = {
+                                                    val swipingRight = swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
                                                     Box(
                                                         modifier = Modifier
                                                             .fillMaxSize()
                                                             .clip(RoundedCornerShape(12.dp))
-                                                            .background(Color(0x2E34D399))
+                                                            .background(
+                                                                if (swipingRight) Color(0x2E34D399) else Color.Transparent,
+                                                            )
                                                             .padding(horizontal = 14.dp),
                                                         contentAlignment = Alignment.CenterStart,
                                                     ) {
-                                                        Text(
-                                                            tr("✓ Swipe to complete", "✓ Vuốt để hoàn thành"),
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = Color(0xFF34D399),
-                                                            fontWeight = FontWeight.SemiBold,
-                                                        )
+                                                        if (swipingRight) {
+                                                            Text(
+                                                                tr("✓ Swipe to complete", "✓ Vuốt để hoàn thành"),
+                                                                style = MaterialTheme.typography.labelMedium,
+                                                                color = Color(0xFF0D7A58),
+                                                                fontWeight = FontWeight.SemiBold,
+                                                            )
+                                                        }
                                                     }
                                                 },
                                                 content = { taskRowContent() },
