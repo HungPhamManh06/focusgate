@@ -42,6 +42,14 @@ export function DeviceRow({
   const toast = useToast();
 
   const isRevoked = device.status === "revoked";
+  const lastSeenMs = device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0;
+  const ageMin = lastSeenMs > 0 ? Math.max(0, Math.round((Date.now() - lastSeenMs) / 60_000)) : null;
+  const syncHealth: "online" | "recent" | "stale" =
+    isRevoked || ageMin === null || ageMin > 1440
+      ? "stale"
+      : ageMin <= 15
+        ? "online"
+        : "recent";
 
   function saveRename(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -126,6 +134,15 @@ export function DeviceRow({
                   ? isVi ? "Đã thu hồi" : "Revoked"
                   : isVi ? "Đang hoạt động" : "Active"}
               </Badge>
+              {!isRevoked ? (
+                <Badge tone={syncHealth === "online" ? "success" : syncHealth === "recent" ? "accent" : "warning"}>
+                  {syncHealth === "online"
+                    ? isVi ? "Trực tuyến" : "Online"
+                    : syncHealth === "recent"
+                      ? isVi ? "Đồng bộ gần đây" : "Synced recently"
+                      : isVi ? "Cần đồng bộ" : "Needs sync"}
+                </Badge>
+              ) : null}
             </div>
           )}
 

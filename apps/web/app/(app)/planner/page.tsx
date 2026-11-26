@@ -41,6 +41,7 @@ import { getWorkspace } from "@/lib/data/workspace";
 import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { AddPlanTask } from "./add-plan-task";
+import { CapacityForecastRing } from "./capacity-forecast-ring";
 import { DeadlineMiniCalendar } from "./deadline-mini-calendar";
 import { PlanTaskRow } from "./plan-task-row";
 import { PlannerTabsShell } from "./planner-tabs-shell";
@@ -633,6 +634,10 @@ export default async function PlannerPage() {
       <PlannerTabsShell
         timelinePanel={
           <>
+            <CapacityForecastRing
+              focusDone={plan?.progress.focusDone ?? 0}
+              pendingMinutes={pendingEstimatedMinutes}
+            />
             <V3GoalsTimeline
               goals={goals}
               schedules={schedules}

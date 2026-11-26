@@ -40,6 +40,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FocusSoundscape } from "@/components/focus-soundscape";
 import { AmbientStudioBackdrop } from "@/components/domain/ambient-studio-backdrop";
 import { FocusSanctuaryTools } from "@/components/domain/focus-sanctuary-tools";
+import { INTENTION_STORAGE_KEY } from "./focus-intention-card";
 import { DEBRIEF_STORAGE_KEY } from "@/components/domain/session-debrief-modal";
 import type { SoundPreset } from "@/lib/domain/soundscapes";
 import { ProgressRing } from "@/components/ui/progress";
@@ -67,7 +68,29 @@ export function FocusTimer({
   const [splitView, setSplitView] = useState(false);
   const [splitTab, setSplitTab] = useState<"notes" | "queue">("notes");
   const [splitNote, setSplitNote] = useState("");
+  const [pinnedIntention, setPinnedIntention] = useState("");
+  const [lastTrigger, setLastTrigger] = useState<string | null>(null);
   const [zenControlsDimmed, setZenControlsDimmed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(INTENTION_STORAGE_KEY)?.trim();
+      if (saved) setPinnedIntention(saved);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  function logDistractionTrigger(tag: string) {
+    setLastTrigger(tag);
+    try {
+      const raw = JSON.parse(window.localStorage.getItem("focusgate:distraction-triggers") || "{}") as Record<string, number>;
+      raw[tag] = (raw[tag] ?? 0) + 1;
+      window.localStorage.setItem("focusgate:distraction-triggers", JSON.stringify(raw));
+    } catch {
+      // ignore
+    }
+  }
   const [activeSound, setActiveSound] = useState<SoundPreset>("off");
   const [clockStyle, setClockStyle] = useState<"dial" | "flip" | "minimal">("dial");
 
@@ -559,6 +582,42 @@ export function FocusTimer({
           <p className="text-[16px] font-semibold text-ink">
             {session.taskTitle ?? (isVi ? "Tập trung tự do" : "Free focus")}
           </p>
+          {pinnedIntention ? (
+            <p className={cn("mt-1.5 text-[12px] italic", zenMode ? "text-white/75" : "text-muted")}>
+              “{pinnedIntention}”
+            </p>
+          ) : null}
+          {timerState.isPaused ? (
+            <div className="mt-3 rounded-xl border border-warning/30 bg-warning-soft/50 px-3 py-2 text-left text-[11px]">
+              <p className="font-semibold text-ink">
+                {isVi ? "Ghi nhận nhanh lý do tạm dừng:" : "Quick-tag what interrupted you:"}
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { id: "messages", label: isVi ? "Tin nhắn" : "Messages" },
+                    { id: "fatigue", label: isVi ? "Mệt mỏi" : "Fatigue" },
+                    { id: "impulse", label: isVi ? "Lướt vô thức" : "Impulse" },
+                    { id: "urgent", label: isVi ? "Việc đột xuất" : "Urgent" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => logDistractionTrigger(t.id)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 font-medium transition-colors",
+                      lastTrigger === t.id
+                        ? "border-accent bg-accent text-white"
+                        : "border-line bg-surface text-muted hover:text-ink",
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {submission.status === "completing" ? (
             <div

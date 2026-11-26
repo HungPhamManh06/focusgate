@@ -272,4 +272,11 @@ object AgentPreferences {
     fun setWidgetTasksPreview(context: Context, text: String) {
         prefs(context).edit().putString("widget_tasks_preview", text).apply()
     }
+
+    fun getQuickScratchpad(context: Context): String =
+        prefs(context).getString("quick_scratchpad", "") ?: ""
+
+    fun setQuickScratchpad(context: Context, text: String) {
+        prefs(context).edit().putString("quick_scratchpad", text).apply()
+    }
 }

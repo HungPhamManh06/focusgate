@@ -184,3 +184,52 @@ document.getElementById("breakBtn")?.addEventListener("click", async () => {
   const { apiBaseUrl } = await chrome.storage.local.get(["apiBaseUrl"]);
   chrome.tabs.create({ url: `${apiBaseUrl || DEFAULT_API_BASE_URL}/focus?break=5` });
 });
+
+// FocusGate 9.0: 4-Theme Popup Switcher + Current Tab Quick-Action Bar
+const POPUP_THEMES = {
+  espresso: "linear-gradient(160deg, #161012 0%, #100b0c 60%, #1d1113 100%)",
+  matcha: "linear-gradient(160deg, #102218 0%, #0a1610 60%, #152b1f 100%)",
+  nordic: "linear-gradient(160deg, #0c182d 0%, #08101e 60%, #13223d 100%)",
+  crimson: "linear-gradient(160deg, #241315 0%, #140b0c 60%, #2a1814 100%)",
+};
+
+async function applyPopupTheme(theme) {
+  const bg = POPUP_THEMES[theme] || POPUP_THEMES.espresso;
+  document.body.style.background = bg;
+  await chrome.storage.local.set({ popupTheme: theme });
+}
+
+document.querySelectorAll(".theme-dot").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const t = btn.getAttribute("data-theme") || "espresso";
+    void applyPopupTheme(t);
+  });
+});
+
+(async () => {
+  const { popupTheme, policy } = await chrome.storage.local.get(["popupTheme", "policy"]);
+  if (popupTheme && POPUP_THEMES[popupTheme]) {
+    document.body.style.background = POPUP_THEMES[popupTheme];
+  }
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.url && /^https?:\/\//i.test(tab.url)) {
+      const host = new URL(tab.url).hostname.replace(/^www\./, "");
+      const bar = document.getElementById("currentTabBar");
+      const hostEl = document.getElementById("currentTabHost");
+      const stateEl = document.getElementById("currentTabState");
+      if (bar && hostEl && stateEl) {
+        const blockedList = Array.isArray(policy?.blockedDomains) ? policy.blockedDomains : [];
+        const isBlocked = blockedList.some((d) => host.includes(String(d).toLowerCase()));
+        const isVi = policy?.language === "vi";
+        hostEl.textContent = host;
+        stateEl.textContent = isBlocked
+          ? (isVi ? "Đang trong danh sách chặn" : "In block list")
+          : (isVi ? "Không bị chặn" : "Allowed");
+        bar.style.display = "block";
+      }
+    }
+  } catch {
+    // ignore
+  }
+})();

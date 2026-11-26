@@ -44,6 +44,7 @@ import {
 import { AmbientDeskClockTrigger } from "./ambient-desk-clock";
 import { BreakTimerCard } from "./break-timer-card";
 import { CustomFocusPresetsCard } from "./custom-focus-presets";
+import { FocusIntentionCard } from "./focus-intention-card";
 import { FocusQueueCard } from "./focus-queue-card";
 import { FocusStarter } from "./focus-starter";
 import { FocusTimer } from "./focus-timer";
@@ -282,11 +283,14 @@ export default async function FocusPage({
               }))}
             />
           ) : (
-            <FocusStarter
-              candidates={candidates}
-              minValidMinutes={workspace.settings.minValidFocusMinutes}
-              initialTaskId={initialTaskId}
-            />
+            <>
+              <FocusIntentionCard />
+              <FocusStarter
+                candidates={candidates}
+                minValidMinutes={workspace.settings.minValidFocusMinutes}
+                initialTaskId={initialTaskId}
+              />
+            </>
           )}
 
           <SessionHistoryTimeline

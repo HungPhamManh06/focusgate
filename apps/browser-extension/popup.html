@@ -132,11 +132,25 @@
   </style>
 </head>
 <body>
-  <div class="brand-row">
-    <img src="icons/icon.svg" alt="FocusGate" />
-    <div>
-      <h1 id="title">FocusGate 8.0</h1>
-      <p class="sub" id="subtitle">Syncs with your daily Must-Do plan.</p>
+  <div class="brand-row" style="justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <img src="icons/icon.svg" alt="FocusGate" />
+      <div>
+        <h1 id="title">FocusGate 9.0</h1>
+        <p class="sub" id="subtitle">Syncs with your daily Must-Do plan.</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:5px;align-items:center;" aria-label="Theme">
+      <button type="button" class="theme-dot" data-theme="espresso" title="Espresso" style="width:14px;height:14px;padding:0;margin:0;border-radius:999px;background:#b91c1c;border:1.5px solid rgba(255,255,255,0.45);"></button>
+      <button type="button" class="theme-dot" data-theme="matcha" title="Matcha" style="width:14px;height:14px;padding:0;margin:0;border-radius:999px;background:#2d6a4f;border:1.5px solid rgba(255,255,255,0.45);"></button>
+      <button type="button" class="theme-dot" data-theme="nordic" title="Nordic" style="width:14px;height:14px;padding:0;margin:0;border-radius:999px;background:#2563eb;border:1.5px solid rgba(255,255,255,0.45);"></button>
+      <button type="button" class="theme-dot" data-theme="crimson" title="Crimson" style="width:14px;height:14px;padding:0;margin:0;border-radius:999px;background:#d97706;border:1.5px solid rgba(255,255,255,0.45);"></button>
+    </div>
+  </div>
+  <div id="currentTabBar" class="card" style="display:none;padding:9px 12px;margin-bottom:10px;font-size:11.5px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <span id="currentTabHost" style="font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <span id="currentTabState" style="font-size:10.5px;color:#b4a3a6;flex-shrink:0;"></span>
     </div>
   </div>
 

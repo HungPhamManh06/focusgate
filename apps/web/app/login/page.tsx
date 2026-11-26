@@ -4,6 +4,7 @@ import { LivingGateVisual } from "@/components/domain/living-gate-visual";
 import { Logo } from "@/components/ui/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { isSupabaseConfigured, sanitizeNextPath } from "@/lib/env";
+import { LoginAmbientBar } from "./login-ambient-bar";
 import { LoginForm } from "./login-form";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +77,7 @@ export default async function LoginPage({
       {/* Right Auth Column */}
       <div className="flex flex-col items-center justify-center px-5 py-10">
         <div className="w-full max-w-[430px] space-y-6">
+          <LoginAmbientBar />
           <div className="flex justify-center lg:hidden">
             <Link href="/welcome" aria-label="FocusGate home">
               <Logo />

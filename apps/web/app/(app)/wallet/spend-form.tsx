@@ -22,6 +22,7 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
   const [grantId, setGrantId] = useState(grants[0]?.id ?? "");
   const [minutes, setMinutes] = useState(15);
   const [label, setLabel] = useState("");
+  const [frictionSlider, setFrictionSlider] = useState(0);
   const toast = useToast();
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
       toast.push("success", state.success);
       setLabel("");
       setMinutes(15);
+      setFrictionSlider(0);
     } else if (state.error) {
       toast.push("error", state.error);
     }
@@ -158,9 +160,42 @@ export function SpendForm({ grants, timezone }: { grants: Grant[]; timezone: str
           : `Max ${formatMinutes(maxMinutes)} on this grant. Spending records a usage event and is final.`}
       </p>
 
-      <Button type="submit" variant="primary" disabled={pending} className="w-full">
+      <div className="space-y-2 rounded-xl border border-line bg-surface-2/60 p-3">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="font-medium text-ink-soft">
+            {isVi ? "Kéo xác nhận chi tiêu có chủ đích" : "Slide to confirm mindful spend"}
+          </span>
+          <span className="font-mono text-muted tabular-nums">
+            {isVi
+              ? `Còn lại: ${formatMinutes(Math.max(0, maxMinutes - clampedMinutes))}`
+              : `After spend: ${formatMinutes(Math.max(0, maxMinutes - clampedMinutes))}`}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={frictionSlider}
+          onChange={(e) => setFrictionSlider(Number(e.target.value))}
+          aria-label={isVi ? "Kéo xác nhận chi tiêu" : "Slide to confirm spend"}
+          className="w-full accent-[var(--accent)]"
+        />
+      </div>
+
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={pending || frictionSlider < 85}
+        className="w-full"
+      >
         {pending ? <Loader2 className="size-4 animate-spin" /> : <MinusCircle className="size-4" />}
-        {isVi ? `Dùng ${clampedMinutes} phút` : `Spend ${clampedMinutes} min`}
+        {frictionSlider < 85
+          ? isVi
+            ? "Kéo thanh trượt để mở khóa nút dùng"
+            : "Slide bar to unlock spend"
+          : isVi
+            ? `Dùng ${clampedMinutes} phút`
+            : `Spend ${clampedMinutes} min`}
       </Button>
     </form>
   );

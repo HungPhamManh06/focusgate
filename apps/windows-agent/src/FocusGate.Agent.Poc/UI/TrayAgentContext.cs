@@ -66,6 +66,20 @@ public sealed class TrayAgentContext : ApplicationContext
             var baseUrl = string.IsNullOrWhiteSpace(_options.ApiBaseUrl) ? "https://focusgate-blue.vercel.app" : _options.ApiBaseUrl.TrimEnd('/');
             try { Process.Start(new ProcessStartInfo($"{baseUrl}/focus") { UseShellExecute = true }); } catch { }
         });
+        var quickFocus25Item = new ToolStripMenuItem("Start 25m Quick Focus (Floating)", null, (_, _) =>
+        {
+            _floatingTimer ??= new FloatingTimerForm();
+            _floatingTimer.UpdateSession("Quick Focus (25m)", false);
+        });
+        var toggleFloatingItem = new ToolStripMenuItem("Toggle Floating Timer", null, (_, _) =>
+        {
+            if (_floatingTimer is { Visible: true }) _floatingTimer.HideSession();
+            else
+            {
+                _floatingTimer ??= new FloatingTimerForm();
+                _floatingTimer.UpdateSession("Focus Sprint", false);
+            }
+        });
         _syncNowItem = new ToolStripMenuItem("Sync policy now", null, async (_, _) => await SyncPolicyAsync());
         _unlockPassItem = new ToolStripMenuItem("Use 10m Earned Time Pass", null, async (_, _) => await UseUnlockPassAsync());
         _startupItem = new ToolStripMenuItem("Auto-start with Windows")
@@ -89,6 +103,8 @@ public sealed class TrayAgentContext : ApplicationContext
             _policyItem,
             new ToolStripSeparator(),
             _openAppItem,
+            quickFocus25Item,
+            toggleFloatingItem,
             openFocusStudioItem,
             _syncNowItem,
             _unlockPassItem,

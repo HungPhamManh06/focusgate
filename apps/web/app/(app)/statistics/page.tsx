@@ -19,6 +19,7 @@ import { getCategoryLabel } from "@/components/domain/labels";
 import { AnalyticsStudioCharts } from "@/components/domain/analytics-studio-charts";
 import { CircadianFocusHeatmap } from "@/components/domain/circadian-focus-heatmap";
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
+import { FocusGardenAndLetter } from "@/components/domain/focus-garden-letter";
 import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
 import { FocusQuestsAndGateCard } from "@/components/domain/focus-quests-card";
@@ -194,6 +195,17 @@ export default async function StatisticsPage({
           focusMinutes: d.focusMinutes,
           tasksCompleted: d.tasksCompleted,
         }))}
+        locale={locale}
+      />
+
+      <FocusGardenAndLetter
+        displayName={workspace.profile.displayName}
+        periodDays={stats.periodDays}
+        focusMinutes={stats.focusMinutes}
+        tasksCompleted={stats.tasksCompleted}
+        currentStreak={passportSummary.currentStreak}
+        bestDayLabel={bestLabel}
+        bestDayMinutes={stats.bestDay?.focusMinutes ?? 0}
         locale={locale}
       />
 

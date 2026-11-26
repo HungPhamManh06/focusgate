@@ -92,6 +92,25 @@ export function BreakTimerCard() {
             <RotateCcw className="size-3.5" />
           </Button>
         </div>
+        {remainingSec === 0 ? (
+          <div className="mt-2 flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/30 bg-accent-soft/60 px-3.5 py-2.5 text-[12px]">
+            <span className="font-medium text-ink">
+              {isVi
+                ? "✨ Hết giờ nghỉ ngắn — sẵn sàng quay lại nhịp tập trung sâu?"
+                : "✨ Break complete — ready for a calm re-entry into your next sprint?"}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setRemainingSec(durationSec);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="rounded-full bg-accent px-3 py-1 text-[11px] font-semibold text-white hover:opacity-95"
+            >
+              {isVi ? "Vào phiên tiếp theo ↑" : "Start next block ↑"}
+            </button>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

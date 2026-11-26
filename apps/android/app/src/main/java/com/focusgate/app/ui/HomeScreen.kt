@@ -153,6 +153,7 @@ fun HomeScreen(
     var showSanctuaryFullscreen by remember { mutableStateOf(false) }
     var showQuickStatsSheet by remember { mutableStateOf(false) }
     var showSoundscapeSheet by remember { mutableStateOf(false) }
+    var showScratchpadSheet by remember { mutableStateOf(false) }
     var activeSoundMode by remember { mutableStateOf(FocusSoundscapePlayer.getMode()) }
     var lastSyncedAtMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -676,6 +677,17 @@ fun HomeScreen(
         )
     }
 
+    if (showScratchpadSheet) {
+        ModalBottomSheet(onDismissRequest = { showScratchpadSheet = false }) {
+            ScratchpadSheetContent(
+                initialText = AgentPreferences.getQuickScratchpad(context),
+                isVi = isVi,
+                onSave = { AgentPreferences.setQuickScratchpad(context, it) },
+                onDismiss = { showScratchpadSheet = false },
+            )
+        }
+    }
+
     if (showSoundscapeSheet) {
         ModalBottomSheet(onDismissRequest = { showSoundscapeSheet = false }) {
             SoundscapeMixerSheetContent(
@@ -756,6 +768,14 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    TextButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showScratchpadSheet = true
+                        },
+                    ) {
+                        Text(tr("Note", "Nháp"))
+                    }
                     TextButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -1060,6 +1080,32 @@ fun HomeScreen(
                         syncBusy = planSyncBusy,
                         themePreset = themePreset,
                     )
+                    if (planUnlocked) {
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = tr(
+                                        "🎉 Gate Unlocked! Enjoy ${earnedMinutesBalance}m earned freedom.",
+                                        "🎉 Cổng đã mở! Tận hưởng ${earnedMinutesBalance}p tự do giải trí.",
+                                    ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
+                        }
+                    }
                     // FocusGate 8.0: 7-Day Habit Streak Strip + Last-Sync Pill + Soundscape Button
                     Spacer(Modifier.height(10.dp))
                     Row(
@@ -1576,11 +1622,16 @@ fun HomeScreen(
                                             onClick = { todayFilter = "must_do" },
                                             label = { Text(tr("Must do", "Bắt buộc")) },
                                         )
+                                        FilterChip(
+                                            selected = todayFilter == "pending",
+                                            onClick = { todayFilter = "pending" },
+                                            label = { Text(tr("Pending", "Chưa xong")) },
+                                        )
                                     }
-                                    val filteredSource = if (todayFilter == "must_do") {
-                                        currentPlan.tasks.filter { it.kind == "must_do" }
-                                    } else {
-                                        currentPlan.tasks
+                                    val filteredSource = when (todayFilter) {
+                                        "must_do" -> currentPlan.tasks.filter { it.kind == "must_do" }
+                                        "pending" -> currentPlan.tasks.filter { it.status != "completed" }
+                                        else -> currentPlan.tasks
                                     }
                                     val pendingTasks = filteredSource.filter { it.status != "completed" }
                                     val completedTasks = filteredSource.filter { it.status == "completed" }
@@ -2244,6 +2295,14 @@ fun HomeScreen(
                                 enabled = !isOperationInProgress,
                             )
                         }
+                        Spacer(Modifier.height(10.dp))
+                        PermissionHealthCard(
+                            usageGranted = usageGranted,
+                            overlayGranted = overlayGranted,
+                            notificationsGranted = notificationsGranted,
+                            isVi = isVi,
+                            onOpenSetup = onOpenSetup,
+                        )
                         Spacer(Modifier.height(10.dp))
                         BedtimeArcCard(
                             enabled = bedtimeEnabled,

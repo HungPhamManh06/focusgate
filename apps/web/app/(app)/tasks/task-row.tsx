@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Check, Loader2, Plus, Trash2 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { addSuggestedTaskToTodayPlanAction } from "@/lib/actions/planner";
 import {
   completeTaskAction,
@@ -51,7 +51,21 @@ export function TaskRow({
   const [pending, startTransition] = useTransition();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [subtaskSummary, setSubtaskSummary] = useState<{ done: number; total: number } | null>(null);
   const toast = useToast();
+
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(
+        window.localStorage.getItem(`focusgate:subtasks:${task.id}`) || "[]",
+      ) as Array<{ done?: boolean }>;
+      if (Array.isArray(raw) && raw.length > 0) {
+        setSubtaskSummary({ done: raw.filter((s) => Boolean(s.done)).length, total: raw.length });
+      }
+    } catch {
+      // ignore
+    }
+  }, [task.id, inspectorOpen]);
   const rowStatus = formatTaskRowStatus(task, timezone, locale);
   const { completed } = rowStatus;
   const ageDays = Math.floor(
@@ -204,6 +218,11 @@ export function TaskRow({
           {isStale ? (
             <Badge tone="neutral">
               {isVi ? `Mở ${ageDays} ngày` : `Open ${ageDays}d`}
+            </Badge>
+          ) : null}
+          {subtaskSummary ? (
+            <Badge tone={subtaskSummary.done === subtaskSummary.total ? "success" : "neutral"}>
+              {subtaskSummary.done}/{subtaskSummary.total} {isVi ? "bước nhỏ" : "subtasks"}
             </Badge>
           ) : null}
         </div>

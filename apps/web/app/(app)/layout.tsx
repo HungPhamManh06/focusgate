@@ -16,6 +16,7 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { FloatingFocusPill } from "@/components/shell/floating-focus-pill";
 import { KeyboardShortcuts } from "@/components/shell/keyboard-shortcuts";
+import { StickyScrollHeader } from "@/components/shell/sticky-scroll-header";
 import { TopProgressBar } from "@/components/shell/top-progress-bar";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +84,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         />
 
         <div className="flex min-h-screen min-w-0 flex-col">
+          <StickyScrollHeader />
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-canvas/85 px-5 backdrop-blur-md lg:hidden">
             <Link href="/" aria-label="FocusGate home">
               <Logo />

@@ -72,6 +72,7 @@ fun FocusSanctuaryOverlay(
     val haptic = LocalHapticFeedback.current
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var breathingMode by remember { mutableStateOf(false) }
+    var flipClockMode by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         val window = (context as? Activity)?.window
@@ -157,54 +158,79 @@ fun FocusSanctuaryOverlay(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Box(
-                    modifier = Modifier.size(240.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (breathingMode) {
-                        Box(
-                            modifier = Modifier
-                                .size(190.dp)
-                                .scale(breathScale)
-                                .clip(CircleShape)
-                                .background(accent.copy(alpha = 0.18f))
-                                .border(2.dp, accent.copy(alpha = 0.7f), CircleShape),
-                        )
+                if (flipClockMode) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        listOf("%02d".format(mm), "%02d".format(ss)).forEach { pair ->
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 112.dp, height = 128.dp)
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(Color.White.copy(alpha = 0.08f))
+                                    .border(1.5.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(22.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = pair,
+                                    color = Color(0xFFFAF7F5),
+                                    fontSize = 62.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
                     }
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val stroke = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round)
-                        drawArc(
-                            color = Color.White.copy(alpha = 0.12f),
-                            startAngle = -90f,
-                            sweepAngle = 360f,
-                            useCenter = false,
-                            style = stroke,
-                        )
-                        drawArc(
-                            color = accent,
-                            startAngle = -90f,
-                            sweepAngle = 360f * progress,
-                            useCenter = false,
-                            style = stroke,
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "%02d:%02d".format(mm, ss),
-                            color = Color(0xFFFAF7F5),
-                            fontSize = 52.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-1).sp,
-                        )
-                        Text(
-                            text = if (breathingMode) {
-                                if (isVi) "Hít vào 4s · Thở ra 4s" else "Inhale 4s · Exhale 4s"
-                            } else {
-                                if (isVi) "Màn hình luôn sáng" else "Screen stays awake"
-                            },
-                            color = Color(0xFFB4A3A6),
-                            fontSize = 12.sp,
-                        )
+                } else {
+                    Box(
+                        modifier = Modifier.size(240.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (breathingMode) {
+                            Box(
+                                modifier = Modifier
+                                    .size(190.dp)
+                                    .scale(breathScale)
+                                    .clip(CircleShape)
+                                    .background(accent.copy(alpha = 0.18f))
+                                    .border(2.dp, accent.copy(alpha = 0.7f), CircleShape),
+                            )
+                        }
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val stroke = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round)
+                            drawArc(
+                                color = Color.White.copy(alpha = 0.12f),
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                style = stroke,
+                            )
+                            drawArc(
+                                color = accent,
+                                startAngle = -90f,
+                                sweepAngle = 360f * progress,
+                                useCenter = false,
+                                style = stroke,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "%02d:%02d".format(mm, ss),
+                                color = Color(0xFFFAF7F5),
+                                fontSize = 52.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-1).sp,
+                            )
+                            Text(
+                                text = if (breathingMode) {
+                                    if (isVi) "Hít vào 4s · Thở ra 4s" else "Inhale 4s · Exhale 4s"
+                                } else {
+                                    if (isVi) "Màn hình luôn sáng" else "Screen stays awake"
+                                },
+                                color = Color(0xFFB4A3A6),
+                                fontSize = 12.sp,
+                            )
+                        }
                     }
                 }
 
@@ -225,6 +251,22 @@ fun FocusSanctuaryOverlay(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    OutlinedButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            flipClockMode = !flipClockMode
+                        },
+                        shape = RoundedCornerShape(999.dp),
+                    ) {
+                        Text(
+                            text = if (flipClockMode) {
+                                if (isVi) "Vòng cung" else "Arc"
+                            } else {
+                                if (isVi) "Đồng hồ lật" else "Flip"
+                            },
+                            color = Color(0xFFFAF7F5),
+                        )
+                    }
                     OutlinedButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
