@@ -154,12 +154,27 @@ export function DayTimelineRibbon({
           />
         </div>
 
-        <div className="mt-1.5 flex justify-between font-mono text-[10px] text-muted">
-          <span>08:00</span>
-          <span>12:00</span>
-          <span>16:00</span>
-          <span>20:00</span>
-          <span>22:00</span>
+        <div className="relative mt-1.5 h-4 font-mono text-[10px] text-muted">
+          <span className="absolute left-0">08:00</span>
+          <span
+            className="absolute -translate-x-1/2"
+            style={{ left: `${toPercent("12:00")}%` }}
+          >
+            12:00
+          </span>
+          <span
+            className="absolute -translate-x-1/2"
+            style={{ left: `${toPercent("16:00")}%` }}
+          >
+            16:00
+          </span>
+          <span
+            className="absolute -translate-x-1/2"
+            style={{ left: `${toPercent("20:00")}%` }}
+          >
+            20:00
+          </span>
+          <span className="absolute right-0">22:00</span>
         </div>
       </div>
     </div>
