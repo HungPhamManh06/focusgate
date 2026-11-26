@@ -7,13 +7,13 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-ink text-canvas shadow-sm hover:bg-ink/90 active:scale-[0.99]",
-        accent: "bg-accent text-white shadow-sm hover:bg-accent-strong active:scale-[0.99]",
-        outline: "border border-line bg-surface text-ink hover:border-ink/25 hover:bg-surface-2",
-        ghost: "text-ink-soft hover:bg-surface-2 hover:text-ink",
-        subtle: "bg-accent-soft text-accent hover:bg-accent-soft/75",
-        danger: "bg-danger-soft text-danger hover:bg-danger hover:text-white",
-        "danger-solid": "bg-danger text-white hover:opacity-90",
+        primary: "bg-ink text-canvas shadow-sm hover:bg-ink/90 active:scale-[0.98]",
+        accent: "bg-accent text-white shadow-sm hover:bg-accent-strong active:scale-[0.98]",
+        outline: "border border-line bg-surface text-ink hover:border-ink/25 hover:bg-surface-2 active:scale-[0.98]",
+        ghost: "text-ink-soft hover:bg-surface-2 hover:text-ink active:scale-[0.98]",
+        subtle: "bg-accent-soft text-accent hover:bg-accent-soft/75 active:scale-[0.98]",
+        danger: "bg-danger-soft text-danger hover:bg-danger hover:text-white active:scale-[0.98]",
+        "danger-solid": "bg-danger text-white hover:opacity-90 active:scale-[0.98]",
       },
       size: {
         sm: "h-9 px-3.5 text-[13px]",

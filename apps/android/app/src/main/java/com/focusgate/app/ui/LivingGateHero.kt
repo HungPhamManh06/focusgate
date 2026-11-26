@@ -1,5 +1,8 @@
 package com.focusgate.app.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,9 +23,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -54,11 +60,22 @@ fun LivingGateHero(
     modifier: Modifier = Modifier,
 ) {
     val isOpen = unlocked || planStatus == "completed"
+    val haptic = LocalHapticFeedback.current
+    val targetProgress = when {
+        isOpen -> 1f
+        mustDoTotal > 0 -> (mustDoCompleted.toFloat() / mustDoTotal.toFloat()).coerceIn(0f, 1f)
+        else -> 0f
+    }
+    val animatedProgress by animateFloatAsState(
+        targetValue = targetProgress,
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+        label = "gate_arch_progress",
+    )
     val accentColor = if (isOpen) FocusGateEmeraldLight else FocusGateCrimsonLight
     val bgBrush = if (isOpen) {
         Brush.verticalGradient(listOf(Color(0xFF0E261F), Color(0xFF131A18)))
     } else {
-        Brush.verticalGradient(listOf(Color(0xFF241315), Color(0xFF150E10)))
+        Brush.verticalGradient(listOf(Color(0xFF281417), Color(0xFF140D0F)))
     }
     val borderColor = if (isOpen) FocusGateEmerald.copy(alpha = 0.55f) else FocusGateCrimsonLight.copy(alpha = 0.35f)
 
@@ -66,10 +83,10 @@ fun LivingGateHero(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(bgBrush)
-            .border(1.dp, borderColor, RoundedCornerShape(20.dp))
-            .padding(18.dp),
+            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+            .padding(20.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -115,9 +132,21 @@ fun LivingGateHero(
                     }
                     drawPath(
                         path = trackPath,
-                        color = Color.White.copy(alpha = 0.18f),
+                        color = Color.White.copy(alpha = 0.16f),
                         style = Stroke(width = 7f, cap = StrokeCap.Round),
                     )
+
+                    if (animatedProgress > 0.01f) {
+                        drawArc(
+                            color = accentColor,
+                            startAngle = 180f,
+                            sweepAngle = 180f * animatedProgress,
+                            useCenter = false,
+                            topLeft = Offset(padX, archCenterY - radius),
+                            size = Size(archW, archW),
+                            style = Stroke(width = 7.5f, cap = StrokeCap.Round),
+                        )
+                    }
 
                     // Ground threshold
                     drawLine(
@@ -216,7 +245,10 @@ fun LivingGateHero(
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = onAddTask,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onAddTask()
+                        },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isOpen) FocusGateEmerald else Color(0xFFB91C1C),
                             contentColor = Color.White,
@@ -225,7 +257,10 @@ fun LivingGateHero(
                         Text(if (isVi) "+ Thêm việc" else "+ Add")
                     }
                     OutlinedButton(
-                        onClick = onSync,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onSync()
+                        },
                         enabled = !syncBusy,
                     ) {
                         Text(

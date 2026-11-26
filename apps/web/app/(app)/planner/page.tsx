@@ -42,6 +42,7 @@ import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { AddPlanTask } from "./add-plan-task";
 import { PlanTaskRow } from "./plan-task-row";
+import { PlannerTabsShell } from "./planner-tabs-shell";
 import { TemplatesRoutinesCard } from "./templates-routines-card";
 import { V2PlannerTools } from "./v2-planner-tools";
 import { V3GoalsTimeline } from "./v3-goals-timeline";
@@ -626,24 +627,30 @@ export default async function PlannerPage() {
         </>
       )}
 
-      <V2PlannerTools
-        todayDate={today}
-        yesterdayDate={new Date(new Date(`${today}T12:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10)}
-        tomorrowDate={new Date(new Date(`${today}T12:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10)}
-        totalTasks={plan?.tasks.length ?? 0}
-        completedTasks={plan?.tasks.filter((t) => Boolean(t.completedAt)).length ?? 0}
-        focusMinutes={plan?.progress.focusDone ?? 0}
-      />
-
-      <V3GoalsTimeline
-        goals={goals}
-        schedules={schedules}
-        pendingEstimatedMinutes={pendingEstimatedMinutes}
-      />
-
-      <TemplatesRoutinesCard
-        templates={planTemplates}
-        recurringRules={recurringRules}
+      <PlannerTabsShell
+        timelinePanel={
+          <V3GoalsTimeline
+            goals={goals}
+            schedules={schedules}
+            pendingEstimatedMinutes={pendingEstimatedMinutes}
+          />
+        }
+        templatesPanel={
+          <TemplatesRoutinesCard
+            templates={planTemplates}
+            recurringRules={recurringRules}
+          />
+        }
+        toolsPanel={
+          <V2PlannerTools
+            todayDate={today}
+            yesterdayDate={new Date(new Date(`${today}T12:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10)}
+            tomorrowDate={new Date(new Date(`${today}T12:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10)}
+            totalTasks={plan?.tasks.length ?? 0}
+            completedTasks={plan?.tasks.filter((t) => Boolean(t.completedAt)).length ?? 0}
+            focusMinutes={plan?.progress.focusDone ?? 0}
+          />
+        }
       />
     </div>
   );

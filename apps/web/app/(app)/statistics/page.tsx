@@ -32,6 +32,7 @@ import { getV2Settings } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
 import { cn } from "@/lib/utils";
 import { HealthLogCard } from "./health-log-card";
+import { StatisticsTabsShell } from "./statistics-tabs-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -565,36 +566,43 @@ export default async function StatisticsPage({
         </>
       )}
 
-      <section className="mt-4">
-        <HealthLogCard
-          health={health}
-          todayDate={todayIso(timezone)}
-          focusDays={stats.days.map((d) => ({ date: d.date, focusMinutes: d.focusMinutes }))}
-        />
-      </section>
-
-      <DistractionSleepCard
-        days={stats.days}
-        healthDays={health.days}
-        hourlyFocus={stats.hourlyBreakdown ?? []}
-        blockedAttempts={stats.blockedAttempts ?? 0}
+      <StatisticsTabsShell
+        overviewPanel={
+          <section>
+            <HealthLogCard
+              health={health}
+              todayDate={todayIso(timezone)}
+              focusDays={stats.days.map((d) => ({ date: d.date, focusMinutes: d.focusMinutes }))}
+            />
+          </section>
+        }
+        heatmapPanel={
+          <DistractionSleepCard
+            days={stats.days}
+            healthDays={health.days}
+            hourlyFocus={stats.hourlyBreakdown ?? []}
+            blockedAttempts={stats.blockedAttempts ?? 0}
+          />
+        }
+        questsPanel={
+          <>
+            <FocusQuestsAndGateCard
+              activeTheme={v2Settings?.gateTheme ?? "stone"}
+              bestStreak={stats.bestStreak ?? stats.currentStreak ?? 0}
+              weeklyFocusMinutes={stats.focusMinutes}
+              quests={focusQuests}
+            />
+            {weeklyReview && (
+              <WeeklyReviewCard
+                weekStart={weeklyReview.weekStart}
+                latestReview={weeklyReview.latestReview}
+                completedThisWeek={weeklyReview.completedThisWeek}
+                staleBacklog={weeklyReview.staleBacklog}
+              />
+            )}
+          </>
+        }
       />
-
-      <FocusQuestsAndGateCard
-        activeTheme={v2Settings?.gateTheme ?? "stone"}
-        bestStreak={stats.bestStreak ?? stats.currentStreak ?? 0}
-        weeklyFocusMinutes={stats.focusMinutes}
-        quests={focusQuests}
-      />
-
-      {weeklyReview && (
-        <WeeklyReviewCard
-          weekStart={weeklyReview.weekStart}
-          latestReview={weeklyReview.latestReview}
-          completedThisWeek={weeklyReview.completedThisWeek}
-          staleBacklog={weeklyReview.staleBacklog}
-        />
-      )}
 
       <p className="mt-6 text-[10.5px] text-muted">
         {isVi

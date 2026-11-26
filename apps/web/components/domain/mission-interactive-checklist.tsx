@@ -113,7 +113,7 @@ export function MissionInteractiveChecklist({
               className="group flex items-center gap-3 px-3.5 py-2.5 text-[13px] transition-colors hover:bg-surface-2/45"
             >
               {done ? (
-                <CheckCircle2 className="size-4.5 shrink-0 text-success" strokeWidth={2.2} />
+                <CheckCircle2 className="fg-animate-check size-4.5 shrink-0 text-success" strokeWidth={2.2} />
               ) : needsFocusFirst ? (
                 <Link
                   href={`/focus?taskId=${task.taskId}`}
