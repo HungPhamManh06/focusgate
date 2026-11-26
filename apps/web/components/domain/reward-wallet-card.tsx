@@ -204,7 +204,12 @@ export function RewardWalletCard({
           )}
         </div>
 
-        <div className="mt-4 border-t border-line pt-3.5">
+        <div
+          className={cn(
+            "mt-4 flex items-center justify-between gap-3 border-t pt-3.5",
+            isUnlocked ? "border-dashed border-success/35" : "border-line",
+          )}
+        >
           <Link
             href="/wallet"
             className={cn(
@@ -214,6 +219,30 @@ export function RewardWalletCard({
           >
             {isVi ? "Xem lịch sử ví" : "View wallet history"} <ArrowRight className="size-3.5" />
           </Link>
+          {isUnlocked ? (
+            <svg
+              aria-hidden
+              viewBox="0 0 64 16"
+              className="h-3.5 w-14 text-success/55"
+              fill="currentColor"
+            >
+              <rect x="0" y="1" width="2" height="14" rx="0.5" />
+              <rect x="4" y="1" width="1" height="14" rx="0.5" />
+              <rect x="7" y="1" width="3" height="14" rx="0.5" />
+              <rect x="12" y="1" width="1.5" height="14" rx="0.5" />
+              <rect x="16" y="1" width="2.5" height="14" rx="0.5" />
+              <rect x="21" y="1" width="1" height="14" rx="0.5" />
+              <rect x="24" y="1" width="3" height="14" rx="0.5" />
+              <rect x="29" y="1" width="1.5" height="14" rx="0.5" />
+              <rect x="33" y="1" width="2" height="14" rx="0.5" />
+              <rect x="38" y="1" width="1" height="14" rx="0.5" />
+              <rect x="41" y="1" width="3" height="14" rx="0.5" />
+              <rect x="46" y="1" width="2" height="14" rx="0.5" />
+              <rect x="50" y="1" width="1.5" height="14" rx="0.5" />
+              <rect x="54" y="1" width="3" height="14" rx="0.5" />
+              <rect x="59" y="1" width="2" height="14" rx="0.5" />
+            </svg>
+          ) : null}
         </div>
       </CardContent>
     </Card>

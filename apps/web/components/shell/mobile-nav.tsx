@@ -12,9 +12,9 @@ export function MobileNav({ language = "en" }: { language?: "en" | "vi" }) {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden"
     >
-      <ul className="mx-auto grid max-w-lg grid-cols-6">
+      <ul className="pointer-events-auto mx-auto grid max-w-md grid-cols-6 rounded-2xl border border-line/80 bg-surface/90 shadow-lg backdrop-blur-md">
         {navItems.map((item) => {
           const active = isNavActive(item, pathname);
           return (

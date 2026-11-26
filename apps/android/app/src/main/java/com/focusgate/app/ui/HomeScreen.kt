@@ -24,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -124,6 +125,7 @@ fun HomeScreen(
     var strictFrictionMode by remember {
         mutableStateOf(AgentPreferences.isStrictFrictionMode(context))
     }
+    var showCompletedTodayTasks by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         availableUpdate = AppUpdater.checkForUpdate()
@@ -781,55 +783,18 @@ fun HomeScreen(
                         syncBusy = planSyncBusy,
                     )
                 }
+            }
+
+            if (signedInEmail == null) {
                 item {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    tr("Strict Friction Challenge", "Chế độ Nghiêm khắc (Ma sát)"),
-                                    fontWeight = FontWeight.Medium,
-                                )
-                                Text(
-                                    tr(
-                                        "Require typing commitment phrase to emergency-unlock.",
-                                        "Bắt buộc gõ câu cam kết khi xin mở khẩn cấp.",
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Switch(
-                                checked = strictFrictionMode,
-                                onCheckedChange = { enabled ->
-                                    strictFrictionMode = enabled
-                                    AgentPreferences.setStrictFrictionMode(context, enabled)
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(tr("FocusGate Web Sync", "Đồng bộ Web FocusGate"), fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(4.dp))
-                        if (signedInEmail == null) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(tr("FocusGate Web Sync", "Đồng bộ Web FocusGate"), fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
                             Text(
                                 tr(
                                     "Sign in with your FocusGate web account to sync today's planned tasks and unlock apps when all tasks are done.",
@@ -868,56 +833,12 @@ fun HomeScreen(
                                 enabled = !planSyncBusy,
                                 modifier = Modifier.padding(top = 10.dp),
                             ) {
-                                Text(if (planSyncBusy) "Signing in..." else "Sign in & Sync")
-                            }
-                        } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        "Signed in as $signedInEmail",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                    )
-                                    val currentPlan = planSnapshot?.plan
-                                    val statusText = when {
-                                        currentPlan != null && currentPlan.allTasksTotal > 0 && currentPlan.allCompleted ->
-                                            "Unlocked: all planned tasks completed"
-                                        planUnlocked && (currentPlan == null || currentPlan.allTasksTotal == 0) ->
-                                            "Unlocked: no active plan lock (or reward grant active)"
-                                        planUnlocked ->
-                                            "Unlocked: reward grant / pass active"
-                                        else ->
-                                            "Locked until all planned tasks are completed"
-                                    }
-                                    Text(
-                                        statusText,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (planUnlocked) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.error
-                                        },
-                                    )
-                                }
-                                TextButton(
-                                    onClick = ::syncPlanFromWeb,
-                                    enabled = !planSyncBusy,
-                                ) {
-                                    Text(if (planSyncBusy) "Syncing..." else "Sync")
-                                }
-                                TextButton(onClick = ::signOutFromWeb) {
-                                    Text("Sign out")
-                                }
-                            }
-                            if (syncError != null) {
                                 Text(
-                                    syncError!!,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(top = 6.dp),
+                                    if (planSyncBusy) {
+                                        tr("Signing in...", "Đang đăng nhập...")
+                                    } else {
+                                        tr("Sign in & Sync", "Đăng nhập & Đồng bộ")
+                                    },
                                 )
                             }
                         }
@@ -1087,7 +1008,26 @@ fun HomeScreen(
                                     }
                                 }
                                 currentPlan != null -> {
-                                    currentPlan.tasks.forEach { task ->
+                                    if (currentPlan.allTasksTotal > 0) {
+                                        val progressFrac = (currentPlan.allTasksCompleted.toFloat() / currentPlan.allTasksTotal.toFloat()).coerceIn(0f, 1f)
+                                        LinearProgressIndicator(
+                                            progress = { progressFrac },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(5.dp)
+                                                .clip(RoundedCornerShape(999.dp)),
+                                            color = if (currentPlan.allCompleted) Color(0xFF34D399) else MaterialTheme.colorScheme.primary,
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+                                    val pendingTasks = currentPlan.tasks.filter { it.status != "completed" }
+                                    val completedTasks = currentPlan.tasks.filter { it.status == "completed" }
+                                    val orderedTasks = if (showCompletedTodayTasks) {
+                                        pendingTasks + completedTasks
+                                    } else {
+                                        pendingTasks
+                                    }
+                                    orderedTasks.forEach { task ->
                                         val isDone = task.status == "completed"
                                         Row(
                                             modifier = Modifier
@@ -1156,6 +1096,29 @@ fun HomeScreen(
                                                     )
                                                 }
                                             }
+                                        }
+                                    }
+
+                                    if (completedTasks.isNotEmpty()) {
+                                        TextButton(
+                                            onClick = { showCompletedTodayTasks = !showCompletedTodayTasks },
+                                            modifier = Modifier.padding(top = 2.dp),
+                                        ) {
+                                            Text(
+                                                if (showCompletedTodayTasks) {
+                                                    tr(
+                                                        "Hide completed (${completedTasks.size}) ▴",
+                                                        "Ẩn việc đã xong (${completedTasks.size}) ▴",
+                                                    )
+                                                } else {
+                                                    tr(
+                                                        "Completed (${completedTasks.size}) ▾",
+                                                        "Đã hoàn thành (${completedTasks.size} việc) ▾",
+                                                    )
+                                                },
+                                                color = Color(0xFF34D399),
+                                                style = MaterialTheme.typography.labelMedium,
+                                            )
                                         }
                                     }
 
@@ -1355,6 +1318,74 @@ fun HomeScreen(
             } // end HomeBottomTab.TODAY
 
             if (bottomTab == HomeBottomTab.GUARD) {
+            if (signedInEmail != null) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(tr("Account & Sync", "Tài khoản & Đồng bộ"), fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                tr("Signed in as $signedInEmail", "Đang đăng nhập: $signedInEmail"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = ::syncPlanFromWeb,
+                                    enabled = !planSyncBusy,
+                                ) {
+                                    Text(if (planSyncBusy) "..." else tr("Sync now", "Đồng bộ ngay"))
+                                }
+                                TextButton(onClick = ::signOutFromWeb) {
+                                    Text(tr("Sign out", "Đăng xuất"))
+                                }
+                            }
+                        }
+                    }
+                }
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    tr("Strict Friction Challenge", "Chế độ Nghiêm khắc (Ma sát)"),
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    tr(
+                                        "Require typing commitment phrase to emergency-unlock.",
+                                        "Bắt buộc gõ câu cam kết khi xin mở khẩn cấp.",
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = strictFrictionMode,
+                                onCheckedChange = { enabled ->
+                                    strictFrictionMode = enabled
+                                    AgentPreferences.setStrictFrictionMode(context, enabled)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             item {
                 Card(
                     modifier = Modifier

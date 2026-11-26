@@ -59,15 +59,33 @@ export function FocusTimer({
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [zenMode, setZenMode] = useState(false);
+  const [zenControlsDimmed, setZenControlsDimmed] = useState(false);
   const [activeSound, setActiveSound] = useState<SoundPreset>("off");
 
   useEffect(() => {
-    if (!zenMode) return;
+    if (!zenMode) {
+      setZenControlsDimmed(false);
+      return;
+    }
+    let idleTimer = window.setTimeout(() => setZenControlsDimmed(true), 3000);
+    const wake = () => {
+      setZenControlsDimmed(false);
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => setZenControlsDimmed(true), 3000);
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setZenMode(false);
+      else wake();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("mousemove", wake);
+    window.addEventListener("pointerdown", wake);
+    return () => {
+      window.clearTimeout(idleTimer);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousemove", wake);
+      window.removeEventListener("pointerdown", wake);
+    };
   }, [zenMode]);
   const [optimisticSession, setOptimisticSession] = useState<{
     status: "running" | "paused";
@@ -306,7 +324,12 @@ export function FocusTimer({
             </Badge>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-3 transition-opacity duration-500",
+            zenMode && zenControlsDimmed ? "opacity-20 hover:opacity-100" : "opacity-100",
+          )}
+        >
           <p
             className={cn(
               "text-[11.5px] tabular-nums",
@@ -348,20 +371,51 @@ export function FocusTimer({
           "relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-9 sm:py-11",
         )}
       >
-        <ProgressRing
-          value={timerState.ringProgress}
-          size={252}
-          stroke={9}
-          label={`${timerState.ringLabel}: ${timerState.clockDisplay}`}
-        >
-          <p className="label-xs text-muted">{timerState.ringLabel}</p>
-          <p className="mt-2 font-display text-[60px] leading-none tracking-[-0.03em] tabular-nums">
-            {timerState.clockDisplay}
-          </p>
-          <p className="mt-2 text-[11.5px] font-medium text-ink-soft tabular-nums">
-            {timerState.subLabel}
-          </p>
-        </ProgressRing>
+        <div className="relative flex items-center justify-center">
+          {/* Minimalist 12-point dial ticks */}
+          <svg
+            aria-hidden
+            viewBox="0 0 280 280"
+            className={cn(
+              "pointer-events-none absolute size-[276px]",
+              zenMode ? "text-white/20" : "text-line",
+            )}
+          >
+            {Array.from({ length: 12 }, (_, i) => {
+              const angle = (i * 30 * Math.PI) / 180;
+              const x1 = 140 + Math.cos(angle) * 130;
+              const y1 = 140 + Math.sin(angle) * 130;
+              const x2 = 140 + Math.cos(angle) * 137;
+              const y2 = 140 + Math.sin(angle) * 137;
+              return (
+                <line
+                  key={i}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="currentColor"
+                  strokeWidth={i % 3 === 0 ? 2 : 1.2}
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          </svg>
+          <ProgressRing
+            value={timerState.ringProgress}
+            size={252}
+            stroke={9}
+            label={`${timerState.ringLabel}: ${timerState.clockDisplay}`}
+          >
+            <p className="label-xs text-muted">{timerState.ringLabel}</p>
+            <p className="mt-2 font-display text-[60px] leading-none tracking-[-0.03em] tabular-nums">
+              {timerState.clockDisplay}
+            </p>
+            <p className="mt-2 text-[11.5px] font-medium text-ink-soft tabular-nums">
+              {timerState.subLabel}
+            </p>
+          </ProgressRing>
+        </div>
 
         {/* Task & Authoritative State Banner */}
         <div className="mt-7 w-full max-w-md text-center">

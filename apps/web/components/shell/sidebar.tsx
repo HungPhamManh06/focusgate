@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, Laptop, LogOut, Settings } from "lucide-react";
+import { ArrowUpRight, Laptop, LogOut, Search, Settings } from "lucide-react";
 import { formatMinutes, initials } from "@/lib/data/format";
 import { isSidebarWalletActive } from "@/lib/domain/dashboard-state";
 import { cn } from "@/lib/utils";
@@ -29,10 +29,27 @@ export function Sidebar({
 
   return (
     <aside className="sticky top-0 hidden h-screen flex-col border-r border-line bg-surface lg:flex">
-      <div className="px-6 pb-8 pt-7">
+      <div className="px-6 pb-5 pt-7">
         <Link href="/" aria-label="FocusGate home">
           <Logo />
         </Link>
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true }),
+            );
+          }}
+          className="mt-4 flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-surface-2/70 px-3 py-2 text-[12px] text-muted transition-all hover:border-accent/35 hover:text-ink active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-2">
+            <Search className="size-3.5" />
+            {isVi ? "Lệnh nhanh..." : "Quick command..."}
+          </span>
+          <kbd className="rounded-md border border-line bg-surface px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted">
+            Ctrl K
+          </kbd>
+        </button>
       </div>
 
       <nav aria-label="Primary" className="flex-1 px-3">

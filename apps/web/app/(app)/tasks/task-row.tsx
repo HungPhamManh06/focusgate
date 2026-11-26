@@ -20,6 +20,15 @@ import { formatTaskRowStatus } from "@/lib/domain/tasks-planner-state";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "./task-form-dialog";
 
+const CATEGORY_DOT_COLORS: Record<string, string> = {
+  work: "bg-accent",
+  study: "bg-indigo-500",
+  health: "bg-success",
+  personal: "bg-warning",
+  finance: "bg-teal-500",
+  other: "bg-muted",
+};
+
 export function TaskRow({
   task,
   timezone,
@@ -86,7 +95,15 @@ export function TaskRow({
   }
 
   return (
-    <div className="group flex items-start gap-3 border-b border-line px-5 py-4 transition-colors last:border-b-0 hover:bg-surface-2/50 sm:px-6">
+      <div className="group flex items-start gap-3 border-b border-line px-5 py-4 transition-colors last:border-b-0 hover:bg-surface-2/55 sm:px-6">
+        <span
+          aria-hidden
+          title={getCategoryLabel(task.category, locale)}
+          className={cn(
+            "mt-2.5 size-2 shrink-0 rounded-full",
+            CATEGORY_DOT_COLORS[task.category] ?? "bg-muted",
+          )}
+        />
       <button
         type="button"
         onClick={toggleComplete}
