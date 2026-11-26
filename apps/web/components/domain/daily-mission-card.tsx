@@ -28,6 +28,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { KindBadge, PlanStatusBadge } from "@/components/domain/labels";
 import { LivingGateVisual } from "@/components/domain/living-gate-visual";
+import { LivingSanctuaryBanner } from "@/components/domain/living-sanctuary-banner";
 import { MissionInteractiveChecklist } from "@/components/domain/mission-interactive-checklist";
 import { getGateThemeSpec, type GateThemeId } from "@/lib/domain/gate-themes";
 import { formatMinutes, formatTime } from "@/lib/data/format";
@@ -80,6 +81,15 @@ export function DailyMissionCard({
       }}
     >
       <div>
+        {/* Panoramic Real-Time Living Sanctuary Banner */}
+        <LivingSanctuaryBanner
+          mustDoCompleted={plan?.progress.mustDoCompleted ?? 0}
+          mustDoTotal={plan?.progress.mustDoTotal ?? 0}
+          isUnlocked={isUnlockedDay}
+          themeId={themeId}
+          locale={locale}
+        />
+
         {/* Card Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-4 sm:px-7">
           <div className="flex flex-wrap items-center gap-2">

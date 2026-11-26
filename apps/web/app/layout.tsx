@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   applicationName: "FocusGate",
 };
 
-const themeBootstrap = `(function(){try{var stored=localStorage.getItem("focusgate-theme");var dark=stored?stored==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",dark);}catch(e){}})();`;
+const themeBootstrap = `(function(){try{var stored=localStorage.getItem("focusgate-theme");var preset=localStorage.getItem("focusgate-preset");var dark=stored?stored==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",dark);if(preset==="matcha"||preset==="nordic"){document.documentElement.setAttribute("data-preset",preset);}}catch(e){}})();`;
 
 export default function RootLayout({
   children,

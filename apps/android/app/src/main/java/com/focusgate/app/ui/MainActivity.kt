@@ -21,9 +21,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val openAddTask = intent?.getBooleanExtra(EXTRA_OPEN_ADD_TASK, false) == true
         setContent {
-            FocusGateTheme {
+            val context = LocalContext.current
+            var themePreset by remember {
+                mutableStateOf(AgentPreferences.getAppThemePreset(context))
+            }
+            FocusGateTheme(preset = themePreset) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    FocusGateRoot(openAddTaskOnLaunch = openAddTask)
+                    FocusGateRoot(
+                        openAddTaskOnLaunch = openAddTask,
+                        themePreset = themePreset,
+                        onThemePresetChange = { next ->
+                            AgentPreferences.setAppThemePreset(context, next)
+                            themePreset = next
+                        },
+                    )
                 }
             }
         }
@@ -35,7 +46,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun FocusGateRoot(openAddTaskOnLaunch: Boolean = false) {
+private fun FocusGateRoot(
+    openAddTaskOnLaunch: Boolean = false,
+    themePreset: String = "auto",
+    onThemePresetChange: (String) -> Unit = {},
+) {
     val context = LocalContext.current
     var onboardingComplete by remember {
         mutableStateOf(AgentPreferences.isOnboardingComplete(context))
@@ -48,6 +63,8 @@ private fun FocusGateRoot(openAddTaskOnLaunch: Boolean = false) {
                 onboardingComplete = false
             },
             openAddTaskOnLaunch = openAddTaskOnLaunch,
+            themePreset = themePreset,
+            onThemePresetChange = onThemePresetChange,
         )
     } else {
         OnboardingScreen(

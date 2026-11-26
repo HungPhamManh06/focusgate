@@ -21,6 +21,7 @@ import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
 import { FocusQuestsAndGateCard } from "@/components/domain/focus-quests-card";
 import { WeeklyReviewCard } from "@/components/domain/weekly-review-modal";
+import { YearlyDisciplineGrid } from "@/components/domain/yearly-discipline-grid";
 import { buildDailySeals } from "@/lib/domain/focus-passport";
 import { getWeeklyReviewContext } from "@/lib/data/v4-ecosystem";
 import { listFocusQuests } from "@/lib/data/v5-ecosystem";
@@ -40,6 +41,7 @@ const periods = [
   { value: 7, label: "7 days" },
   { value: 30, label: "30 days" },
   { value: 90, label: "90 days" },
+  { value: 365, label: "365 days" },
 ] as const;
 
 export default async function StatisticsPage({
@@ -177,6 +179,8 @@ export default async function StatisticsPage({
         healthDays={health.days}
         locale={locale}
       />
+
+      <YearlyDisciplineGrid days={stats.days} locale={locale} />
 
       <DailyReceiptCard
         displayName={workspace.profile.displayName}

@@ -61,6 +61,7 @@ export function FocusTimer({
   const [zenMode, setZenMode] = useState(false);
   const [zenControlsDimmed, setZenControlsDimmed] = useState(false);
   const [activeSound, setActiveSound] = useState<SoundPreset>("off");
+  const [clockStyle, setClockStyle] = useState<"dial" | "flip" | "minimal">("dial");
 
   useEffect(() => {
     if (!zenMode) {
@@ -371,6 +372,73 @@ export function FocusTimer({
           "relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-9 sm:py-11",
         )}
       >
+        {/* 3 Clock Style Switcher */}
+        <div
+          className={cn(
+            "mb-5 inline-flex gap-1 rounded-full border p-1 text-[11px] font-medium transition-opacity duration-500",
+            zenMode ? "border-white/15 bg-white/5 text-white/75" : "border-line bg-surface-2/80 text-muted",
+            zenMode && zenControlsDimmed ? "opacity-20 hover:opacity-100" : "opacity-100",
+          )}
+        >
+          {(
+            [
+              { id: "dial", label: isVi ? "Vòng cung" : "Arc Dial" },
+              { id: "flip", label: isVi ? "Đồng hồ lật" : "Flip Clock" },
+              { id: "minimal", label: isVi ? "Tối giản" : "Minimal" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setClockStyle(opt.id)}
+              className={cn(
+                "rounded-full px-3 py-1 transition-colors",
+                clockStyle === opt.id
+                  ? zenMode
+                    ? "bg-white text-[#120c0d]"
+                    : "bg-ink text-canvas"
+                  : "hover:text-ink",
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {clockStyle === "flip" ? (
+          <div className="flex flex-col items-center">
+            <p className="label-xs mb-3 text-muted">{timerState.ringLabel}</p>
+            <div className="flex items-center gap-2.5">
+              {timerState.clockDisplay.split(":").map((part, idx) => (
+                <div key={idx} className="flex items-center gap-2.5">
+                  <div className="relative flex h-[112px] w-[96px] items-center justify-center overflow-hidden rounded-2xl border border-line bg-[#181113] font-display text-[56px] leading-none text-[#faf7f5] shadow-lg tabular-nums">
+                    <span>{part}</span>
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-x-0 top-1/2 h-[1.5px] bg-black/45"
+                    />
+                  </div>
+                  {idx < timerState.clockDisplay.split(":").length - 1 ? (
+                    <span className="font-display text-[42px] text-accent">:</span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[12px] font-medium text-ink-soft tabular-nums">
+              {timerState.subLabel}
+            </p>
+          </div>
+        ) : clockStyle === "minimal" ? (
+          <div className="flex flex-col items-center py-6">
+            <p className="label-xs text-muted">{timerState.ringLabel}</p>
+            <p className="mt-2 font-display text-[84px] leading-none tracking-[-0.04em] tabular-nums sm:text-[96px]">
+              {timerState.clockDisplay}
+            </p>
+            <p className="mt-3 text-[12.5px] font-medium text-ink-soft tabular-nums">
+              {timerState.subLabel}
+            </p>
+          </div>
+        ) : (
         <div className="relative flex items-center justify-center">
           {/* Minimalist 12-point dial ticks */}
           <svg
@@ -416,6 +484,7 @@ export function FocusTimer({
             </p>
           </ProgressRing>
         </div>
+        )}
 
         {/* Task & Authoritative State Banner */}
         <div className="mt-7 w-full max-w-md text-center">

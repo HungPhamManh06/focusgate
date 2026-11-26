@@ -254,4 +254,15 @@ object AgentPreferences {
     fun setActiveFocusTitle(context: Context, title: String?) {
         prefs(context).edit().putString("active_focus_title", title).apply()
     }
+
+    fun getAppThemePreset(context: Context): String =
+        prefs(context).getString("app_theme_preset", "auto") ?: "auto"
+
+    fun setAppThemePreset(context: Context, preset: String) {
+        val normalized = when (preset) {
+            "crimson", "espresso", "matcha", "nordic" -> preset
+            else -> "auto"
+        }
+        prefs(context).edit().putString("app_theme_preset", normalized).apply()
+    }
 }

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { getCategoryLabel, getKindLabel } from "@/components/domain/labels";
+import { TaskInspectorDrawer } from "@/components/domain/task-inspector-drawer";
 import { formatTaskRowStatus } from "@/lib/domain/tasks-planner-state";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "./task-form-dialog";
@@ -46,6 +47,7 @@ export function TaskRow({
   const isVi = locale === "vi";
   const [pending, startTransition] = useTransition();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const toast = useToast();
   const rowStatus = formatTaskRowStatus(task, timezone, locale);
   const { completed } = rowStatus;
@@ -134,14 +136,16 @@ export function TaskRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p
+          <button
+            type="button"
+            onClick={() => setInspectorOpen(true)}
             className={cn(
-              "text-[14px] font-medium leading-snug",
+              "text-left text-[14px] font-medium leading-snug transition-colors hover:text-accent",
               completed && "text-muted line-through",
             )}
           >
             {task.title}
-          </p>
+          </button>
           {rowStatus.showPriorityBadge && task.priority === "urgent" ? (
             <Badge tone="danger">{isVi ? "Khẩn cấp" : "Urgent"}</Badge>
           ) : null}
@@ -229,6 +233,12 @@ export function TaskRow({
           </button>
         </div>
       </div>
+
+      <TaskInspectorDrawer
+        task={task}
+        open={inspectorOpen}
+        onClose={() => setInspectorOpen(false)}
+      />
 
       <ConfirmDialog
         open={confirmDeleteOpen}

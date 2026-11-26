@@ -14,7 +14,7 @@ val FocusGateEmeraldLight = Color(0xFF34D399)
 val FocusGateGold = Color(0xFFD97706)
 val FocusGateEspresso = Color(0xFF181113)
 
-private val LightColors = lightColorScheme(
+private val CrimsonLightColors = lightColorScheme(
     primary = FocusGateCrimson,
     onPrimary = Color.White,
     primaryContainer = Color(0xFFFDEAEA),
@@ -33,7 +33,7 @@ private val LightColors = lightColorScheme(
     outline = Color(0xFFE8DEDE),
 )
 
-private val DarkColors = darkColorScheme(
+private val EspressoDarkColors = darkColorScheme(
     primary = FocusGateCrimsonLight,
     onPrimary = Color(0xFF28090B),
     primaryContainer = Color(0xFF3A1619),
@@ -52,10 +52,58 @@ private val DarkColors = darkColorScheme(
     outline = Color(0xFF352629),
 )
 
+private val KyotoMatchaColors = lightColorScheme(
+    primary = Color(0xFF3F6A49),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE1EFE4),
+    onPrimaryContainer = Color(0xFF1B3A23),
+    secondary = Color(0xFF2F6F4E),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFDDF0E5),
+    onSecondaryContainer = Color(0xFF0F3B26),
+    tertiary = Color(0xFFB07524),
+    background = Color(0xFFF4F3EC),
+    onBackground = Color(0xFF1C241D),
+    surface = Color(0xFFFAF9F4),
+    onSurface = Color(0xFF1C241D),
+    surfaceVariant = Color(0xFFEBECE2),
+    onSurfaceVariant = Color(0xFF58665A),
+    outline = Color(0xFFDCE0D5),
+)
+
+private val NordicSlateColors = darkColorScheme(
+    primary = Color(0xFF60A5FA),
+    onPrimary = Color(0xFF0B1628),
+    primaryContainer = Color(0xFF1E3252),
+    onPrimaryContainer = Color(0xFFDBEAFE),
+    secondary = Color(0xFF34D399),
+    onSecondary = Color(0xFF05291E),
+    secondaryContainer = Color(0xFF0F2D24),
+    onSecondaryContainer = Color(0xFFA7F3D0),
+    tertiary = Color(0xFFFBBF24),
+    background = Color(0xFF0B1120),
+    onBackground = Color(0xFFF1F5F9),
+    surface = Color(0xFF11192C),
+    onSurface = Color(0xFFF1F5F9),
+    surfaceVariant = Color(0xFF1A2540),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    outline = Color(0xFF273452),
+)
+
 @Composable
-fun FocusGateTheme(content: @Composable () -> Unit) {
+fun FocusGateTheme(
+    preset: String = "auto",
+    content: @Composable () -> Unit,
+) {
+    val scheme = when (preset) {
+        "crimson" -> CrimsonLightColors
+        "espresso" -> EspressoDarkColors
+        "matcha" -> KyotoMatchaColors
+        "nordic" -> NordicSlateColors
+        else -> if (isSystemInDarkTheme()) EspressoDarkColors else CrimsonLightColors
+    }
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
+        colorScheme = scheme,
         content = content,
     )
 }

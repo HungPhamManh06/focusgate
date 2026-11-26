@@ -71,6 +71,39 @@
   color-scheme: dark;
 }
 
+/* FocusGate 2.0 Visual Presets */
+:root[data-preset="matcha"] {
+  --canvas: #f3f5f0;
+  --surface: #fcfdf9;
+  --surface-2: #ebf0e6;
+  --ink: #162119;
+  --ink-soft: #334739;
+  --muted: #5a6f60;
+  --line: #d8e2d2;
+  --accent: #2d6a4f;
+  --accent-strong: #1b4332;
+  --accent-soft: #dff0e6;
+  --success: #15803d;
+  --success-soft: #dcfce7;
+  color-scheme: light;
+}
+
+:root[data-preset="nordic"] {
+  --canvas: #f3f6fa;
+  --surface: #ffffff;
+  --surface-2: #eaf0f7;
+  --ink: #0f172a;
+  --ink-soft: #334155;
+  --muted: #64748b;
+  --line: #dce5f0;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: #e0edff;
+  --success: #0f766e;
+  --success-soft: #ccfbf1;
+  color-scheme: light;
+}
+
 @layer base {
   * {
     border-color: var(--line);

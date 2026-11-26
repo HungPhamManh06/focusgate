@@ -88,9 +88,13 @@ export function FocusSoundscape({
   const [preset, setPreset] = useState<SoundPreset>("off");
   const [lastPreset, setLastPreset] = useState<SoundPreset>("brown");
   const [volume, setVolume] = useState(0.28);
+  const [layer2, setLayer2] = useState<"off" | "rain" | "fireplace" | "cafe">("off");
+  const [layer2Volume, setLayer2Volume] = useState(0.22);
   const ctxRef = useRef<AudioContext | null>(null);
   const gainRef = useRef<GainNode | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const layer2GainRef = useRef<GainNode | null>(null);
+  const layer2CleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     try {
@@ -107,7 +111,22 @@ export function FocusSoundscape({
     }
   }, []);
 
+  const stopLayer2 = () => {
+    layer2CleanupRef.current?.();
+    layer2CleanupRef.current = null;
+    if (layer2GainRef.current) {
+      try {
+        layer2GainRef.current.gain.value = 0;
+        layer2GainRef.current.disconnect();
+      } catch {
+        // ignore
+      }
+      layer2GainRef.current = null;
+    }
+  };
+
   const stopAllAudio = () => {
+    stopLayer2();
     cleanupRef.current?.();
     cleanupRef.current = null;
     if (gainRef.current) {
@@ -524,6 +543,90 @@ export function FocusSoundscape({
     };
   }, [preset]);
 
+  useEffect(() => {
+    if (layer2GainRef.current) {
+      layer2GainRef.current.gain.value = layer2Volume;
+    }
+  }, [layer2Volume]);
+
+  useEffect(() => {
+    stopLayer2();
+    if (preset === "off" || layer2 === "off" || !ctxRef.current) return;
+    const ctx = ctxRef.current;
+    const g = ctx.createGain();
+    g.gain.value = layer2Volume;
+    g.connect(ctx.destination);
+    layer2GainRef.current = g;
+
+    const cleanups: Array<() => void> = [];
+    const src = ctx.createBufferSource();
+    src.loop = true;
+
+    if (layer2 === "rain") {
+      src.buffer = createRainBuffer(ctx, 4);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 1900;
+      src.connect(filter);
+      filter.connect(g);
+      cleanups.push(() => {
+        try {
+          filter.disconnect();
+        } catch {
+          // ignore
+        }
+      });
+    } else if (layer2 === "fireplace") {
+      src.buffer = createCrackleBuffer(ctx, 5);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = 2400;
+      filter.Q.value = 0.9;
+      src.connect(filter);
+      filter.connect(g);
+      cleanups.push(() => {
+        try {
+          filter.disconnect();
+        } catch {
+          // ignore
+        }
+      });
+    } else {
+      src.buffer = createPinkNoiseBuffer(ctx, 4);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = 680;
+      filter.Q.value = 1.0;
+      src.connect(filter);
+      filter.connect(g);
+      cleanups.push(() => {
+        try {
+          filter.disconnect();
+        } catch {
+          // ignore
+        }
+      });
+    }
+
+    src.start();
+    cleanups.push(() => {
+      try {
+        src.stop();
+        src.disconnect();
+      } catch {
+        // ignore
+      }
+    });
+
+    layer2CleanupRef.current = () => {
+      for (const fn of cleanups) fn();
+    };
+
+    return () => {
+      stopLayer2();
+    };
+  }, [layer2, preset]);
+
   const activeDef = SOUNDSCAPE_PRESETS.find((item) => item.id === preset);
 
   return (
@@ -597,6 +700,62 @@ export function FocusSoundscape({
       <p className="mt-2 text-[11px] text-muted">
         {activeDef ? (isVi ? activeDef.descriptionVi : activeDef.description) : ""}
       </p>
+
+      {preset !== "off" ? (
+        <div
+          className={cn(
+            "mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-2.5",
+            darkSurface ? "border-white/10" : "border-line",
+          )}
+        >
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10.5px] font-medium uppercase tracking-[0.06em] text-muted">
+              {isVi ? "+ Lớp âm phụ:" : "+ Mix layer:"}
+            </span>
+            {(
+              [
+                { id: "off", label: isVi ? "Tắt" : "Off" },
+                { id: "rain", label: isVi ? "Mưa" : "Rain" },
+                { id: "fireplace", label: isVi ? "Lò sưởi" : "Fire" },
+                { id: "cafe", label: isVi ? "Quán" : "Café" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setLayer2(opt.id)}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[10.5px] font-medium transition-colors",
+                  layer2 === opt.id
+                    ? "border-accent bg-accent/20 text-accent"
+                    : darkSurface
+                      ? "border-white/15 bg-white/5 text-white/70 hover:text-white"
+                      : "border-line bg-surface text-muted hover:text-ink",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {layer2 !== "off" ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="range"
+                min={0.05}
+                max={0.65}
+                step={0.05}
+                value={layer2Volume}
+                onChange={(e) => setLayer2Volume(Number(e.target.value))}
+                aria-label={isVi ? "Âm lượng lớp phụ" : "Secondary layer volume"}
+                className="h-1 w-20 accent-[var(--accent)]"
+              />
+              <span className="w-7 text-right text-[10.5px] tabular-nums text-muted">
+                {Math.round(layer2Volume * 100)}%
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

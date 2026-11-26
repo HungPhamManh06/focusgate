@@ -32,11 +32,14 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -108,6 +111,8 @@ private enum class HomeBottomTab { TODAY, WEB, GUARD }
 fun HomeScreen(
     onOpenSetup: () -> Unit,
     openAddTaskOnLaunch: Boolean = false,
+    themePreset: String = "auto",
+    onThemePresetChange: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -651,7 +656,72 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            NavigationBar {
+            Column {
+                val activeFocusRunning = AgentPreferences.isActiveFocusRunning(context)
+                val activeFocusTitle = AgentPreferences.getActiveFocusTitle(context)
+                if (soundscapePlaying || activeFocusRunning) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(Color(0xFF34D399)),
+                            )
+                            Column {
+                                Text(
+                                    text = if (activeFocusRunning) {
+                                        activeFocusTitle ?: tr("Focus session running", "Đang tập trung")
+                                    } else {
+                                        tr("Ambient soundscape playing", "Đang phát âm thanh tập trung")
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = if (soundscapePlaying) {
+                                        tr("Tap Stop to mute audio", "Chạm Dừng để tắt âm thanh")
+                                    } else {
+                                        tr("Tap Web to open timer", "Mở tab Web để xem đồng hồ")
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                        if (soundscapePlaying) {
+                            TextButton(
+                                onClick = {
+                                    FocusSoundscapePlayer.stop()
+                                    soundscapePlaying = false
+                                },
+                            ) {
+                                Text(tr("Stop", "Dừng"))
+                            }
+                        } else {
+                            TextButton(onClick = { bottomTab = HomeBottomTab.WEB }) {
+                                Text(tr("Open", "Mở"))
+                            }
+                        }
+                    }
+                }
+                NavigationBar {
                 NavigationBarItem(
                     selected = bottomTab == HomeBottomTab.TODAY,
                     onClick = {
@@ -682,6 +752,7 @@ fun HomeScreen(
                     icon = { NavGuardIcon(active = bottomTab == HomeBottomTab.GUARD) },
                     label = { Text(tr("Guard", "Bảo vệ")) },
                 )
+            }
             }
         },
     ) { innerPadding ->
@@ -1051,73 +1122,111 @@ fun HomeScreen(
                                     }
                                     orderedTasks.forEach { task ->
                                         val isDone = task.status == "completed"
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Column(Modifier.weight(1f)) {
-                                                Text(
-                                                    task.title,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isDone) FontWeight.Normal else FontWeight.Medium,
-                                                    color = if (isDone) {
-                                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                                    } else {
-                                                        MaterialTheme.colorScheme.onSurface
-                                                    },
-                                                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
-                                                    maxLines = 2,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                                val meta = buildString {
-                                                    append(
-                                                        when (task.kind) {
-                                                            "must_do" -> tr("Must do", "Bắt buộc")
-                                                            "should_do" -> tr("Should do", "Nên làm")
-                                                            else -> tr("Bonus", "Thưởng")
+                                        val taskRowContent: @Composable () -> Unit = {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.01f))
+                                                    .padding(vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(
+                                                        task.title,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isDone) FontWeight.Normal else FontWeight.Medium,
+                                                        color = if (isDone) {
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                                        } else {
+                                                            MaterialTheme.colorScheme.onSurface
                                                         },
+                                                        textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
+                                                        maxLines = 2,
+                                                        overflow = TextOverflow.Ellipsis,
                                                     )
-                                                    if (task.requiredFocusMinutes > 0) {
-                                                        append(tr(" • Focus ${task.focusDone}/${task.requiredFocusMinutes}m", " • Tập trung ${task.focusDone}/${task.requiredFocusMinutes}p"))
+                                                    val meta = buildString {
+                                                        append(
+                                                            when (task.kind) {
+                                                                "must_do" -> tr("Must do", "Bắt buộc")
+                                                                "should_do" -> tr("Should do", "Nên làm")
+                                                                else -> tr("Bonus", "Thưởng")
+                                                            },
+                                                        )
+                                                        if (task.requiredFocusMinutes > 0) {
+                                                            append(tr(" • Focus ${task.focusDone}/${task.requiredFocusMinutes}m", " • Tập trung ${task.focusDone}/${task.requiredFocusMinutes}p"))
+                                                        }
+                                                    }
+                                                    Text(
+                                                        meta,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
+                                                Spacer(Modifier.width(8.dp))
+                                                if (isDone) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(999.dp))
+                                                            .background(Color(0x1F34D399))
+                                                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                                                    ) {
+                                                        Text(
+                                                            tr("✓ Done", "✓ Đã xong"),
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            color = Color(0xFF34D399),
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            maxLines = 1,
+                                                            softWrap = false,
+                                                        )
+                                                    }
+                                                } else {
+                                                    OutlinedButton(
+                                                        onClick = { completeTaskFromPhone(task.planTaskId) },
+                                                        enabled = completingTaskId == null,
+                                                    ) {
+                                                        Text(
+                                                            if (completingTaskId == task.planTaskId) "..." else tr("Done", "Xong"),
+                                                            maxLines = 1,
+                                                            softWrap = false,
+                                                        )
                                                     }
                                                 }
-                                                Text(
-                                                    meta,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
                                             }
-                                            Spacer(Modifier.width(8.dp))
-                                            if (isDone) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(999.dp))
-                                                        .background(Color(0x1F34D399))
-                                                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                                                ) {
-                                                    Text(
-                                                        tr("✓ Done", "✓ Đã xong"),
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = Color(0xFF34D399),
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        maxLines = 1,
-                                                        softWrap = false,
-                                                    )
-                                                }
-                                            } else {
-                                                OutlinedButton(
-                                                    onClick = { completeTaskFromPhone(task.planTaskId) },
-                                                    enabled = completingTaskId == null,
-                                                ) {
-                                                    Text(
-                                                        if (completingTaskId == task.planTaskId) "..." else tr("Done", "Xong"),
-                                                        maxLines = 1,
-                                                        softWrap = false,
-                                                    )
-                                                }
-                                            }
+                                        }
+                                        if (!isDone) {
+                                            val swipeState = rememberSwipeToDismissBoxState(
+                                                confirmValueChange = { value ->
+                                                    if (value == SwipeToDismissBoxValue.StartToEnd && completingTaskId == null) {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        completeTaskFromPhone(task.planTaskId)
+                                                    }
+                                                    false
+                                                },
+                                            )
+                                            SwipeToDismissBox(
+                                                state = swipeState,
+                                                enableDismissFromEndToStart = false,
+                                                backgroundContent = {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .clip(RoundedCornerShape(12.dp))
+                                                            .background(Color(0x2E34D399))
+                                                            .padding(horizontal = 14.dp),
+                                                        contentAlignment = Alignment.CenterStart,
+                                                    ) {
+                                                        Text(
+                                                            tr("✓ Swipe to complete", "✓ Vuốt để hoàn thành"),
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            color = Color(0xFF34D399),
+                                                            fontWeight = FontWeight.SemiBold,
+                                                        )
+                                                    }
+                                                },
+                                                content = { taskRowContent() },
+                                            )
+                                        } else {
+                                            taskRowContent()
                                         }
                                     }
 
@@ -1340,6 +1449,57 @@ fun HomeScreen(
             } // end HomeBottomTab.TODAY
 
             if (bottomTab == HomeBottomTab.GUARD) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            tr("Appearance · Theme Studio", "Giao diện · 4 Bảng màu"),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            tr(
+                                "Pick a signature color mood for FocusGate.",
+                                "Chọn phong cách màu sắc bạn yêu thích cho FocusGate.",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        val presets = listOf(
+                            Triple("auto", tr("Auto", "Tự động"), Color(0xFF78716C)),
+                            Triple("crimson", "Crimson", Color(0xFFB91C1C)),
+                            Triple("espresso", "Espresso", Color(0xFF28181A)),
+                            Triple("matcha", "Kyoto Matcha", Color(0xFF3F6A49)),
+                            Triple("nordic", "Nordic Slate", Color(0xFF3B82F6)),
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(presets) { (id, label, swatch) ->
+                                FilterChip(
+                                    selected = themePreset == id,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onThemePresetChange(id)
+                                    },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .clip(RoundedCornerShape(999.dp))
+                                                .background(swatch),
+                                        )
+                                    },
+                                    label = { Text(label) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             if (signedInEmail != null) {
                 item {
                     Card(
