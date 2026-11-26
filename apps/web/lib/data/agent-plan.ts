@@ -2,6 +2,7 @@ import "server-only";
 
 import { getSupabaseContext, getSupabaseUserTimezone, localDateInTimezone, unwrapSupabase, assertSupabaseOk } from "@/lib/supabase/data-client";
 import { getTodayPlan, completePlanTask } from "./planner";
+import { resetStaleDailyHabitsForNewDay } from "./tasks";
 import { getWalletSummary } from "./rewards";
 import type { PlanStatus, TaskKind, TaskStatus } from "./types";
 
@@ -41,6 +42,7 @@ export interface AgentPlanSnapshot {
 const KIND_ORDER: Record<TaskKind, number> = { must_do: 0, should_do: 1, bonus: 2 };
 
 export async function getAgentTodayPlan(request?: Request): Promise<AgentPlanSnapshot> {
+  await resetStaleDailyHabitsForNewDay(request).catch(() => 0);
   const ctx = await getSupabaseContext(request);
   if (!ctx) {
     const [plan, activeGrantMinutes] = await Promise.all([getTodayPlan(), getWalletSummary()]);

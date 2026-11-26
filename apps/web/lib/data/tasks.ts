@@ -4,6 +4,8 @@ import { LOCAL_USER_ID, withUser } from "@/lib/db";
 import {
   assertSupabaseOk,
   getSupabaseContext,
+  getSupabaseUserTimezone,
+  localDateInTimezone,
   unwrapSupabase,
 } from "@/lib/supabase/data-client";
 import { toIso } from "./format";
@@ -102,7 +104,64 @@ function compareTasks(a: Task, b: Task): number {
   return b.createdAt.localeCompare(a.createdAt);
 }
 
+/**
+ * Automatically resets daily habits (`is_daily_habit = true`) that were completed
+ * on a previous local day back to `todo` so they repeat on the new day.
+ * Never resets habits completed today.
+ */
+export async function resetStaleDailyHabitsForNewDay(request?: Request): Promise<number> {
+  const ctx = await getSupabaseContext(request);
+  if (ctx) {
+    const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+    const today = localDateInTimezone(timezone);
+    const { data, error } = await ctx.supabase
+      .from("tasks")
+      .select("id, completed_at")
+      .eq("user_id", ctx.userId)
+      .eq("is_daily_habit", true)
+      .eq("status", "completed");
+    if (error || !data || data.length === 0) return 0;
+
+    const staleIds = data
+      .filter((row) => {
+        if (!row.completed_at) return true;
+        return localDateInTimezone(timezone, new Date(String(row.completed_at))) < today;
+      })
+      .map((row) => String(row.id));
+
+    if (staleIds.length === 0) return 0;
+
+    await ctx.supabase
+      .from("tasks")
+      .update({ status: "todo", completed_at: null })
+      .eq("user_id", ctx.userId)
+      .in("id", staleIds);
+
+    return staleIds.length;
+  }
+
+  return withUser(async (db) => {
+    const res = await db.query<{ id: string }>(
+      `update public.tasks t
+       set status = 'todo', completed_at = null
+       from public.profiles pr
+       where pr.id = t.user_id
+         and t.user_id = $1
+         and t.is_daily_habit = true
+         and t.status = 'completed'
+         and (
+           t.completed_at is null
+           or (t.completed_at at time zone pr.timezone)::date < (now() at time zone pr.timezone)::date
+         )
+       returning t.id`,
+      [LOCAL_USER_ID],
+    );
+    return res.rows.length;
+  });
+}
+
 export async function listTasks(filters: TaskFilters = {}): Promise<Task[]> {
+  await resetStaleDailyHabitsForNewDay().catch(() => 0);
   const ctx = await getSupabaseContext();
   if (ctx) {
     let query = ctx.supabase

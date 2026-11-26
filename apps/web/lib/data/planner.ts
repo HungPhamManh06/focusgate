@@ -10,6 +10,7 @@ import {
   unwrapSupabase,
 } from "@/lib/supabase/data-client";
 import { toIso } from "./format";
+import { resetStaleDailyHabitsForNewDay } from "./tasks";
 import type {
   Plan,
   PlanEvent,
@@ -285,6 +286,7 @@ async function loadPlanSupabase(
 }
 
 export async function getTodayPlan(): Promise<Plan | null> {
+  await resetStaleDailyHabitsForNewDay().catch(() => 0);
   const ctx = await getSupabaseContext();
   if (ctx) {
     const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
@@ -445,6 +447,7 @@ export async function getPlannerBacklog(planId: string | null): Promise<Task[]> 
 }
 
 export async function ensureTodayPlan(): Promise<string> {
+  await resetStaleDailyHabitsForNewDay().catch(() => 0);
   const ctx = await getSupabaseContext();
   if (ctx) {
     const payload = unwrapSupabase(
@@ -452,6 +455,17 @@ export async function ensureTodayPlan(): Promise<string> {
       "Could not create the daily plan.",
     ) as { planId?: string };
     if (!payload.planId) throw new Error("Could not create the daily plan.");
+    // Auto-load flagged daily habits if the freshly created draft plan is empty.
+    const { count } = await ctx.supabase
+      .from("daily_plan_tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("plan_id", payload.planId)
+      .eq("user_id", ctx.userId);
+    if ((count ?? 0) === 0) {
+      await ctx.supabase
+        .rpc("rpc_populate_today_habits", { p_plan_id: payload.planId })
+        .then(() => undefined, () => undefined);
+    }
     return payload.planId;
   }
 
@@ -461,6 +475,15 @@ export async function ensureTodayPlan(): Promise<string> {
     );
     const planId = result.rows[0]?.result?.planId;
     if (!planId) throw new Error("Could not create the daily plan.");
+    const cnt = await db.query<{ c: number }>(
+      "select count(*)::int as c from public.daily_plan_tasks where plan_id = $1 and user_id = $2",
+      [planId, LOCAL_USER_ID],
+    );
+    if ((cnt.rows[0]?.c ?? 0) === 0) {
+      await db
+        .query("select public.rpc_populate_today_habits($1)", [planId])
+        .catch(() => undefined);
+    }
     return planId;
   });
 }
