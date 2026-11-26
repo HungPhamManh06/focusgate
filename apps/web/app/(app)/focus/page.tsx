@@ -41,10 +41,13 @@ import {
   findReadyToCompletePlanTasks,
   resolveInitialFocusTaskId,
 } from "@/lib/domain/tasks-planner-state";
+import { AmbientDeskClockTrigger } from "./ambient-desk-clock";
 import { BreakTimerCard } from "./break-timer-card";
+import { CustomFocusPresetsCard } from "./custom-focus-presets";
 import { FocusQueueCard } from "./focus-queue-card";
 import { FocusStarter } from "./focus-starter";
 import { FocusTimer } from "./focus-timer";
+import { SessionHistoryTimeline } from "./session-history-timeline";
 import { SessionNotesCard } from "./session-notes-card";
 import { SessionDebriefModal } from "@/components/domain/session-debrief-modal";
 
@@ -98,9 +101,12 @@ export default async function FocusPage({
               : "A block only counts when it meets the minimum threshold and is verified by the server. Choose one thing and begin."
         }
         actions={
-          <Link href="/planner" className={buttonVariants({ variant: "outline", size: "md" })}>
-            <CalendarClock className="size-4" /> {isVi ? "Kế hoạch hôm nay" : "Today's plan"}
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <AmbientDeskClockTrigger />
+            <Link href="/planner" className={buttonVariants({ variant: "outline", size: "md" })}>
+              <CalendarClock className="size-4" /> {isVi ? "Kế hoạch hôm nay" : "Today's plan"}
+            </Link>
+          </div>
         }
       />
 
@@ -282,9 +288,21 @@ export default async function FocusPage({
               initialTaskId={initialTaskId}
             />
           )}
+
+          <SessionHistoryTimeline
+            sessions={sessions.map((s) => ({
+              id: s.id,
+              taskTitle: s.taskTitle,
+              creditedMinutes: s.creditedMinutes,
+              actualMinutes: s.actualMinutes,
+              isValid: s.isValid,
+              startedAt: s.startedAt,
+            }))}
+          />
         </div>
 
         <aside className="space-y-4">
+          <CustomFocusPresetsCard />
           <Card>
             <CardHeader>
               <CardTitle>{isVi ? "Cổng hôm nay" : "Today's gate"}</CardTitle>

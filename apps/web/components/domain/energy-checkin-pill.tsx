@@ -8,15 +8,24 @@ import { cn } from "@/lib/utils";
 
 type EnergyLevel = "high" | "medium" | "low";
 
+const HISTORY_KEY = "focusgate:energy-history";
+
 export function EnergyCheckinPill() {
   const isVi = useLocale() === "vi";
-  const todayKey = `focusgate:energy:${new Date().toISOString().slice(0, 10)}`;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayKey = `focusgate:energy:${todayIso}`;
   const [energy, setEnergy] = useState<EnergyLevel | null>(null);
+  const [history, setHistory] = useState<Array<{ date: string; score: number }>>([]);
 
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(todayKey) as EnergyLevel | null;
       if (saved === "high" || saved === "medium" || saved === "low") setEnergy(saved);
+      const raw = JSON.parse(window.localStorage.getItem(HISTORY_KEY) || "[]") as Array<{
+        date: string;
+        score: number;
+      }>;
+      if (Array.isArray(raw)) setHistory(raw.slice(-7));
     } catch {
       // ignore
     }
@@ -24,11 +33,17 @@ export function EnergyCheckinPill() {
 
   function pick(next: EnergyLevel) {
     setEnergy(next);
-    try {
-      window.localStorage.setItem(todayKey, next);
-    } catch {
-      // ignore
-    }
+    const score = next === "high" ? 3 : next === "medium" ? 2 : 1;
+    setHistory((prev) => {
+      const updated = [...prev.filter((p) => p.date !== todayIso), { date: todayIso, score }].slice(-7);
+      try {
+        window.localStorage.setItem(todayKey, next);
+        window.localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
   }
 
   const tip =
@@ -79,11 +94,37 @@ export function EnergyCheckinPill() {
           );
         })}
       </div>
-      {tip ? (
-        <Link href="/focus" className="text-[11px] font-medium text-accent hover:underline">
-          {tip}
-        </Link>
-      ) : null}
+      <div className="flex items-center gap-3">
+        {history.length >= 2 ? (
+          <svg
+            width="56"
+            height="18"
+            viewBox="0 0 56 18"
+            aria-label={isVi ? "Xu hướng năng lượng 7 ngày" : "7-day energy trend"}
+            className="shrink-0"
+          >
+            <polyline
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              points={history
+                .map((p, idx) => {
+                  const x = history.length === 1 ? 28 : 4 + (idx / (history.length - 1)) * 48;
+                  const y = 15 - ((p.score - 1) / 2) * 11;
+                  return `${x.toFixed(1)},${y.toFixed(1)}`;
+                })
+                .join(" ")}
+            />
+          </svg>
+        ) : null}
+        {tip ? (
+          <Link href="/focus" className="text-[11px] font-medium text-accent hover:underline">
+            {tip}
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
 }

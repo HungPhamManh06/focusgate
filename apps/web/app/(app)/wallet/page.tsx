@@ -30,6 +30,7 @@ import { getTodayPlan } from "@/lib/data/planner";
 import { getWallet } from "@/lib/data/rewards";
 import { getWorkspace } from "@/lib/data/workspace";
 import { getV2Settings } from "@/lib/data/v2-settings";
+import { DistractionCostCalculator } from "./distraction-cost-calculator";
 import { EarnedTimeCard } from "./earned-time-card";
 import { QuickRedeemVault } from "./quick-redeem-vault";
 import { RewardWishlistCard } from "./reward-wishlist-card";
@@ -114,6 +115,8 @@ export default async function WalletPage() {
           </>
         }
       />
+
+      <DistractionCostCalculator availableMinutes={wallet.availableMinutes} />
 
       <QuickRedeemVault
         grants={activeGrants}

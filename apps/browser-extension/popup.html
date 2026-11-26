@@ -135,7 +135,7 @@
   <div class="brand-row">
     <img src="icons/icon.svg" alt="FocusGate" />
     <div>
-      <h1 id="title">FocusGate 3.0</h1>
+      <h1 id="title">FocusGate 8.0</h1>
       <p class="sub" id="subtitle">Syncs with your daily Must-Do plan.</p>
     </div>
   </div>
@@ -153,7 +153,14 @@
 
   <div id="signedInView" style="display: none;">
     <div class="card">
-      <span id="statusBadge" class="status-pill locked">Lock Active</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+        <span id="statusBadge" class="status-pill locked" style="margin-bottom:0;">Lock Active</span>
+        <svg width="34" height="34" viewBox="0 0 36 36" aria-label="Focus progress">
+          <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="3" />
+          <circle id="ringArc" cx="18" cy="18" r="15" fill="none" stroke="#f87171" stroke-width="3" stroke-linecap="round" stroke-dasharray="94.2" stroke-dashoffset="32" transform="rotate(-90 18 18)" />
+        </svg>
+      </div>
+      <div class="meta" id="shieldLabel" style="color:#fca5a5;font-weight:600;"></div>
       <div class="meta" id="emailLabel"></div>
       <div class="meta" id="domainsLabel"></div>
       <div class="meta" id="earnedLabel"></div>
@@ -161,6 +168,7 @@
     </div>
     <button class="primary" id="syncBtn">Sync Now</button>
     <button class="secondary" id="focusBtn">Open Focus Studio</button>
+    <button class="secondary" id="breakBtn">5m Quick Break</button>
     <button class="secondary" id="ytStudyBtn">YouTube Study Mode: OFF</button>
     <button class="secondary" id="passBtn">Use 10m Earned Time Pass</button>
     <button class="secondary" id="openWebBtn">Open FocusGate Web</button>

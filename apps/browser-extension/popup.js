@@ -99,6 +99,24 @@ async function render() {
   const earned = Number(policy?.earnedMinutesBalance ?? 0);
   document.getElementById("earnedLabel").textContent = t.earned(earned);
 
+  const shieldEl = document.getElementById("shieldLabel");
+  if (shieldEl) {
+    const blockedAttempts = Number(policy?.blockedAttemptsToday ?? 0);
+    shieldEl.textContent =
+      lang === "vi"
+        ? `🛡️ Đã bảo vệ ${blockedAttempts} lần hôm nay`
+        : `🛡️ Shielded ${blockedAttempts} distractions today`;
+  }
+  const ringArc = document.getElementById("ringArc");
+  if (ringArc) {
+    ringArc.setAttribute("stroke", locked ? "#f87171" : "#34d399");
+    ringArc.setAttribute("stroke-dashoffset", locked ? "28" : "0");
+  }
+  const breakBtn = document.getElementById("breakBtn");
+  if (breakBtn) {
+    breakBtn.textContent = lang === "vi" ? "Nghỉ ngắn 5 phút" : "5m Quick Break";
+  }
+
   const passBtn = document.getElementById("passBtn");
   passBtn.disabled = earned < 10;
 
@@ -160,4 +178,9 @@ render();
 document.getElementById("focusBtn")?.addEventListener("click", async () => {
   const { apiBaseUrl } = await chrome.storage.local.get(["apiBaseUrl"]);
   chrome.tabs.create({ url: `${apiBaseUrl || DEFAULT_API_BASE_URL}/focus` });
+});
+
+document.getElementById("breakBtn")?.addEventListener("click", async () => {
+  const { apiBaseUrl } = await chrome.storage.local.get(["apiBaseUrl"]);
+  chrome.tabs.create({ url: `${apiBaseUrl || DEFAULT_API_BASE_URL}/focus?break=5` });
 });

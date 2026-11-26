@@ -61,6 +61,7 @@ export function TasksWorkspaceClient({
   const toast = useToast();
   const [layout, setLayout] = useState<"list" | "board" | "matrix">("list");
   const [smartFilter, setSmartFilter] = useState<"all" | "habit" | "due" | "high">("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [hideCompleted, setHideCompleted] = useState(false);
   const [sortBy, setSortBy] = useState<"default" | "priority" | "shortest" | "due">("default");
   const [customOrder, setCustomOrder] = useState<string[]>([]);
@@ -99,11 +100,19 @@ export function TasksWorkspaceClient({
 
   const filteredTasks = tasks.filter((t) => {
     if (hideCompleted && t.status === "completed") return false;
+    if (categoryFilter !== "all" && (t.category || "other") !== categoryFilter) return false;
     if (smartFilter === "habit") return Boolean(t.isDailyHabit);
     if (smartFilter === "due") return Boolean(t.dueDate);
     if (smartFilter === "high") return t.priority === "urgent" || t.priority === "high";
     return true;
   });
+
+  const openMinutesBudget = tasks
+    .filter((t) => t.status !== "completed")
+    .reduce((acc, t) => acc + (t.estimatedMinutes || 0), 0);
+  const dailyBudgetCap = 360;
+  const budgetPct = Math.min(100, Math.round((openMinutesBudget / dailyBudgetCap) * 100));
+  const overBudget = openMinutesBudget > dailyBudgetCap;
 
   const priorityRank: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
   const sortedTasks = [...filteredTasks].sort((a, b) => {
@@ -178,8 +187,62 @@ export function TasksWorkspaceClient({
 
   return (
     <div>
-      <div className="mb-3">
+      <div className="mb-3 space-y-2.5">
         <TaskTemplatesStrip />
+
+        {/* FocusGate 8.0: Daily Time-Budget Meter & Category Filter Pills */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-2.5 text-[11.5px]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                { id: "all", label: isVi ? "Tất cả" : "All" },
+                { id: "work", label: getCategoryLabel("work", locale) },
+                { id: "study", label: getCategoryLabel("study", locale) },
+                { id: "health", label: getCategoryLabel("health", locale) },
+                { id: "personal", label: getCategoryLabel("personal", locale) },
+                { id: "finance", label: getCategoryLabel("finance", locale) },
+              ] as const
+            ).map((cat) => {
+              const count =
+                cat.id === "all"
+                  ? tasks.length
+                  : tasks.filter((t) => (t.category || "other") === cat.id).length;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                    categoryFilter === cat.id
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-line bg-surface-2/60 text-muted hover:text-ink",
+                  )}
+                >
+                  {cat.id !== "all" ? (
+                    <span
+                      aria-hidden
+                      className={cn("size-1.5 rounded-full", CATEGORY_DOT_COLORS[cat.id] ?? "bg-muted")}
+                    />
+                  ) : null}
+                  {cat.label}
+                  <span className="opacity-70 tabular-nums">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={cn("font-medium tabular-nums", overBudget ? "text-warning" : "text-muted")}>
+              {isVi ? "Ngân sách ngày:" : "Time budget:"} {Math.floor(openMinutesBudget / 60)}h{openMinutesBudget % 60}m / 6h
+            </span>
+            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
+              <div
+                className={cn("h-full rounded-full transition-all", overBudget ? "bg-warning" : "bg-accent")}
+                style={{ width: `${budgetPct}%` }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-full border border-line bg-surface p-0.5 text-[11.5px]">

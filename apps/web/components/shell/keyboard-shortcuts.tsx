@@ -1,8 +1,8 @@
 "use client";
 
-import { Keyboard, X } from "lucide-react";
+import { Keyboard, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "@/components/i18n/language-provider";
 
 const GO_ROUTES: Array<{
@@ -21,6 +21,13 @@ const GO_ROUTES: Array<{
   { key: ",", href: "/settings", label: "Settings", labelVi: "Cài đặt" },
 ];
 
+const GENERAL_SHORTCUTS = [
+  { keys: ["Ctrl", "K"], labelEn: "Command Palette 2.0", labelVi: "Bảng lệnh nhanh 2.0" },
+  { keys: ["?"], labelEn: "Toggle Shortcut Cheatsheet", labelVi: "Mở / Đóng bảng phím tắt" },
+  { keys: ["F"], labelEn: "Fullscreen Focus Sanctuary", labelVi: "Buồng lái tập trung toàn MH" },
+  { keys: ["Esc"], labelEn: "Exit Modal / Studio / Desk Clock", labelVi: "Thoát Hộp thoại / Studio" },
+];
+
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -32,10 +39,19 @@ function isTypingTarget(target: EventTarget | null): boolean {
   );
 }
 
+function Keycap({ children }: { children: string }) {
+  return (
+    <kbd className="inline-flex min-w-[24px] items-center justify-center rounded-md border border-line border-b-2 bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold uppercase text-ink shadow-xs">
+      {children}
+    </kbd>
+  );
+}
+
 export function KeyboardShortcuts() {
   const router = useRouter();
   const isVi = useLocale() === "vi";
   const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
   const gPressedAtRef = useRef<number>(0);
 
   useEffect(() => {
@@ -76,6 +92,22 @@ export function KeyboardShortcuts() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, router]);
 
+  const q = filter.trim().toLowerCase();
+  const filteredRoutes = useMemo(
+    () =>
+      GO_ROUTES.filter(
+        (r) => !q || r.label.toLowerCase().includes(q) || r.labelVi.toLowerCase().includes(q) || r.key === q,
+      ),
+    [q],
+  );
+  const filteredGeneral = useMemo(
+    () =>
+      GENERAL_SHORTCUTS.filter(
+        (g) => !q || g.labelEn.toLowerCase().includes(q) || g.labelVi.toLowerCase().includes(q),
+      ),
+    [q],
+  );
+
   if (!open) return null;
 
   return (
@@ -88,12 +120,12 @@ export function KeyboardShortcuts() {
         if (e.target === e.currentTarget) setOpen(false);
       }}
     >
-      <div className="fg-animate-in w-full max-w-lg rounded-2xl border border-line bg-surface shadow-2xl">
+      <div className="fg-animate-in w-full max-w-xl rounded-2xl border border-line bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div className="flex items-center gap-2">
             <Keyboard className="size-4 text-accent" />
             <h2 className="text-[15px] font-semibold text-ink">
-              {isVi ? "Phím tắt điều hướng nhanh" : "Keyboard Shortcuts"}
+              {isVi ? "Bảng Phím tắt Trực quan 2.0" : "Visual Keycap Shortcuts 2.0"}
             </h2>
           </div>
           <button
@@ -106,22 +138,31 @@ export function KeyboardShortcuts() {
           </button>
         </div>
 
-        <div className="grid gap-4 p-5 sm:grid-cols-2">
+        <div className="border-b border-line px-5 py-2.5">
+          <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2/60 px-3 py-1.5">
+            <Search className="size-3.5 text-muted" />
+            <input
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder={isVi ? "Tìm phím tắt…" : "Filter shortcuts…"}
+              className="w-full bg-transparent text-[12.5px] text-ink outline-none placeholder:text-muted"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-5 p-5 sm:grid-cols-2">
           <div>
-            <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">
-              {isVi ? "Điều hướng (Nhấn G rồi phím)" : "Go to (Press G then key)"}
+            <p className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">
+              {isVi ? "Điều hướng (G + phím)" : "Navigation (G then key)"}
             </p>
             <ul className="space-y-2 text-[12.5px]">
-              {GO_ROUTES.map((item) => (
+              {filteredRoutes.map((item) => (
                 <li key={item.href} className="flex items-center justify-between">
                   <span className="text-ink-soft">{isVi ? item.labelVi : item.label}</span>
                   <span className="flex items-center gap-1">
-                    <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] text-ink">
-                      G
-                    </kbd>
-                    <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] uppercase text-ink">
-                      {item.key}
-                    </kbd>
+                    <Keycap>G</Keycap>
+                    <Keycap>{item.key}</Keycap>
                   </span>
                 </li>
               ))}
@@ -129,34 +170,20 @@ export function KeyboardShortcuts() {
           </div>
 
           <div>
-            <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">
-              {isVi ? "Thao tác chung" : "General Actions"}
+            <p className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">
+              {isVi ? "Tập trung & Hệ thống" : "Focus & System"}
             </p>
-            <ul className="space-y-2 text-[12.5px]">
-              <li className="flex items-center justify-between">
-                <span className="text-ink-soft">
-                  {isVi ? "Bảng lệnh / Thêm nhanh" : "Command Palette"}
-                </span>
-                <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] text-ink">
-                  Ctrl K
-                </kbd>
-              </li>
-              <li className="flex items-center justify-between">
-                <span className="text-ink-soft">
-                  {isVi ? "Mở / Đóng bảng phím tắt" : "Toggle shortcuts"}
-                </span>
-                <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] text-ink">
-                  ?
-                </kbd>
-              </li>
-              <li className="flex items-center justify-between">
-                <span className="text-ink-soft">
-                  {isVi ? "Đóng hộp thoại / Ngăn kéo" : "Close modal / drawer"}
-                </span>
-                <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] text-ink">
-                  Esc
-                </kbd>
-              </li>
+            <ul className="space-y-2.5 text-[12.5px]">
+              {filteredGeneral.map((g) => (
+                <li key={g.labelEn} className="flex items-center justify-between gap-2">
+                  <span className="text-ink-soft">{isVi ? g.labelVi : g.labelEn}</span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    {g.keys.map((k) => (
+                      <Keycap key={k}>{k}</Keycap>
+                    ))}
+                  </span>
+                </li>
+              ))}
             </ul>
           </div>
         </div>

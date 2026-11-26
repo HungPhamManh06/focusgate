@@ -152,6 +152,9 @@ fun HomeScreen(
     var appCategory by remember { mutableStateOf("all") }
     var showSanctuaryFullscreen by remember { mutableStateOf(false) }
     var showQuickStatsSheet by remember { mutableStateOf(false) }
+    var showSoundscapeSheet by remember { mutableStateOf(false) }
+    var activeSoundMode by remember { mutableStateOf(FocusSoundscapePlayer.getMode()) }
+    var lastSyncedAtMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     var usageGranted by remember { mutableStateOf(PermissionChecks.hasUsageAccess(context)) }
     var overlayGranted by remember { mutableStateOf(PermissionChecks.hasOverlayAccess(context)) }
@@ -673,6 +676,33 @@ fun HomeScreen(
         )
     }
 
+    if (showSoundscapeSheet) {
+        ModalBottomSheet(onDismissRequest = { showSoundscapeSheet = false }) {
+            SoundscapeMixerSheetContent(
+                isPlaying = soundscapePlaying,
+                activeMode = activeSoundMode,
+                isVi = isVi,
+                onSelectMode = { mode ->
+                    activeSoundMode = mode
+                    FocusSoundscapePlayer.setMode(mode)
+                    if (!soundscapePlaying) {
+                        FocusSoundscapePlayer.start(mode)
+                        soundscapePlaying = true
+                    }
+                },
+                onTogglePlay = {
+                    if (soundscapePlaying) {
+                        FocusSoundscapePlayer.stop()
+                        soundscapePlaying = false
+                    } else {
+                        FocusSoundscapePlayer.start(activeSoundMode)
+                        soundscapePlaying = true
+                    }
+                },
+            )
+        }
+    }
+
     if (showQuickStatsSheet) {
         val planTasksList = planSnapshot?.plan?.tasks.orEmpty()
         val doneCount = planTasksList.count { it.status == "completed" }
@@ -1023,10 +1053,78 @@ fun HomeScreen(
                         earnedMinutes = earnedMinutesBalance,
                         isVi = isVi,
                         onAddTask = { showAddTaskDialog = true },
-                        onSync = { syncPlanFromWeb() },
+                        onSync = {
+                            lastSyncedAtMs = System.currentTimeMillis()
+                            syncPlanFromWeb()
+                        },
                         syncBusy = planSyncBusy,
                         themePreset = themePreset,
                     )
+                    // FocusGate 8.0: 7-Day Habit Streak Strip + Last-Sync Pill + Soundscape Button
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            val syncedMinAgo = ((System.currentTimeMillis() - lastSyncedAtMs) / 60_000L).coerceAtLeast(0L)
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(Color(0xFF34D399)),
+                            )
+                            Text(
+                                text = if (syncedMinAgo == 0L) {
+                                    tr("Synced just now", "Đồng bộ vừa xong")
+                                } else {
+                                    tr("Synced ${syncedMinAgo}m ago", "Đồng bộ ${syncedMinAgo}p trước")
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            repeat(7) { idx ->
+                                val filled = idx < 5 || mustDoDone > 0
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(
+                                            if (filled) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.outlineVariant
+                                            },
+                                        ),
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            TextButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    showSoundscapeSheet = true
+                                },
+                            ) {
+                                Text(
+                                    if (soundscapePlaying) tr("Audio ON", "Âm thanh BẬT") else tr("Audio", "Âm thanh"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    }
                 }
                 item {
                     var focusRunning by remember { mutableStateOf(AgentPreferences.isActiveFocusRunning(context)) }
@@ -1582,30 +1680,55 @@ fun HomeScreen(
                                                     if (value == SwipeToDismissBoxValue.StartToEnd && completingTaskId == null) {
                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         completeTaskFromPhone(task.planTaskId)
+                                                    } else if (value == SwipeToDismissBoxValue.EndToStart) {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        val endsAt = System.currentTimeMillis() + 25 * 60_000L
+                                                        AgentPreferences.setActiveFocusRunning(context, true)
+                                                        AgentPreferences.setActiveFocusEndsAt(context, endsAt)
+                                                        AgentPreferences.setActiveFocusTitle(context, task.title)
+                                                        Notifications.showLiveFocusNotification(
+                                                            context = context,
+                                                            taskTitle = task.title,
+                                                            endsAtEpochMs = endsAt,
+                                                            isPaused = false,
+                                                        )
+                                                        showSanctuaryFullscreen = true
                                                     }
                                                     false
                                                 },
                                             )
                                             SwipeToDismissBox(
                                                 state = swipeState,
-                                                enableDismissFromEndToStart = false,
+                                                enableDismissFromEndToStart = true,
                                                 backgroundContent = {
                                                     val swipingRight = swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+                                                    val swipingLeft = swipeState.dismissDirection == SwipeToDismissBoxValue.EndToStart
                                                     Box(
                                                         modifier = Modifier
                                                             .fillMaxSize()
                                                             .clip(RoundedCornerShape(12.dp))
                                                             .background(
-                                                                if (swipingRight) Color(0x2E34D399) else Color.Transparent,
+                                                                when {
+                                                                    swipingRight -> Color(0x2E34D399)
+                                                                    swipingLeft -> MaterialTheme.colorScheme.primaryContainer
+                                                                    else -> Color.Transparent
+                                                                },
                                                             )
                                                             .padding(horizontal = 14.dp),
-                                                        contentAlignment = Alignment.CenterStart,
+                                                        contentAlignment = if (swipingLeft) Alignment.CenterEnd else Alignment.CenterStart,
                                                     ) {
                                                         if (swipingRight) {
                                                             Text(
                                                                 tr("✓ Swipe to complete", "✓ Vuốt để hoàn thành"),
                                                                 style = MaterialTheme.typography.labelMedium,
                                                                 color = Color(0xFF0D7A58),
+                                                                fontWeight = FontWeight.SemiBold,
+                                                            )
+                                                        } else if (swipingLeft) {
+                                                            Text(
+                                                                tr("⚡ Focus 25m", "⚡ Tập trung 25p"),
+                                                                style = MaterialTheme.typography.labelMedium,
+                                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                                 fontWeight = FontWeight.SemiBold,
                                                             )
                                                         }
@@ -2121,28 +2244,15 @@ fun HomeScreen(
                                 enabled = !isOperationInProgress,
                             )
                         }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(tr("Bedtime lock (23:00–06:00)", "Khóa giờ đi ngủ (23:00–06:00)"))
-                                Text(
-                                    if (bedtimeEnabled) tr("Locks apps during sleep hours", "Khóa ứng dụng vào giờ ngủ") else tr("Off", "Tắt"),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Switch(
-                                checked = bedtimeEnabled,
-                                onCheckedChange = { enabled ->
-                                    bedtimeEnabled = enabled
-                                    AgentPreferences.setBedtimeEnabled(context, enabled)
-                                },
-                            )
-                        }
+                        Spacer(Modifier.height(10.dp))
+                        BedtimeArcCard(
+                            enabled = bedtimeEnabled,
+                            onToggle = { enabled ->
+                                bedtimeEnabled = enabled
+                                AgentPreferences.setBedtimeEnabled(context, enabled)
+                            },
+                            isVi = isVi,
+                        )
                         Spacer(Modifier.height(10.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),

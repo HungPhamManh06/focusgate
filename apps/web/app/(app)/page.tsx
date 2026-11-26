@@ -3,9 +3,11 @@ import { ListTodo, Target, Timer } from "lucide-react";
 import { AiCoachCard } from "@/components/domain/ai-coach-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
 import { DashboardActivityTabs } from "@/components/domain/dashboard-activity-tabs";
+import { DashboardBentoCustomizer } from "@/components/domain/dashboard-bento-customizer";
 import { DayTimelineRibbon } from "@/components/domain/day-timeline-ribbon";
 import { EnergyCheckinPill } from "@/components/domain/energy-checkin-pill";
 import { EveningWrapupTrigger } from "@/components/domain/evening-wrapup-modal";
+import { FocusFootprintBar } from "@/components/domain/focus-footprint-bar";
 import { GettingStartedStrip } from "@/components/domain/getting-started-strip";
 import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
 import { MorningRitualBanner } from "@/components/domain/morning-ritual-banner";
@@ -130,6 +132,7 @@ export default async function DashboardPage() {
               earnedMinutes={wallet.availableMinutes}
               remainingTasks={(plan?.tasks ?? []).filter((t) => !t.completedAt)}
             />
+            <DashboardBentoCustomizer />
           </div>
         </div>
 
@@ -179,19 +182,41 @@ export default async function DashboardPage() {
         hasPlan={Boolean(plan)}
         hasSessions={sessions.length > 0 || focus.minutes > 0}
       />
-      {!plan ? <MorningRitualBanner suggestedTasks={upcomingRaw} /> : null}
-      <TodaysWinsStrip
-        completedTitles={(plan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).map((t) => t.title)}
-        locale={locale}
-      />
-      <section className="mt-5">
-        <DayTimelineRibbon
-          schedules={schedules}
-          busyEvents={busyEvents}
-          activeSession={activeSession}
+      {!plan ? (
+        <div data-bento-id="ritual">
+          <MorningRitualBanner suggestedTasks={upcomingRaw} />
+        </div>
+      ) : null}
+      <div data-bento-id="wins">
+        <TodaysWinsStrip
+          completedTitles={(plan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).map((t) => t.title)}
           locale={locale}
         />
-        {weeklyStats ? <WeeklyPeekStrip days={weeklyStats.days} locale={locale} /> : null}
+      </div>
+      <FocusFootprintBar
+        sessions={sessions.map((s) => ({
+          id: s.id,
+          startedAt: s.startedAt,
+          creditedMinutes: s.creditedMinutes,
+          isValid: s.isValid,
+          taskTitle: s.taskTitle,
+        }))}
+        totalMinutes={focus.minutes}
+      />
+      <section className="mt-5">
+        <div data-bento-id="timeline">
+          <DayTimelineRibbon
+            schedules={schedules}
+            busyEvents={busyEvents}
+            activeSession={activeSession}
+            locale={locale}
+          />
+        </div>
+        {weeklyStats ? (
+          <div data-bento-id="weekly">
+            <WeeklyPeekStrip days={weeklyStats.days} locale={locale} />
+          </div>
+        ) : null}
         <EnergyCheckinPill />
       </section>
 

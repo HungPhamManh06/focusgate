@@ -34,14 +34,19 @@ export function GettingStartedStrip({
     { done: hasPlan, href: "/planner", label: isVi ? "2. Chốt kế hoạch ngày" : "2. Lock today's plan" },
     { done: hasSessions, href: "/focus", label: isVi ? "3. Chạy phiên tập trung" : "3. Complete 1 focus block" },
   ];
+  const doneCount = steps.filter((s) => s.done).length;
+  const pct = Math.round((doneCount / steps.length) * 100);
 
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-accent-soft/40 px-4 py-3 text-[12px]">
       <div className="flex flex-wrap items-center gap-3">
         <span className="inline-flex items-center gap-1.5 font-semibold text-accent">
           <Compass className="size-4" />
-          {isVi ? "Bắt đầu nhanh:" : "Quick start:"}
+          {isVi ? `Thiết lập ${pct}%` : `Setup ${pct}%`}
         </span>
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface">
+          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+        </div>
         {steps.map((s) => (
           <Link
             key={s.href}

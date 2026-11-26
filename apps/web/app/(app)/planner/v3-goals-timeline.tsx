@@ -439,6 +439,21 @@ export function V3GoalsTimeline({
                       </div>
                     </div>
                     <Progress value={pct} className="mt-2 h-1.5" />
+                    <div className="mt-2 flex items-center justify-between gap-1 text-[10px] font-medium tabular-nums">
+                      {[25, 50, 75, 100].map((m) => (
+                        <span
+                          key={m}
+                          className={cn(
+                            "rounded-full px-1.5 py-0.5 transition-colors",
+                            pct >= m
+                              ? "bg-accent-soft text-accent font-semibold"
+                              : "bg-surface text-muted",
+                          )}
+                        >
+                          {m}%
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
