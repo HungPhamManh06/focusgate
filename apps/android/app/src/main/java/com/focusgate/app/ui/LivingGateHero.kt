@@ -88,6 +88,7 @@ fun LivingGateHero(
             .border(1.dp, borderColor, RoundedCornerShape(24.dp))
             .padding(20.dp),
     ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -242,34 +243,46 @@ fun LivingGateHero(
                     color = Color(0xFFB4A3A6),
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onAddTask()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isOpen) FocusGateEmerald else Color(0xFFB91C1C),
-                            contentColor = Color.White,
-                        ),
-                    ) {
-                        Text(if (isVi) "+ Thêm việc" else "+ Add")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onSync()
-                        },
-                        enabled = !syncBusy,
-                    ) {
-                        Text(
-                            if (syncBusy) "..." else if (isVi) "Đồng bộ" else "Sync",
-                            color = Color(0xFFFAF7F5),
-                        )
-                    }
-                }
             }
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Button(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onAddTask()
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isOpen) FocusGateEmerald else Color(0xFFB91C1C),
+                    contentColor = Color.White,
+                ),
+            ) {
+                Text(
+                    if (isVi) "+ Thêm việc" else "+ Add task",
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+            OutlinedButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onSync()
+                },
+                enabled = !syncBusy,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    if (syncBusy) "..." else if (isVi) "Đồng bộ" else "Sync",
+                    color = Color(0xFFFAF7F5),
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+        }
         }
     }
 }

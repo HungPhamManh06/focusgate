@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -1098,7 +1099,13 @@ fun HomeScreen(
                                                 Text(
                                                     task.title,
                                                     style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Medium,
+                                                    fontWeight = if (isDone) FontWeight.Normal else FontWeight.Medium,
+                                                    color = if (isDone) {
+                                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                                    } else {
+                                                        MaterialTheme.colorScheme.onSurface
+                                                    },
+                                                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
                                                     maxLines = 2,
                                                     overflow = TextOverflow.Ellipsis,
                                                 )
@@ -1122,12 +1129,21 @@ fun HomeScreen(
                                             }
                                             Spacer(Modifier.width(8.dp))
                                             if (isDone) {
-                                                Text(
-                                                    tr("Done", "Xong"),
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(999.dp))
+                                                        .background(Color(0x1F34D399))
+                                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                                ) {
+                                                    Text(
+                                                        tr("✓ Done", "✓ Đã xong"),
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = Color(0xFF34D399),
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                    )
+                                                }
                                             } else {
                                                 OutlinedButton(
                                                     onClick = { completeTaskFromPhone(task.planTaskId) },
@@ -1135,6 +1151,8 @@ fun HomeScreen(
                                                 ) {
                                                     Text(
                                                         if (completingTaskId == task.planTaskId) "..." else tr("Done", "Xong"),
+                                                        maxLines = 1,
+                                                        softWrap = false,
                                                     )
                                                 }
                                             }
