@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -874,6 +875,7 @@ fun HomeScreen(
                         onAddTask = { showAddTaskDialog = true },
                         onSync = { syncPlanFromWeb() },
                         syncBusy = planSyncBusy,
+                        themePreset = themePreset,
                     )
                 }
                 item {
@@ -910,12 +912,37 @@ fun HomeScreen(
                                     val remSec = ((focusEndsAt - nowTick).coerceAtLeast(0L) / 1000L).toInt()
                                     val mm = remSec / 60
                                     val ss = remSec % 60
-                                    Text(
-                                        text = "%02d:%02d".format(mm, ss),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
+                                    val ringPrimary = MaterialTheme.colorScheme.primary
+                                    val ringTrack = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                                    val sweep = ((remSec.toFloat() / 1500f).coerceIn(0.04f, 1f)) * 360f
+                                    Box(
+                                        modifier = Modifier.size(56.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Canvas(modifier = Modifier.size(56.dp)) {
+                                            val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
+                                            drawArc(
+                                                color = ringTrack,
+                                                startAngle = -90f,
+                                                sweepAngle = 360f,
+                                                useCenter = false,
+                                                style = stroke,
+                                            )
+                                            drawArc(
+                                                color = ringPrimary,
+                                                startAngle = -90f,
+                                                sweepAngle = sweep,
+                                                useCenter = false,
+                                                style = stroke,
+                                            )
+                                        }
+                                        Text(
+                                            text = "%02d:%02d".format(mm, ss),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = ringPrimary,
+                                        )
+                                    }
                                 }
                             }
                             Spacer(Modifier.height(4.dp))
@@ -1244,23 +1271,56 @@ fun HomeScreen(
                                         )
                                         Spacer(Modifier.height(8.dp))
                                     }
-                                    val pendingTasks = currentPlan.tasks.filter { it.status != "completed" }
-                                    val completedTasks = currentPlan.tasks.filter { it.status == "completed" }
+                                    var todayFilter by remember { mutableStateOf("all") }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.padding(bottom = 6.dp),
+                                    ) {
+                                        FilterChip(
+                                            selected = todayFilter == "all",
+                                            onClick = { todayFilter = "all" },
+                                            label = { Text(tr("All", "Tất cả")) },
+                                        )
+                                        FilterChip(
+                                            selected = todayFilter == "must_do",
+                                            onClick = { todayFilter = "must_do" },
+                                            label = { Text(tr("Must do", "Bắt buộc")) },
+                                        )
+                                    }
+                                    val filteredSource = if (todayFilter == "must_do") {
+                                        currentPlan.tasks.filter { it.kind == "must_do" }
+                                    } else {
+                                        currentPlan.tasks
+                                    }
+                                    val pendingTasks = filteredSource.filter { it.status != "completed" }
+                                    val completedTasks = filteredSource.filter { it.status == "completed" }
                                     val orderedTasks = if (showCompletedTodayTasks) {
                                         pendingTasks + completedTasks
                                     } else {
                                         pendingTasks
                                     }
-                                    orderedTasks.forEach { task ->
+                                    orderedTasks.forEachIndexed { idx, task ->
                                         val isDone = task.status == "completed"
+                                        val dotColor = when (task.kind) {
+                                            "must_do" -> MaterialTheme.colorScheme.primary
+                                            "should_do" -> MaterialTheme.colorScheme.secondary
+                                            else -> MaterialTheme.colorScheme.tertiary
+                                        }
                                         val taskRowContent: @Composable () -> Unit = {
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                                                    .padding(vertical = 6.dp),
+                                                    .padding(vertical = 8.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(8.dp)
+                                                        .clip(RoundedCornerShape(999.dp))
+                                                        .background(if (isDone) Color(0xFF34D399) else dotColor),
+                                                )
+                                                Spacer(Modifier.width(10.dp))
                                                 Column(Modifier.weight(1f)) {
                                                     Text(
                                                         task.title,
@@ -1363,6 +1423,12 @@ fun HomeScreen(
                                             )
                                         } else {
                                             taskRowContent()
+                                        }
+                                        if (idx < orderedTasks.lastIndex) {
+                                            HorizontalDivider(
+                                                thickness = 0.5.dp,
+                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                                            )
                                         }
                                     }
 

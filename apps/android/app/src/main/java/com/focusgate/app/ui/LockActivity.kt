@@ -31,7 +31,8 @@ class LockActivity : ComponentActivity() {
         val appLabel = intent.getStringExtra(EXTRA_APP_LABEL) ?: "This app"
 
         setContent {
-            FocusGateTheme {
+            val preset = AgentPreferences.getAppThemePreset(this)
+            FocusGateTheme(preset = preset) {
                 BlockOverlayContent(
                     appLabel = appLabel,
                     allowEmergency = AgentPreferences.canUseEmergencyToday(this),
@@ -43,6 +44,7 @@ class LockActivity : ComponentActivity() {
                     },
                     isVi = AgentPreferences.getLanguage(this) == "vi",
                     planSummary = AgentPreferences.getPlanSummaryText(this),
+                    themePreset = preset,
                 )
             }
         }

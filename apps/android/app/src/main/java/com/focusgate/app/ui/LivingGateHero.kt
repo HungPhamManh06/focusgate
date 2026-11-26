@@ -57,6 +57,7 @@ fun LivingGateHero(
     onAddTask: () -> Unit,
     onSync: () -> Unit,
     syncBusy: Boolean,
+    themePreset: String = "auto",
     modifier: Modifier = Modifier,
 ) {
     val isOpen = unlocked || planStatus == "completed"
@@ -71,13 +72,25 @@ fun LivingGateHero(
         animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
         label = "gate_arch_progress",
     )
-    val accentColor = if (isOpen) FocusGateEmeraldLight else FocusGateCrimsonLight
-    val bgBrush = if (isOpen) {
-        Brush.verticalGradient(listOf(Color(0xFF0E261F), Color(0xFF131A18)))
-    } else {
-        Brush.verticalGradient(listOf(Color(0xFF281417), Color(0xFF140D0F)))
+    val accentColor = when {
+        isOpen -> FocusGateEmeraldLight
+        themePreset == "matcha" -> Color(0xFF74C69D)
+        themePreset == "nordic" -> Color(0xFF60A5FA)
+        else -> FocusGateCrimsonLight
     }
-    val borderColor = if (isOpen) FocusGateEmerald.copy(alpha = 0.55f) else FocusGateCrimsonLight.copy(alpha = 0.35f)
+    val bgBrush = when {
+        isOpen -> Brush.verticalGradient(listOf(Color(0xFF0E261F), Color(0xFF131A18)))
+        themePreset == "matcha" -> Brush.verticalGradient(listOf(Color(0xFF1A2E22), Color(0xFF121E17)))
+        themePreset == "nordic" -> Brush.verticalGradient(listOf(Color(0xFF111C33), Color(0xFF0B1221)))
+        else -> Brush.verticalGradient(listOf(Color(0xFF281417), Color(0xFF140D0F)))
+    }
+    val borderColor = if (isOpen) FocusGateEmerald.copy(alpha = 0.55f) else accentColor.copy(alpha = 0.35f)
+    val ctaColor = when {
+        isOpen -> FocusGateEmerald
+        themePreset == "matcha" -> Color(0xFF3F6A49)
+        themePreset == "nordic" -> Color(0xFF2563EB)
+        else -> Color(0xFFB91C1C)
+    }
 
     Box(
         modifier = modifier
@@ -257,7 +270,7 @@ fun LivingGateHero(
                 },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isOpen) FocusGateEmerald else Color(0xFFB91C1C),
+                    containerColor = ctaColor,
                     contentColor = Color.White,
                 ),
             ) {

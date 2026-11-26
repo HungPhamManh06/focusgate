@@ -61,6 +61,7 @@ fun BlockOverlayContent(
     planSummary: String = "",
     strictFrictionMode: Boolean = false,
     isBedtimeMode: Boolean = false,
+    themePreset: String = "auto",
 ) {
     var confirmEmergency by remember { mutableStateOf(false) }
     var countdownSeconds by remember { mutableIntStateOf(30) }
@@ -90,13 +91,22 @@ fun BlockOverlayContent(
         }
     }
 
+    val overlayBg = when (themePreset) {
+        "matcha" -> listOf(Color(0xFF14241B), Color(0xFF0E1913), Color(0xFF08100B))
+        "nordic" -> listOf(Color(0xFF0E1A30), Color(0xFF0A1222), Color(0xFF060B15))
+        else -> listOf(Color(0xFF1B0E11), Color(0xFF100A0B), Color(0xFF090607))
+    }
+    val overlayAccent = when (themePreset) {
+        "matcha" -> Color(0xFF74C69D)
+        "nordic" -> Color(0xFF60A5FA)
+        else -> Color(0xFFF87171)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF1B0E11), Color(0xFF100A0B), Color(0xFF090607)),
-                ),
+                Brush.verticalGradient(colors = overlayBg),
             ),
     ) {
         Column(
@@ -121,14 +131,14 @@ fun BlockOverlayContent(
                             .size(44.dp)
                             .scale(breathScale)
                             .clip(CircleShape)
-                            .background(Color(0x33F87171))
-                            .border(1.5.dp, Color(0xFFF87171), CircleShape),
+                            .background(overlayAccent.copy(alpha = 0.2f))
+                            .border(1.5.dp, overlayAccent, CircleShape),
                     )
                     Box(
                         modifier = Modifier
                             .size(12.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFF87171)),
+                            .background(overlayAccent),
                     )
                 }
                 Column {

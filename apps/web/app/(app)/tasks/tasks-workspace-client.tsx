@@ -58,6 +58,7 @@ export function TasksWorkspaceClient({
   const isVi = locale === "vi";
   const toast = useToast();
   const [layout, setLayout] = useState<"list" | "board">("list");
+  const [sortBy, setSortBy] = useState<"default" | "priority" | "shortest" | "due">("default");
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [inspectTask, setInspectTask] = useState<Task | null>(null);
@@ -65,9 +66,25 @@ export function TasksWorkspaceClient({
 
   const planTaskByTaskId = new Map<string, PlanTask>(planTasks.map((pt) => [pt.taskId, pt]));
 
+  const priorityRank: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (sortBy === "priority") {
+      return (priorityRank[a.priority] ?? 2) - (priorityRank[b.priority] ?? 2);
+    }
+    if (sortBy === "shortest") {
+      return a.estimatedMinutes - b.estimatedMinutes;
+    }
+    if (sortBy === "due") {
+      const da = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+      const db = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+      return da - db;
+    }
+    return 0;
+  });
+
   const groups = KIND_ORDER.map((kind) => ({
     kind,
-    tasks: tasks.filter((task) => task.kind === kind),
+    tasks: sortedTasks.filter((task) => task.kind === kind),
   }));
 
   function toggleSelect(taskId: string) {
@@ -141,28 +158,44 @@ export function TasksWorkspaceClient({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (selectMode) clearSelection();
-            else setSelectMode(true);
-          }}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] font-medium transition-colors",
-            selectMode
-              ? "border-accent bg-accent-soft text-accent"
-              : "border-line bg-surface text-muted hover:text-ink",
-          )}
-        >
-          <CheckSquare className="size-3.5" />
-          {selectMode
-            ? isVi
-              ? `Đang chọn (${selectedIds.size})`
-              : `Selecting (${selectedIds.size})`
-            : isVi
-              ? "Chọn nhiều"
-              : "Bulk select"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label={isVi ? "Sắp xếp nhiệm vụ" : "Sort tasks"}
+            value={sortBy}
+            onChange={(e) =>
+              setSortBy(e.target.value as "default" | "priority" | "shortest" | "due")
+            }
+            className="h-8 rounded-full border border-line bg-surface px-3 text-[11.5px] font-medium text-ink-soft focus:border-accent focus:outline-none"
+          >
+            <option value="default">{isVi ? "Sắp xếp: Mặc định" : "Sort: Default"}</option>
+            <option value="priority">{isVi ? "Ưu tiên cao nhất" : "Highest priority"}</option>
+            <option value="shortest">{isVi ? "Ngắn nhất trước" : "Shortest first"}</option>
+            <option value="due">{isVi ? "Hạn gần nhất" : "Soonest due"}</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (selectMode) clearSelection();
+              else setSelectMode(true);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] font-medium transition-colors",
+              selectMode
+                ? "border-accent bg-accent-soft text-accent"
+                : "border-line bg-surface text-muted hover:text-ink",
+            )}
+          >
+            <CheckSquare className="size-3.5" />
+            {selectMode
+              ? isVi
+                ? `Đang chọn (${selectedIds.size})`
+                : `Selecting (${selectedIds.size})`
+              : isVi
+                ? "Chọn nhiều"
+                : "Bulk select"}
+          </button>
+        </div>
       </div>
 
       {layout === "list" ? (
