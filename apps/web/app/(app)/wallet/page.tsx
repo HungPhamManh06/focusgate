@@ -34,6 +34,7 @@ import { DistractionCostCalculator } from "./distraction-cost-calculator";
 import { EarnedTimeCard } from "./earned-time-card";
 import { FocusBalanceScale } from "./focus-balance-scale";
 import { QuickRedeemVault } from "./quick-redeem-vault";
+import { RewardTierCard } from "./reward-tier-card";
 import { RewardWishlistCard } from "./reward-wishlist-card";
 import { SpendForm } from "./spend-form";
 import { WalletInsightsStrip } from "./wallet-insights-strip";
@@ -122,6 +123,7 @@ export default async function WalletPage() {
         earnedMinutes={wallet.earnedMinutes}
         consumedMinutes={wallet.consumedMinutes}
       />
+      <RewardTierCard earnedMinutes={wallet.earnedMinutes} />
 
       <QuickRedeemVault
         grants={activeGrants}

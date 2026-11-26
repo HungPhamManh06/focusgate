@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart3, Crown, Flame } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLocale } from "@/components/i18n/language-provider";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,19 @@ export function StatisticsTabsShell({
 }) {
   const isVi = useLocale() === "vi";
   const [tab, setTab] = useState<StatsTabKey>("overview");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "1") setTab("overview");
+      else if (e.key === "2") setTab("heatmap");
+      else if (e.key === "3") setTab("quests");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const tabs: Array<{ key: StatsTabKey; label: string; icon: typeof BarChart3 }> = [
     {

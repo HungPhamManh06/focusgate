@@ -18,6 +18,8 @@ public sealed class FloatingTimerForm : Form
     private bool _dragging;
     private int _elapsedSeconds;
     private bool _microMode;
+    private bool _breakMode;
+    private int _breakRemainingSeconds;
     private int _themeIndex;
     private int _opacityIndex;
     private Color _borderColor = Color.FromArgb(220, 56, 56);
@@ -124,12 +126,13 @@ public sealed class FloatingTimerForm : Form
         Controls.Add(_doneButton);
         Controls.Add(_microButton);
 
-        // FocusGate 10.0: Right-click menu for Opacity Cycle & Pin-On-Top Toggle
+        // FocusGate 10.0 & 11.0: Right-click menu for Pin-On-Top, Opacity Cycle & Quick 5m Break
         var ctxMenu = new ContextMenuStrip();
         var pinItem = new ToolStripMenuItem("Always on Top") { Checked = true, CheckOnClick = true };
         pinItem.Click += (_, _) => TopMost = pinItem.Checked;
         var opacityItem = new ToolStripMenuItem("Cycle Opacity (96% → 80% → 65%)", null, (_, _) => CycleOpacity());
-        ctxMenu.Items.AddRange([pinItem, opacityItem]);
+        var breakItem = new ToolStripMenuItem("Toggle 5m Break Mode", null, (_, _) => ToggleBreakMode());
+        ctxMenu.Items.AddRange([pinItem, opacityItem, breakItem]);
         ContextMenuStrip = ctxMenu;
 
         foreach (Control ctrl in new Control[] { this, _clockLabel, _titleLabel })
@@ -155,8 +158,16 @@ public sealed class FloatingTimerForm : Form
         _tickTimer = new System.Windows.Forms.Timer { Interval = 1000 };
         _tickTimer.Tick += (_, _) =>
         {
-            _elapsedSeconds++;
-            _clockLabel.Text = FormatClock(_elapsedSeconds);
+            if (_breakMode)
+            {
+                if (_breakRemainingSeconds > 0) _breakRemainingSeconds--;
+                _clockLabel.Text = FormatClock(_breakRemainingSeconds);
+            }
+            else
+            {
+                _elapsedSeconds++;
+                _clockLabel.Text = FormatClock(_elapsedSeconds);
+            }
         };
     }
 
@@ -256,6 +267,27 @@ public sealed class FloatingTimerForm : Form
             2 => 0.65,
             _ => 0.96,
         };
+    }
+
+    private void ToggleBreakMode()
+    {
+        _breakMode = !_breakMode;
+        if (_breakMode)
+        {
+            _breakRemainingSeconds = 5 * 60;
+            _clockLabel.Text = FormatClock(_breakRemainingSeconds);
+            _clockLabel.ForeColor = Color.FromArgb(52, 211, 153);
+            _borderColor = Color.FromArgb(52, 211, 153);
+            _titleLabel.Text = "5m Short Break";
+        }
+        else
+        {
+            _clockLabel.Text = FormatClock(_elapsedSeconds);
+            _clockLabel.ForeColor = Color.FromArgb(248, 113, 113);
+            _borderColor = Color.FromArgb(220, 56, 56);
+            _titleLabel.Text = "Focus Sprint";
+        }
+        Invalidate();
     }
 
     private void ApplyRoundedRegion(int radius)

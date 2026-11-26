@@ -109,6 +109,31 @@ export function BlockRulesCard({
       </CardHeader>
 
       <CardContent className="space-y-5 pt-4">
+        {/* FocusGate 11.0: 1-Click Block Rule Category Presets */}
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2/50 px-3 py-2 text-[11px]">
+          <span className="font-semibold text-muted">
+            {isVi ? "Mẫu nhanh:" : "Quick presets:"}
+          </span>
+          {[
+            { label: "Facebook", id: "facebook.com", name: "Facebook", cat: "social" as const },
+            { label: "TikTok", id: "tiktok.com", name: "TikTok", cat: "video" as const },
+            { label: "YouTube", id: "youtube.com", name: "YouTube", cat: "video" as const },
+          ].map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                setRuleType("block");
+                setIdentifier(p.id);
+                setDisplayName(p.name);
+                setCategory(p.cat);
+              }}
+              className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-medium text-ink-soft transition-colors hover:border-accent/40 hover:text-accent"
+            >
+              + {p.label}
+            </button>
+          ))}
+        </div>
         {activeDevices.length === 0 ? (
           <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-4 py-3 text-[12.5px] text-muted">
             <ShieldAlert className="size-4 shrink-0" />

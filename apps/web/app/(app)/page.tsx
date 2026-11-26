@@ -105,6 +105,14 @@ export default async function DashboardPage() {
 
   const planStat = formatPlanProgressStat(plan, locale);
   const openTasksStat = formatOpenTasksStat(counts, locale);
+  const mustDoTotalCount = (plan?.tasks ?? []).filter((t) => t.kind === "must_do").length;
+  const mustDoDoneCount = (plan?.tasks ?? []).filter((t) => t.kind === "must_do" && Boolean(t.completedAt)).length;
+  const gateReadinessPct =
+    plan?.status === "completed"
+      ? 100
+      : mustDoTotalCount > 0
+        ? Math.round((mustDoDoneCount / mustDoTotalCount) * 100)
+        : 0;
 
   return (
     <div className="mx-auto w-full max-w-[1280px] overflow-x-hidden px-4 py-6 sm:px-8 sm:py-8 lg:px-10">
@@ -165,14 +173,30 @@ export default async function DashboardPage() {
           </Link>
           <Link
             href="/planner"
-            className="rounded-xl px-3 py-2 transition-colors hover:bg-surface-2/70"
+            className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 transition-colors hover:bg-surface-2/70"
           >
-            <p className="flex items-center gap-1 text-[10.5px] font-medium text-muted">
-              <Target className="size-3 text-accent" /> {isVi ? "Tiến độ" : "Plan"}
-            </p>
-            <p className="mt-0.5 text-[16px] font-bold text-ink tabular-nums">
-              {planStat.value}
-            </p>
+            <div>
+              <p className="flex items-center gap-1 text-[10.5px] font-medium text-muted">
+                <Target className="size-3 text-accent" /> {isVi ? "Mở cổng" : "Gate"}
+              </p>
+              <p className="mt-0.5 text-[16px] font-bold text-ink tabular-nums">
+                {planStat.value}
+              </p>
+            </div>
+            <svg width="32" height="32" viewBox="0 0 36 36" className="shrink-0" aria-label="Gate readiness">
+              <circle cx="18" cy="18" r="14" fill="none" stroke="var(--surface-2)" strokeWidth="4" />
+              <circle
+                cx="18"
+                cy="18"
+                r="14"
+                fill="none"
+                stroke={gateReadinessPct >= 100 ? "var(--success)" : "var(--accent)"}
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={`${(gateReadinessPct / 100) * 88} 88`}
+                transform="rotate(-90 18 18)"
+              />
+            </svg>
           </Link>
         </div>
       </div>

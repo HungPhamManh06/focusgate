@@ -115,11 +115,21 @@ export function FocusSoundscape({
   }, []);
 
   const stopLayer2 = () => {
+    const g = layer2GainRef.current;
+    const ctx = ctxRef.current;
+    if (g && ctx) {
+      try {
+        g.gain.cancelScheduledValues(ctx.currentTime);
+        g.gain.setValueAtTime(Math.max(0.001, g.gain.value), ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+      } catch {
+        // ignore
+      }
+    }
     layer2CleanupRef.current?.();
     layer2CleanupRef.current = null;
     if (layer2GainRef.current) {
       try {
-        layer2GainRef.current.gain.value = 0;
         layer2GainRef.current.disconnect();
       } catch {
         // ignore

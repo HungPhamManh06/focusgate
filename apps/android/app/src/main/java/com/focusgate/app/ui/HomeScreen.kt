@@ -747,6 +747,8 @@ fun HomeScreen(
                 blockedCount = pendingBlocked.size,
                 weeklyBars = weeklyBars,
                 recentFocusTitle = AgentPreferences.getActiveFocusTitle(context),
+                initialReflection = AgentPreferences.getDailyReflection(context),
+                onSaveReflection = { AgentPreferences.setDailyReflection(context, it) },
                 isVi = isVi,
             )
         }
@@ -772,7 +774,25 @@ fun HomeScreen(
                         }
                         Spacer(Modifier.width(10.dp))
                         Column {
-                            Text("FocusGate", fontWeight = FontWeight.SemiBold)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text("FocusGate", fontWeight = FontWeight.SemiBold)
+                                val topPlanTasks = planSnapshot?.plan?.tasks?.filter { it.kind == "must_do" }.orEmpty()
+                                val topProgress = if (topPlanTasks.isNotEmpty()) {
+                                    topPlanTasks.count { it.status == "completed" }.toFloat() / topPlanTasks.size.toFloat()
+                                } else {
+                                    0f
+                                }
+                                val ringPrimary = MaterialTheme.colorScheme.primary
+                                val ringTrack = MaterialTheme.colorScheme.surfaceVariant
+                                Canvas(modifier = Modifier.size(18.dp)) {
+                                    val st = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+                                    drawArc(ringTrack, -90f, 360f, false, style = st)
+                                    drawArc(ringPrimary, -90f, 360f * topProgress, false, style = st)
+                                }
+                            }
                             Text(
                                 tr(
                                     "Finish your tasks. Earn your freedom.",
@@ -914,7 +934,15 @@ fun HomeScreen(
                             val navTabs = listOf(
                                 Triple(HomeBottomTab.TODAY, tr("Today", "Hôm nay"), "today"),
                                 Triple(HomeBottomTab.WEB, tr("Web", "Web"), "web"),
-                                Triple(HomeBottomTab.GUARD, tr("Guard", "Bảo vệ"), "guard"),
+                                Triple(
+                                    HomeBottomTab.GUARD,
+                                    if (pendingBlocked.isNotEmpty()) {
+                                        "${tr("Guard", "Bảo vệ")} (${pendingBlocked.size})"
+                                    } else {
+                                        tr("Guard", "Bảo vệ")
+                                    },
+                                    "guard",
+                                ),
                             )
                             navTabs.forEach { (itemTab, itemLabel, _) ->
                                 val selected = bottomTab == itemTab
@@ -1094,6 +1122,7 @@ fun HomeScreen(
                         },
                         syncBusy = planSyncBusy,
                         themePreset = themePreset,
+                        strictMode = strictFrictionMode,
                     )
                     if (planUnlocked) {
                         Spacer(Modifier.height(10.dp))

@@ -279,4 +279,11 @@ object AgentPreferences {
     fun setQuickScratchpad(context: Context, text: String) {
         prefs(context).edit().putString("quick_scratchpad", text).apply()
     }
+
+    fun getDailyReflection(context: Context): String =
+        prefs(context).getString("daily_reflection", "") ?: ""
+
+    fun setDailyReflection(context: Context, text: String) {
+        prefs(context).edit().putString("daily_reflection", text).apply()
+    }
 }

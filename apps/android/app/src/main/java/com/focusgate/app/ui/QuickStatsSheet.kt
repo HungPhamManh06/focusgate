@@ -10,9 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,8 +35,11 @@ fun QuickStatsSheetContent(
     blockedCount: Int,
     weeklyBars: List<Pair<String, Int>>,
     recentFocusTitle: String? = null,
+    initialReflection: String = "",
+    onSaveReflection: ((String) -> Unit)? = null,
     isVi: Boolean,
 ) {
+    var reflectionDraft by remember(initialReflection) { mutableStateOf(initialReflection) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val maxVal = (weeklyBars.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
@@ -151,6 +160,37 @@ fun QuickStatsSheetContent(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(top = 2.dp),
                 )
+            }
+        }
+
+        if (onSaveReflection != null) {
+            Text(
+                text = if (isVi) "1 dòng nhìn lại hôm nay" else "1-Line Daily Reflection",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = reflectionDraft,
+                    onValueChange = { reflectionDraft = it },
+                    singleLine = true,
+                    placeholder = {
+                        Text(
+                            if (isVi) "Điều gì giúp bạn tập trung nhất?" else "What helped you focus best today?",
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Button(onClick = { onSaveReflection(reflectionDraft.trim()) }) {
+                    Text(if (isVi) "Lưu" else "Save")
+                }
             }
         }
     }

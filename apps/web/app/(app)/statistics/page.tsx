@@ -21,6 +21,7 @@ import { CircadianFocusHeatmap } from "@/components/domain/circadian-focus-heatm
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { FocusGardenAndLetter } from "@/components/domain/focus-garden-letter";
 import { MonthlyTargetAndTriggers } from "@/components/domain/monthly-target-triggers";
+import { WeeklyComparisonChart } from "@/components/domain/weekly-comparison-chart";
 import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
 import { FocusQuestsAndGateCard } from "@/components/domain/focus-quests-card";
@@ -211,6 +212,10 @@ export default async function StatisticsPage({
       />
 
       <MonthlyTargetAndTriggers focusMinutes={stats.focusMinutes} locale={locale} />
+      <WeeklyComparisonChart
+        days={stats.days.map((d) => ({ date: d.date, focusMinutes: d.focusMinutes }))}
+        locale={locale}
+      />
 
       <HallOfFameCard
         bestDayMinutes={stats.bestDay?.focusMinutes ?? 0}

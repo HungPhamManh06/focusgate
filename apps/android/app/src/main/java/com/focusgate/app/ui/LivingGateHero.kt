@@ -58,6 +58,7 @@ fun LivingGateHero(
     onSync: () -> Unit,
     syncBusy: Boolean,
     themePreset: String = "auto",
+    strictMode: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val isOpen = unlocked || planStatus == "completed"

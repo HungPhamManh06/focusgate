@@ -73,6 +73,8 @@ fun FocusSanctuaryOverlay(
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var breathingMode by remember { mutableStateOf(false) }
     var flipClockMode by remember { mutableStateOf(false) }
+    var breakMode by remember { mutableStateOf(false) }
+    var breakEndsAtMs by remember { mutableLongStateOf(0L) }
 
     DisposableEffect(Unit) {
         val window = (context as? Activity)?.window
@@ -89,12 +91,14 @@ fun FocusSanctuaryOverlay(
         }
     }
 
-    val remainingMs = (endsAtEpochMs - nowMs).coerceAtLeast(0L)
+    val activeEndsAt = if (breakMode && breakEndsAtMs > 0L) breakEndsAtMs else endsAtEpochMs
+    val activeDuration = if (breakMode) 5 * 60_000L else totalDurationMs
+    val remainingMs = (activeEndsAt - nowMs).coerceAtLeast(0L)
     val totalSec = (remainingMs / 1000L).toInt()
     val mm = totalSec / 60
     val ss = totalSec % 60
-    val progress = if (totalDurationMs > 0L) {
-        (1f - remainingMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
+    val progress = if (activeDuration > 0L) {
+        (1f - remainingMs.toFloat() / activeDuration.toFloat()).coerceIn(0f, 1f)
     } else {
         0f
     }
@@ -104,10 +108,14 @@ fun FocusSanctuaryOverlay(
         "nordic" -> listOf(Color(0xFF0C182D), Color(0xFF08101E), Color(0xFF040812))
         else -> listOf(Color(0xFF1C0E11), Color(0xFF110A0C), Color(0xFF080506))
     }
-    val accent = when (themePreset) {
-        "matcha" -> Color(0xFF74C69D)
-        "nordic" -> Color(0xFF60A5FA)
-        else -> Color(0xFFF87171)
+    val accent = if (breakMode) {
+        Color(0xFF34D399)
+    } else {
+        when (themePreset) {
+            "matcha" -> Color(0xFF74C69D)
+            "nordic" -> Color(0xFF60A5FA)
+            else -> Color(0xFFF87171)
+        }
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "sanctuary_breath")
@@ -149,6 +157,22 @@ fun FocusSanctuaryOverlay(
                     letterSpacing = 1.6.sp,
                     fontWeight = FontWeight.Bold,
                 )
+                TextButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        breakMode = !breakMode
+                        if (breakMode) breakEndsAtMs = System.currentTimeMillis() + 5 * 60_000L
+                    },
+                ) {
+                    Text(
+                        if (breakMode) {
+                            if (isVi) "Về Focus" else "Back to Focus"
+                        } else {
+                            if (isVi) "Nghỉ 5p" else "5m Break"
+                        },
+                        color = accent,
+                    )
+                }
                 TextButton(onClick = onDismiss) {
                     Text(if (isVi) "Thu nhỏ" else "Minimize", color = Color(0xFFD9CBCD))
                 }

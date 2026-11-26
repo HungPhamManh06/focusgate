@@ -346,7 +346,7 @@ export function FocusTimer({
       className={cn(
         zenMode
           ? "fixed inset-0 z-50 flex flex-col overflow-y-auto text-[#f5eeee]"
-          : "surface-card overflow-hidden",
+          : cn("surface-card overflow-hidden", !timerState.isPaused && "fg-focus-breathing"),
       )}
     >
       {zenMode ? <AmbientStudioBackdrop preset={activeSound} /> : null}

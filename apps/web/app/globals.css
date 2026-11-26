@@ -361,3 +361,18 @@
 :root[data-text-size="lg"] {
   font-size: 16.5px;
 }
+
+/* FocusGate 11.0: Ambient Breathing Focus Border */
+@keyframes fgBreathGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 28px -4px color-mix(in srgb, var(--accent) 42%, transparent);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fg-focus-breathing {
+    animation: fgBreathGlow 8s ease-in-out infinite;
+  }
+}

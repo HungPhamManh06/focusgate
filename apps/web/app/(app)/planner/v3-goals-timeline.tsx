@@ -214,6 +214,30 @@ export function V3GoalsTimeline({
                           <GripVertical className="size-3.5 shrink-0 text-muted" />
                           <span className="truncate font-medium text-ink">{item.title}</span>
                         </span>
+                        <span className="flex shrink-0 items-center gap-0.5">
+                          {["14:00", "16:00", "20:00"].map((slot) => (
+                            <button
+                              key={slot}
+                              type="button"
+                              disabled={pending}
+                              onClick={() =>
+                                startTransition(async () => {
+                                  const end = addMinutesToTime(slot, 60);
+                                  const res = await setPlanTaskScheduleAction({
+                                    planTaskId: item.planTaskId,
+                                    start: slot,
+                                    end,
+                                  });
+                                  if (res.error) toast.push("error", res.error);
+                                  else toast.push("success", isVi ? `Đã đặt lịch ${slot}–${end}` : `Scheduled ${slot}–${end}`);
+                                })
+                              }
+                              className="rounded-md border border-line bg-surface px-1.5 py-0.5 font-mono text-[9.5px] font-medium text-muted hover:border-accent/40 hover:text-accent"
+                            >
+                              {slot.slice(0, 2)}h
+                            </button>
+                          ))}
+                        </span>
                         <button
                           type="button"
                           disabled={pending}

@@ -41,3 +41,15 @@ async function init() {
 }
 
 init();
+
+// FocusGate 11.0: Live Status Clock on blocked.html
+(function initBlockedClock() {
+  const el = document.getElementById("liveClock");
+  if (!el) return;
+  const tick = () => {
+    const now = new Date();
+    el.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  };
+  tick();
+  setInterval(tick, 15000);
+})();

@@ -264,11 +264,21 @@ export function ThemePreviewPicker() {
 
   return (
     <Card className="mt-6">
-      <CardHeader>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle className="flex items-center gap-2">
           <Palette className="size-4 text-accent" />
           {isVi ? "FocusGate Themes Studio (4 bộ chủ đề)" : "FocusGate Themes Studio (4 Presets)"}
         </CardTitle>
+        {/* FocusGate 11.0: Live Mini-Preview Pill */}
+        <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2/70 px-3 py-1.5 text-[11px]">
+          <span className="font-display text-[13px] font-semibold text-ink">25:00</span>
+          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-surface">
+            <div className="h-full w-2/3 rounded-full bg-accent" />
+          </div>
+          <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">
+            {isVi ? "Xem trước" : "Preview"}
+          </span>
+        </div>
       </CardHeader>
       <CardContent className="grid gap-3.5 pt-3 sm:grid-cols-2 lg:grid-cols-4">
         {PRESETS.map((item) => {

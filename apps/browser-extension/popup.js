@@ -185,6 +185,46 @@ document.getElementById("breakBtn")?.addEventListener("click", async () => {
   chrome.tabs.create({ url: `${apiBaseUrl || DEFAULT_API_BASE_URL}/focus?break=5` });
 });
 
+// FocusGate 11.0: 1-Tap Ambient Brown Noise (Web Audio API)
+let fgNoiseCtx = null;
+let fgNoiseRunning = false;
+document.getElementById("noiseBtn")?.addEventListener("click", () => {
+  const btn = document.getElementById("noiseBtn");
+  if (fgNoiseRunning && fgNoiseCtx) {
+    try { fgNoiseCtx.close(); } catch {}
+    fgNoiseCtx = null;
+    fgNoiseRunning = false;
+    if (btn) btn.textContent = "Ambient Brown Noise: OFF";
+    return;
+  }
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let lastOut = 0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      data[i] = (lastOut + 0.02 * white) / 1.02;
+      lastOut = data[i];
+      data[i] *= 2.5;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.14;
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    src.start();
+    fgNoiseCtx = ctx;
+    fgNoiseRunning = true;
+    if (btn) btn.textContent = "Ambient Brown Noise: ON";
+  } catch {
+    // ignore
+  }
+});
+
 // FocusGate 9.0: 4-Theme Popup Switcher + Current Tab Quick-Action Bar
 const POPUP_THEMES = {
   espresso: "linear-gradient(160deg, #161012 0%, #100b0c 60%, #1d1113 100%)",

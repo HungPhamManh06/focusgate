@@ -60,7 +60,7 @@ export function TasksWorkspaceClient({
   const isVi = locale === "vi";
   const toast = useToast();
   const [layout, setLayout] = useState<"list" | "board" | "matrix">("list");
-  const [smartFilter, setSmartFilter] = useState<"all" | "habit" | "due" | "high">("all");
+  const [smartFilter, setSmartFilter] = useState<"all" | "habit" | "due" | "high" | "unscheduled">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [hideCompleted, setHideCompleted] = useState(false);
   const [sortBy, setSortBy] = useState<"default" | "priority" | "shortest" | "due">("default");
@@ -104,8 +104,16 @@ export function TasksWorkspaceClient({
     if (smartFilter === "habit") return Boolean(t.isDailyHabit);
     if (smartFilter === "due") return Boolean(t.dueDate);
     if (smartFilter === "high") return t.priority === "urgent" || t.priority === "high";
+    if (smartFilter === "unscheduled") return !planTaskByTaskId.has(t.id) && t.status !== "completed";
     return true;
   });
+
+  const todayIsoLocal = new Date().toISOString().slice(0, 10);
+  const urgentOrOverdue = tasks.filter(
+    (t) =>
+      t.status !== "completed" &&
+      (t.priority === "urgent" || (Boolean(t.dueDate) && t.dueDate!.slice(0, 10) < todayIsoLocal)),
+  );
 
   const openMinutesBudget = tasks
     .filter((t) => t.status !== "completed")
@@ -192,6 +200,22 @@ export function TasksWorkspaceClient({
   return (
     <div>
       <div className="mb-3 space-y-2.5">
+        {urgentOrOverdue.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-danger/30 bg-danger-soft/45 px-4 py-2.5 text-[12px]">
+            <span className="font-semibold text-danger">
+              {isVi
+                ? `🔥 ${urgentOrOverdue.length} việc khẩn cấp / quá hạn cần xử lý ngay:`
+                : `🔥 ${urgentOrOverdue.length} urgent or overdue tasks need attention:`}{" "}
+              <span className="font-normal text-ink">{urgentOrOverdue[0]?.title}</span>
+            </span>
+            <a
+              href={`/focus?taskId=${urgentOrOverdue[0]?.id ?? ""}`}
+              className="rounded-full bg-danger px-3 py-1 text-[11px] font-semibold text-white hover:opacity-95"
+            >
+              ▶ {isVi ? "Vào Focus ngay" : "Focus now"}
+            </a>
+          </div>
+        ) : null}
         <TaskTemplatesStrip />
 
         {/* FocusGate 8.0: Daily Time-Budget Meter & Category Filter Pills */}
@@ -296,6 +320,7 @@ export function TasksWorkspaceClient({
               { id: "habit", label: isVi ? "Thói quen" : "Habits" },
               { id: "due", label: isVi ? "Có hạn" : "Has due" },
               { id: "high", label: isVi ? "Ưu tiên cao" : "High priority" },
+              { id: "unscheduled", label: isVi ? "Chưa xếp lịch" : "Unscheduled" },
             ] as const
           ).map((f) => (
             <button
