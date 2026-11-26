@@ -72,12 +72,16 @@ export function TaskRow({
     (Date.now() - new Date(task.createdAt).getTime()) / 86_400_000,
   );
   const isStale = !completed && Number.isFinite(ageDays) && ageDays >= 7;
+  const effectiveRequiredFocus =
+    task.requiredFocusMinutes === 0
+      ? 0
+      : (planTask?.requiredFocusMinutes ?? task.requiredFocusMinutes);
   const needsFocusInActivePlan =
     planStatus === "active" &&
     planTask !== null &&
     !completed &&
-    planTask.requiredFocusMinutes > 0 &&
-    planTask.focusDone < planTask.requiredFocusMinutes;
+    effectiveRequiredFocus > 0 &&
+    planTask.focusDone < effectiveRequiredFocus;
   const canAddToTodayPlan =
     !planTask &&
     !completed &&
@@ -252,7 +256,7 @@ export function TaskRow({
           >
             {isVi ? `ước tính ${task.estimatedMinutes}m` : `${task.estimatedMinutes}m estimate`}
           </button>
-          {planTask && planTask.requiredFocusMinutes > 0 ? (
+          {planTask && effectiveRequiredFocus > 0 ? (
             <>
               <span aria-hidden>·</span>
               <span>

@@ -477,17 +477,24 @@ export async function completeTask(id: string): Promise<{ viaPlan: boolean }> {
     const planTasks = unwrapSupabase(
       await ctx.supabase
         .from("daily_plan_tasks")
-        .select("id, daily_plans!inner(status)")
+        .select("id, daily_plans!inner(status), tasks!inner(required_focus_minutes)")
         .eq("user_id", ctx.userId)
         .eq("task_id", id)
         .eq("daily_plans.status", "active")
         .limit(1),
-    ) as Array<{ id: string }>;
+    ) as Array<{
+      id: string;
+      tasks: { required_focus_minutes: number } | Array<{ required_focus_minutes: number }>;
+    }>;
 
     const activePlanTask = planTasks[0];
     if (activePlanTask) {
+      const taskReq = Array.isArray(activePlanTask.tasks)
+        ? activePlanTask.tasks[0]?.required_focus_minutes
+        : activePlanTask.tasks?.required_focus_minutes;
+      const rpcName = taskReq === 0 ? "rpc_complete_plan_task_direct" : "rpc_complete_plan_task";
       assertSupabaseOk(
-        await ctx.supabase.rpc("rpc_complete_plan_task", {
+        await ctx.supabase.rpc(rpcName, {
           p_plan_task_id: activePlanTask.id,
         }),
       );
@@ -506,10 +513,11 @@ export async function completeTask(id: string): Promise<{ viaPlan: boolean }> {
   }
 
   return withUser(async (db) => {
-    const planTask = await db.query<{ id: string }>(
-      `select pt.id
+    const planTask = await db.query<{ id: string; task_req: number }>(
+      `select pt.id, t.required_focus_minutes as task_req
        from public.daily_plan_tasks pt
        join public.daily_plans p on p.id = pt.plan_id
+       join public.tasks t on t.id = pt.task_id
        where pt.user_id = $1 and pt.task_id = $2 and p.status = 'active'
        limit 1`,
       [LOCAL_USER_ID, id],
@@ -517,7 +525,11 @@ export async function completeTask(id: string): Promise<{ viaPlan: boolean }> {
 
     const activePlanTask = planTask.rows[0];
     if (activePlanTask) {
-      await db.query("select public.rpc_complete_plan_task($1)", [activePlanTask.id]);
+      const rpcName =
+        activePlanTask.task_req === 0
+          ? "public.rpc_complete_plan_task_direct"
+          : "public.rpc_complete_plan_task";
+      await db.query(`select ${rpcName}($1)`, [activePlanTask.id]);
       return { viaPlan: true };
     }
 

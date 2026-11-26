@@ -299,7 +299,7 @@ document.getElementById("quickTaskForm")?.addEventListener("submit", async (e) =
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ title, kind: "must_do", requiredFocusMinutes: 25, addToTodayPlan: true }),
+      body: JSON.stringify({ title, kind: "must_do", requiredFocusMinutes: 0, addToTodayPlan: true }),
     });
     if (!res.ok) throw new Error("Failed");
     input.value = "";

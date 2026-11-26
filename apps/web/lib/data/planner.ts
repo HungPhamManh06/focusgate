@@ -79,9 +79,10 @@ async function loadPlan(db: Db, planId: string): Promise<Plan | null> {
   const row = planResult.rows[0];
   if (!row) return null;
 
-  const tasksResult = await db.query<PlanTaskRow>(
+  const tasksResult = await db.query<PlanTaskRow & { task_required_focus_minutes: number }>(
     `select pt.id, pt.task_id, pt.kind, pt.required_focus_minutes, pt.completed_at,
             t.title, t.description, t.status, t.priority,
+            t.required_focus_minutes as task_required_focus_minutes,
             coalesce((
               select sum(fs.credited_minutes)
               from public.focus_sessions fs
@@ -117,7 +118,8 @@ async function loadPlan(db: Db, planId: string): Promise<Plan | null> {
     id: task.id,
     taskId: task.task_id,
     kind: task.kind,
-    requiredFocusMinutes: task.required_focus_minutes,
+    requiredFocusMinutes:
+      task.task_required_focus_minutes === 0 ? 0 : task.required_focus_minutes,
     completedAt: toIso(task.completed_at),
     title: task.title,
     description: task.description,
@@ -172,7 +174,7 @@ async function loadPlanSupabase(
     supabase
       .from("daily_plan_tasks")
       .select(
-        "id, task_id, kind, required_focus_minutes, completed_at, sort_order, created_at, tasks!inner(title, description, status, priority)",
+        "id, task_id, kind, required_focus_minutes, completed_at, sort_order, created_at, tasks!inner(title, description, status, priority, required_focus_minutes)",
       )
       .eq("plan_id", planId)
       .eq("user_id", userId),
@@ -208,8 +210,8 @@ async function loadPlanSupabase(
     sort_order: number;
     created_at: string;
     tasks:
-      | { title: string; description: string | null; status: PlanTask["status"]; priority: PlanTask["priority"] }
-      | Array<{ title: string; description: string | null; status: PlanTask["status"]; priority: PlanTask["priority"] }>;
+      | { title: string; description: string | null; status: PlanTask["status"]; priority: PlanTask["priority"]; required_focus_minutes: number }
+      | Array<{ title: string; description: string | null; status: PlanTask["status"]; priority: PlanTask["priority"]; required_focus_minutes: number }>;
   }>;
   const focusRows = unwrapSupabase(focusRes) as Array<{
     task_id: string | null;
@@ -237,7 +239,8 @@ async function loadPlanSupabase(
         id: item.id,
         taskId: item.task_id,
         kind: item.kind,
-        requiredFocusMinutes: item.required_focus_minutes,
+        requiredFocusMinutes:
+          task.required_focus_minutes === 0 ? 0 : item.required_focus_minutes,
         completedAt: toIso(item.completed_at),
         title: task.title,
         description: task.description,
@@ -596,14 +599,40 @@ export async function completePlan(planId: string): Promise<void> {
 export async function completePlanTask(planTaskId: string): Promise<void> {
   const ctx = await getSupabaseContext();
   if (ctx) {
+    const { data: ptRow } = await ctx.supabase
+      .from("daily_plan_tasks")
+      .select("required_focus_minutes, tasks!inner(required_focus_minutes)")
+      .eq("id", planTaskId)
+      .eq("user_id", ctx.userId)
+      .maybeSingle();
+    const linked = ptRow as {
+      required_focus_minutes: number;
+      tasks: { required_focus_minutes: number } | Array<{ required_focus_minutes: number }>;
+    } | null;
+    const taskReq = linked
+      ? (Array.isArray(linked.tasks) ? linked.tasks[0]?.required_focus_minutes : linked.tasks?.required_focus_minutes)
+      : null;
+    const rpcName = taskReq === 0 ? "rpc_complete_plan_task_direct" : "rpc_complete_plan_task";
     assertSupabaseOk(
-      await ctx.supabase.rpc("rpc_complete_plan_task", { p_plan_task_id: planTaskId }),
+      await ctx.supabase.rpc(rpcName, { p_plan_task_id: planTaskId }),
     );
     return;
   }
 
   await withUser(async (db) => {
-    await db.query("select public.rpc_complete_plan_task($1)", [planTaskId]);
+    const check = await db.query<{ task_req: number }>(
+      `select t.required_focus_minutes as task_req
+       from public.daily_plan_tasks pt
+       join public.tasks t on t.id = pt.task_id
+       where pt.id = $1 and pt.user_id = $2
+       limit 1`,
+      [planTaskId, LOCAL_USER_ID],
+    );
+    const rpcName =
+      check.rows[0]?.task_req === 0
+        ? "public.rpc_complete_plan_task_direct"
+        : "public.rpc_complete_plan_task";
+    await db.query(`select ${rpcName}($1)`, [planTaskId]);
   });
 }
 
