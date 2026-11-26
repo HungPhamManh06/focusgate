@@ -10,9 +10,13 @@ import { cn } from "@/lib/utils";
 type ActiveSessionPayload = {
   id: string;
   status: string;
+  mode?: string;
+  startedAt: string;
+  pausedAt?: string | null;
+  pausedSeconds?: number;
   taskTitle?: string | null;
   plannedMinutes: number;
-  remainingSeconds: number;
+  remainingSeconds?: number;
 };
 
 type DocumentPiPWindow = Window & {
@@ -21,10 +25,27 @@ type DocumentPiPWindow = Window & {
   };
 };
 
+function computeElapsedSeconds(session: ActiveSessionPayload): number {
+  const startedMs = new Date(session.startedAt).getTime();
+  if (!Number.isFinite(startedMs)) return 0;
+  const refMs =
+    session.status === "paused" && session.pausedAt
+      ? new Date(session.pausedAt).getTime()
+      : Date.now();
+  return Math.max(
+    0,
+    Math.floor((refMs - startedMs) / 1000) - Math.max(0, session.pausedSeconds ?? 0),
+  );
+}
+
 function formatClock(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
-  const mins = Math.floor(safe / 60);
+  const hrs = Math.floor(safe / 3600);
+  const mins = Math.floor((safe % 3600) / 60);
   const secs = safe % 60;
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
@@ -32,7 +53,7 @@ export function FloatingFocusPill() {
   const pathname = usePathname();
   const isVi = useLocale() === "vi";
   const [session, setSession] = useState<ActiveSessionPayload | null>(null);
-  const [remainingSec, setRemainingSec] = useState(0);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [pipSupported, setPipSupported] = useState(false);
 
   useEffect(() => {
@@ -57,7 +78,7 @@ export function FloatingFocusPill() {
         if (cancelled) return;
         if (data.active && data.session) {
           setSession(data.session);
-          setRemainingSec(data.session.remainingSeconds ?? 0);
+          setElapsedSec(computeElapsedSeconds(data.session));
         } else {
           setSession(null);
         }
@@ -77,7 +98,7 @@ export function FloatingFocusPill() {
   useEffect(() => {
     if (!session || session.status === "paused") return;
     const tick = window.setInterval(() => {
-      setRemainingSec((prev) => Math.max(0, prev - 1));
+      setElapsedSec((prev) => prev + 1);
     }, 1000);
     return () => window.clearInterval(tick);
   }, [session]);
@@ -85,8 +106,11 @@ export function FloatingFocusPill() {
   if (pathname === "/focus" || !session) return null;
 
   const isPaused = session.status === "paused";
+  const isOpenEnded = session.mode === "open_ended";
   const totalSec = Math.max(60, session.plannedMinutes * 60);
-  const progress = Math.max(0, Math.min(1, 1 - remainingSec / totalSec));
+  const progress = isOpenEnded
+    ? Math.max(0.05, Math.min(1, (elapsedSec % 3600) / 3600))
+    : Math.max(0, Math.min(1, elapsedSec / totalSec));
   const radius = 11;
   const circ = 2 * Math.PI * radius;
 
@@ -120,7 +144,7 @@ export function FloatingFocusPill() {
       clockEl.style.fontSize = "38px";
       clockEl.style.fontWeight = "700";
       clockEl.style.fontVariantNumeric = "tabular-nums";
-      let localSec = remainingSec;
+      let localSec = elapsedSec;
       clockEl.textContent = formatClock(localSec);
 
       doc.body.appendChild(titleEl);
@@ -128,7 +152,7 @@ export function FloatingFocusPill() {
 
       const timer = pipWin.setInterval(() => {
         if (!isPaused) {
-          localSec = Math.max(0, localSec - 1);
+          localSec += 1;
           clockEl.textContent = formatClock(localSec);
         }
       }, 1000);
@@ -175,7 +199,7 @@ export function FloatingFocusPill() {
               )}
             />
             <span className="font-mono text-[13.5px] font-semibold tabular-nums text-ink">
-              {formatClock(remainingSec)}
+              {formatClock(elapsedSec)}
             </span>
           </div>
           <p className="max-w-[140px] truncate text-[10.5px] text-muted">
