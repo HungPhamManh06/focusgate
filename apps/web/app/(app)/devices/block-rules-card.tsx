@@ -31,8 +31,28 @@ export function BlockRulesCard({
   const [displayName, setDisplayName] = useState("");
   const [category, setCategory] = useState<BlockRuleRecord["category"]>("games");
   const [action, setAction] = useState<BlockRuleRecord["action"]>("overlay");
+  const [filterCat, setFilterCat] = useState<string>("all");
   const [pending, startTransition] = useTransition();
   const toast = useToast();
+
+  function getBrandBadge(rule: BlockRuleRecord): { letter: string; bg: string } {
+    const key = `${rule.displayName} ${rule.identifier}`.toLowerCase();
+    if (key.includes("youtube")) return { letter: "YT", bg: "bg-red-600 text-white" };
+    if (key.includes("facebook") || key.includes("fb")) return { letter: "FB", bg: "bg-blue-600 text-white" };
+    if (key.includes("tiktok") || key.includes("musically")) return { letter: "TT", bg: "bg-zinc-900 text-white" };
+    if (key.includes("instagram")) return { letter: "IG", bg: "bg-pink-600 text-white" };
+    if (key.includes("reddit")) return { letter: "RD", bg: "bg-orange-600 text-white" };
+    if (key.includes("discord")) return { letter: "DC", bg: "bg-indigo-600 text-white" };
+    if (key.includes("steam")) return { letter: "ST", bg: "bg-slate-800 text-white" };
+    if (key.includes("netflix")) return { letter: "NF", bg: "bg-red-700 text-white" };
+    if (key.includes("twitch")) return { letter: "TW", bg: "bg-purple-600 text-white" };
+    if (key.includes("twitter") || key.includes("x.com")) return { letter: "X", bg: "bg-zinc-900 text-white" };
+    const ch = (rule.displayName || rule.identifier || "?").trim().slice(0, 2).toUpperCase();
+    return { letter: ch, bg: "bg-surface-2 text-ink" };
+  }
+
+  const visibleRules =
+    filterCat === "all" ? rules : rules.filter((r) => r.category === filterCat);
 
   function addRule(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -194,56 +214,97 @@ export function BlockRulesCard({
             {isVi ? "Chưa có quy tắc khóa ứng dụng nào." : "No app lock rules configured yet."}
           </p>
         ) : (
-          <div className="divide-y divide-line rounded-xl border border-line bg-surface">
-            {rules.map((rule) => (
-              <div
-                key={rule.id}
-                className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className={cn("text-[13.5px] font-medium", !rule.isEnabled && "text-muted line-through")}>
-                      {rule.displayName}
-                    </p>
-                    <Badge tone={rule.ruleType === "block" ? "danger" : "success"}>
-                      {rule.ruleType === "block"
-                        ? isVi ? "Chặn" : "Block"
-                        : isVi ? "Cho phép" : "Allow"}
-                    </Badge>
-                    {!rule.isEnabled ? (
-                      <Badge tone="neutral">{isVi ? "Tạm dừng" : "Paused"}</Badge>
-                    ) : null}
-                  </div>
-                  <p className="mt-1 text-[12px] text-muted">
-                    <code className="text-ink-soft">{rule.identifier}</code> · {rule.deviceName} ·{" "}
-                    {rule.category} · {rule.action}
-                  </p>
-                </div>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  { id: "all", label: isVi ? "Tất cả" : "All" },
+                  { id: "social", label: isVi ? "Mạng xã hội" : "Social" },
+                  { id: "video", label: "Video" },
+                  { id: "games", label: isVi ? "Game" : "Games" },
+                  { id: "other", label: isVi ? "Khác" : "Other" },
+                ] as const
+              ).map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => setFilterCat(chip.id)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                    filterCat === chip.id
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-line bg-surface text-muted hover:text-ink",
+                  )}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+            <div className="divide-y divide-line rounded-xl border border-line bg-surface">
+              {visibleRules.map((rule) => {
+                const brand = getBrandBadge(rule);
+                return (
+                  <div
+                    key={rule.id}
+                    className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold tracking-tight",
+                          brand.bg,
+                        )}
+                      >
+                        {brand.letter}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className={cn("text-[13.5px] font-medium", !rule.isEnabled && "text-muted line-through")}>
+                            {rule.displayName}
+                          </p>
+                          <Badge tone={rule.ruleType === "block" ? "danger" : "success"}>
+                            {rule.ruleType === "block"
+                              ? isVi ? "Chặn" : "Block"
+                              : isVi ? "Cho phép" : "Allow"}
+                          </Badge>
+                          {!rule.isEnabled ? (
+                            <Badge tone="neutral">{isVi ? "Tạm dừng" : "Paused"}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-[12px] text-muted">
+                          <code className="text-ink-soft">{rule.identifier}</code> · {rule.deviceName} ·{" "}
+                          {rule.category} · {rule.action}
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={pending}
-                    onClick={() => toggle(rule)}
-                  >
-                    {rule.isEnabled
-                      ? isVi ? "Tắt" : "Disable"
-                      : isVi ? "Bật" : "Enable"}
-                  </Button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => remove(rule)}
-                    aria-label={`Delete ${rule.displayName}`}
-                    className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-danger-soft hover:text-danger"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => toggle(rule)}
+                      >
+                        {rule.isEnabled
+                          ? isVi ? "Tắt" : "Disable"
+                          : isVi ? "Bật" : "Enable"}
+                      </Button>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => remove(rule)}
+                        aria-label={`Delete ${rule.displayName}`}
+                        className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-danger-soft hover:text-danger"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>

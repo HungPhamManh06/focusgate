@@ -8,12 +8,12 @@ import { getTodayPlan } from "@/lib/data/planner";
 import { getTaskCounts, listTasks, type TaskFilters } from "@/lib/data/tasks";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
-import type { PlanTask, TaskKind } from "@/lib/data/types";
-import { getKindLabel, kindDescriptions } from "@/components/domain/labels";
+import type { TaskKind } from "@/lib/data/types";
+import { getKindLabel } from "@/components/domain/labels";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "./task-form-dialog";
-import { TaskRow } from "./task-row";
 import { TaskSearch } from "./task-search";
+import { TasksWorkspaceClient } from "./tasks-workspace-client";
 
 export const dynamic = "force-dynamic";
 
@@ -57,23 +57,6 @@ export default async function TasksPage({
 
   const locale = v2Settings?.language ?? "en";
   const isVi = locale === "vi";
-
-  const kindDescriptionsVi: Record<TaskKind, string> = {
-    must_do: "Được bảo vệ bởi phiên tập trung và bắt buộc hoàn thành để mở khóa ngày.",
-    should_do: "Đẩy tiến độ công việc sau khi đã lo xong các việc cốt lõi.",
-    bonus: "Nhiệm vụ tùy chọn giúp kiếm thêm phút thưởng.",
-  };
-
-  const planTaskByTaskId = new Map<string, PlanTask>(
-    (plan?.tasks ?? []).map((pt) => [pt.taskId, pt]),
-  );
-
-  const groups = kinds
-    .map((groupKind) => ({
-      kind: groupKind,
-      tasks: tasks.filter((task) => task.kind === groupKind),
-    }))
-    .filter((group) => group.tasks.length > 0);
 
   const viewTabs = [
     { value: "open", label: isVi ? "Đang mở" : "Open" },
@@ -206,39 +189,13 @@ export default async function TasksPage({
             )}
           </Card>
         ) : (
-          <div className="space-y-6">
-            {groups.map((group) => (
-              <section key={group.kind} aria-labelledby={`group-${group.kind}`}>
-                <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
-                  <div>
-                    <h2 id={`group-${group.kind}`} className="text-[13px] font-semibold">
-                      {getKindLabel(group.kind, locale)}
-                    </h2>
-                    <p className="mt-0.5 text-[11px] text-muted">
-                      {isVi ? kindDescriptionsVi[group.kind] : kindDescriptions[group.kind]}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[11px] text-muted">
-                    {isVi
-                      ? `${group.tasks.length} nhiệm vụ`
-                      : `${group.tasks.length} task${group.tasks.length === 1 ? "" : "s"}`}
-                  </span>
-                </div>
-                <Card className="overflow-hidden">
-                  {group.tasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      timezone={workspace.profile.timezone}
-                      planId={plan?.id ?? null}
-                      planStatus={plan?.status ?? null}
-                      planTask={planTaskByTaskId.get(task.id) ?? null}
-                    />
-                  ))}
-                </Card>
-              </section>
-            ))}
-          </div>
+          <TasksWorkspaceClient
+            tasks={tasks}
+            timezone={workspace.profile.timezone}
+            planId={plan?.id ?? null}
+            planStatus={plan?.status ?? null}
+            planTasks={plan?.tasks ?? []}
+          />
         )}
       </div>
     </div>

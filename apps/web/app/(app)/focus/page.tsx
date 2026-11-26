@@ -44,6 +44,7 @@ import {
 import { FocusStarter } from "./focus-starter";
 import { FocusTimer } from "./focus-timer";
 import { SessionNotesCard } from "./session-notes-card";
+import { SessionDebriefModal } from "@/components/domain/session-debrief-modal";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,7 @@ export default async function FocusPage({
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-5 py-8 sm:px-8 sm:py-10">
+      <SessionDebriefModal />
       <PageHeader
         eyebrow={isVi ? "Chế độ tập trung" : "Focus mode"}
         title={

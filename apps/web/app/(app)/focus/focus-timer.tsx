@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FocusSoundscape } from "@/components/focus-soundscape";
 import { AmbientStudioBackdrop } from "@/components/domain/ambient-studio-backdrop";
+import { DEBRIEF_STORAGE_KEY } from "@/components/domain/session-debrief-modal";
 import type { SoundPreset } from "@/lib/domain/soundscapes";
 import { ProgressRing } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/toast";
@@ -191,7 +192,28 @@ export function FocusTimer({
         setSubmission,
         setConfirmEndOpen,
         completeAction: completeFocusAction,
-        onToast: (tone, msg) => toast.push(tone, msg),
+        onToast: (tone, msg) => {
+          toast.push(tone, msg);
+          if (tone === "success") {
+            try {
+              const completedMins = Math.max(
+                1,
+                Math.round(timerState.elapsedSeconds / 60),
+              );
+              window.sessionStorage.setItem(
+                DEBRIEF_STORAGE_KEY,
+                JSON.stringify({
+                  sessionId: session.id,
+                  taskTitle: session.taskTitle ?? null,
+                  minutes: completedMins,
+                  completedAt: Date.now(),
+                }),
+              );
+            } catch {
+              // Ignore storage errors
+            }
+          }
+        },
       });
     });
   }

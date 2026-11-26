@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, CalendarClock, Clock3, GripVertical, Plus, Target, Trash2, X } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   createGoalAction,
   deleteGoalAction,
@@ -19,7 +19,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
-const TIMELINE_HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 08:00 -> 22:00
+const TIMELINE_HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 06:00 -> 23:00
 
 function addMinutesToTime(hhmm: string, deltaMinutes: number): string {
   const [hStr, mStr] = hhmm.split(":");
@@ -53,6 +53,17 @@ export function V3GoalsTimeline({
   // Visual drag-and-drop state
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropHoverHour, setDropHoverHour] = useState<number | null>(null);
+  const [nowClock, setNowClock] = useState<{ hour: number; minute: number } | null>(null);
+
+  useEffect(() => {
+    const sync = () => {
+      const d = new Date();
+      setNowClock({ hour: d.getHours(), minute: d.getMinutes() });
+    };
+    sync();
+    const timer = window.setInterval(sync, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const capacity = useMemo(
     () => computeCapacityAnalysis(pendingEstimatedMinutes, undefined, undefined, bedtimeStartHour),
@@ -190,6 +201,7 @@ export function V3GoalsTimeline({
                 {TIMELINE_HOURS.map((hour) => {
                   const slotItems = scheduledByHour.get(hour) ?? [];
                   const isHovered = dropHoverHour === hour;
+                  const isCurrentHour = nowClock?.hour === hour;
                   return (
                     <div
                       key={hour}
@@ -205,17 +217,34 @@ export function V3GoalsTimeline({
                         setDropHoverHour(null);
                       }}
                       className={cn(
-                        "flex min-h-[36px] items-center gap-2.5 rounded-xl border px-2.5 py-1.5 transition-colors",
+                        "relative flex min-h-[36px] items-center gap-2.5 rounded-xl border px-2.5 py-1.5 transition-colors",
                         isHovered
                           ? "border-accent bg-accent-soft/50"
-                          : slotItems.length > 0
-                            ? "border-line bg-surface"
-                            : "border-line/50 bg-surface-2/30",
+                          : isCurrentHour
+                            ? "border-accent/55 bg-accent-soft/25"
+                            : slotItems.length > 0
+                              ? "border-line bg-surface"
+                              : "border-line/50 bg-surface-2/30",
                       )}
                     >
-                      <span className="w-11 shrink-0 font-mono text-[11px] text-muted">
-                        {String(hour).padStart(2, "0")}:00
+                      <span
+                        className={cn(
+                          "w-11 shrink-0 font-mono text-[11px]",
+                          isCurrentHour ? "font-semibold text-accent" : "text-muted",
+                        )}
+                      >
+                        {isCurrentHour && nowClock
+                          ? `${String(nowClock.hour).padStart(2, "0")}:${String(nowClock.minute).padStart(2, "0")}`
+                          : `${String(hour).padStart(2, "0")}:00`}
                       </span>
+                      {isCurrentHour ? (
+                        <span
+                          aria-label={isVi ? "Giờ hiện tại" : "Current time"}
+                          className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-white"
+                        >
+                          {isVi ? "Now" : "Now"}
+                        </span>
+                      ) : null}
                       <div className="flex flex-1 flex-wrap gap-1.5">
                         {slotItems.length === 0 ? (
                           <span className="text-[11px] text-muted/50">

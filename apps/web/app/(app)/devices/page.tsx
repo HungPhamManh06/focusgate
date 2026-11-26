@@ -10,6 +10,7 @@ import { getV2Settings, listDiscoveredApps } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
 import { BlockRulesCard } from "./block-rules-card";
 import { DeviceRow } from "./device-row";
+import { GatePreviewCard } from "./gate-preview-card";
 import { RegisterDeviceForm } from "./register-device-form";
 import { V2ProfilesCard } from "./v2-profiles-card";
 
@@ -114,8 +115,9 @@ export default async function DevicesPage() {
         </aside>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <BlockRulesCard devices={devices} rules={rules} />
+        <GatePreviewCard rules={rules} />
       </div>
 
       <V2ProfilesCard settings={v2} discoveredApps={discoveredApps} />

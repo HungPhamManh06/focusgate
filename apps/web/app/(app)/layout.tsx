@@ -12,6 +12,8 @@ import { LanguageProvider } from "@/components/i18n/language-provider";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { Sidebar } from "@/components/shell/sidebar";
 import { CommandPalette } from "@/components/shell/command-palette";
+import { FloatingFocusPill } from "@/components/shell/floating-focus-pill";
+import { KeyboardShortcuts } from "@/components/shell/keyboard-shortcuts";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +103,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {children}
           </main>
           <CommandPalette />
+          <FloatingFocusPill />
+          <KeyboardShortcuts />
 
           <MobileNav language={language} />
         </div>
