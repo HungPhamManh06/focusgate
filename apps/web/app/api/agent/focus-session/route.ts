@@ -42,23 +42,24 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-function computeRemainingSeconds(session: {
+function computeSessionTiming(session: {
   startedAt: string;
   plannedMinutes: number;
   status: string;
   pausedAt?: string | null;
   pausedSeconds?: number;
-}): number {
+}): { elapsedSeconds: number; remainingSeconds: number } {
   const startedMs = new Date(session.startedAt).getTime();
   const refMs =
     session.status === "paused" && session.pausedAt
       ? new Date(session.pausedAt).getTime()
       : Date.now();
-  const elapsedSec = Math.max(
+  const elapsedSeconds = Math.max(
     0,
     Math.floor((refMs - startedMs) / 1000) - Math.max(0, session.pausedSeconds ?? 0),
   );
-  return Math.max(0, session.plannedMinutes * 60 - elapsedSec);
+  const remainingSeconds = Math.max(0, session.plannedMinutes * 60 - elapsedSeconds);
+  return { elapsedSeconds, remainingSeconds };
 }
 
 export async function GET(request: Request) {
@@ -71,13 +72,14 @@ export async function GET(request: Request) {
     if (!session) {
       return NextResponse.json({ active: false, session: null }, { headers: NO_STORE_HEADERS });
     }
-    const remainingSeconds = computeRemainingSeconds(session);
+    const { elapsedSeconds, remainingSeconds } = computeSessionTiming(session);
     const endsAt = new Date(Date.now() + remainingSeconds * 1000).toISOString();
     return NextResponse.json(
       {
         active: true,
         session: {
           ...session,
+          elapsedSeconds,
           remainingSeconds,
           endsAt,
         },
@@ -134,12 +136,12 @@ export async function POST(request: Request) {
     if (!session) {
       return NextResponse.json({ active: false, session: null }, { headers: NO_STORE_HEADERS });
     }
-    const remainingSeconds = computeRemainingSeconds(session);
+    const { elapsedSeconds, remainingSeconds } = computeSessionTiming(session);
     const endsAt = new Date(Date.now() + remainingSeconds * 1000).toISOString();
     return NextResponse.json(
       {
         active: true,
-        session: { ...session, remainingSeconds, endsAt },
+        session: { ...session, elapsedSeconds, remainingSeconds, endsAt },
       },
       { headers: NO_STORE_HEADERS },
     );

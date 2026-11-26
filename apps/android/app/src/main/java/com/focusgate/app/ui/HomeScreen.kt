@@ -232,18 +232,30 @@ fun HomeScreen(
     var settingsGuardEnabled by remember { mutableStateOf(AgentPreferences.isSettingsGuardEnabled(context)) }
     var soundscapePlaying by remember { mutableStateOf(FocusSoundscapePlayer.isPlaying()) }
     var earnedMinutesBalance by remember { mutableStateOf(AgentPreferences.getEarnedMinutesBalance(context)) }
+    var userPullRefreshing by remember { mutableStateOf(false) }
+    var backgroundSyncInFlight by remember { mutableStateOf(false) }
+    var focusSyncVersion by remember { mutableIntStateOf(0) }
 
-    fun syncPlanFromWeb() {
-        if (AgentPreferences.getAccessToken(context) == null || planSyncBusy) return
-        planSyncBusy = true
-        syncError = null
+    fun syncPlanFromWeb(silent: Boolean = false, fromPullToRefresh: Boolean = false) {
+        if (AgentPreferences.getAccessToken(context) == null) return
+        if (silent && (backgroundSyncInFlight || planSyncBusy || userPullRefreshing)) return
+        if (!silent && planSyncBusy) return
+        backgroundSyncInFlight = true
+        if (fromPullToRefresh) userPullRefreshing = true
+        else if (!silent) planSyncBusy = true
+        if (!silent) syncError = null
         scope.launch {
             try {
-                val snapshot = withContext(Dispatchers.IO) { PlanSyncManager.syncNow(context) }
+                val snapshot = withContext(Dispatchers.IO) {
+                    PlanSyncManager.syncRemoteFocusSession(context)
+                    PlanSyncManager.syncNow(context)
+                }
                 planSnapshot = snapshot
                 planUnlocked = snapshot.unlocked
                 signedInEmail = AgentPreferences.getUserEmail(context)
                 earnedMinutesBalance = AgentPreferences.getEarnedMinutesBalance(context)
+                lastSyncedAtMs = System.currentTimeMillis()
+                focusSyncVersion += 1
                 val topMustDos = snapshot.plan?.tasks
                     ?.filter { it.kind == "must_do" && it.status != "completed" }
                     ?.take(3)
@@ -252,9 +264,11 @@ fun HomeScreen(
                 AgentPreferences.setWidgetTasksPreview(context, topMustDos)
                 FocusGateWidgetProvider.updateAll(context)
             } catch (e: Exception) {
-                syncError = e.message ?: "Could not sync plan."
+                if (!silent) syncError = e.message ?: "Could not sync plan."
             } finally {
-                planSyncBusy = false
+                backgroundSyncInFlight = false
+                if (fromPullToRefresh) userPullRefreshing = false
+                if (!silent && !fromPullToRefresh) planSyncBusy = false
             }
         }
     }
@@ -376,7 +390,7 @@ fun HomeScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 refreshRuntime()
-                syncPlanFromWeb()
+                syncPlanFromWeb(silent = true)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -386,8 +400,8 @@ fun HomeScreen(
     LaunchedEffect(signedInEmail) {
         if (signedInEmail != null) {
             while (true) {
-                syncPlanFromWeb()
-                delay(10_000L)
+                syncPlanFromWeb(silent = true)
+                delay(15_000L)
             }
         }
     }
@@ -667,6 +681,9 @@ fun HomeScreen(
             taskTitle = AgentPreferences.getActiveFocusTitle(context)
                 ?: tr("Deep Focus Sprint", "Phiên tập trung sâu"),
             endsAtEpochMs = endsAt,
+            startedAtEpochMs = AgentPreferences.getActiveFocusStartedAt(context),
+            isOpenEnded = AgentPreferences.getActiveFocusMode(context) == "open_ended",
+            totalDurationMs = AgentPreferences.getActiveFocusPlannedMinutes(context) * 60_000L,
             themePreset = themePreset,
             isVi = isVi,
             onComplete = {
@@ -778,7 +795,13 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                Text("FocusGate", fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "FocusGate",
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                                 val topPlanTasks = planSnapshot?.plan?.tasks?.filter { it.kind == "must_do" }.orEmpty()
                                 val topProgress = if (topPlanTasks.isNotEmpty()) {
                                     topPlanTasks.count { it.status == "completed" }.toFloat() / topPlanTasks.size.toFloat()
@@ -800,6 +823,8 @@ fun HomeScreen(
                                 ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -808,18 +833,10 @@ fun HomeScreen(
                     TextButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            showScratchpadSheet = true
-                        },
-                    ) {
-                        Text(tr("Note", "Nháp"))
-                    }
-                    TextButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             showQuickStatsSheet = true
                         },
                     ) {
-                        Text(tr("Stats", "Thống kê"))
+                        Text(tr("Stats", "Số liệu"), maxLines = 1, softWrap = false)
                     }
                     TextButton(
                         onClick = {
@@ -960,7 +977,7 @@ fun HomeScreen(
                                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             if (itemTab == HomeBottomTab.TODAY && bottomTab != HomeBottomTab.TODAY) {
                                                 bottomTab = HomeBottomTab.TODAY
-                                                if (signedInEmail != null) syncPlanFromWeb()
+                                                if (signedInEmail != null) syncPlanFromWeb(silent = true)
                                             } else {
                                                 bottomTab = itemTab
                                             }
@@ -1004,8 +1021,8 @@ fun HomeScreen(
             )
         } else {
         PullToRefreshBox(
-            isRefreshing = planSyncBusy,
-            onRefresh = { if (signedInEmail != null) syncPlanFromWeb() },
+            isRefreshing = userPullRefreshing,
+            onRefresh = { if (signedInEmail != null) syncPlanFromWeb(fromPullToRefresh = true) },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -1205,6 +1222,14 @@ fun HomeScreen(
                             TextButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    showScratchpadSheet = true
+                                },
+                            ) {
+                                Text(tr("Note", "Nháp"), style = MaterialTheme.typography.labelSmall)
+                            }
+                            TextButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     showSoundscapeSheet = true
                                 },
                             ) {
@@ -1260,10 +1285,23 @@ fun HomeScreen(
                 item {
                     var focusRunning by remember { mutableStateOf(AgentPreferences.isActiveFocusRunning(context)) }
                     var focusEndsAt by remember { mutableLongStateOf(AgentPreferences.getActiveFocusEndsAt(context)) }
+                    var focusStartedAt by remember { mutableLongStateOf(AgentPreferences.getActiveFocusStartedAt(context)) }
+                    var focusMode by remember { mutableStateOf(AgentPreferences.getActiveFocusMode(context)) }
+                    var focusPlannedMin by remember { mutableIntStateOf(AgentPreferences.getActiveFocusPlannedMinutes(context)) }
                     var focusSessionId by remember { mutableStateOf(AgentPreferences.getActiveFocusSessionId(context)) }
                     var focusTitle by remember { mutableStateOf(AgentPreferences.getActiveFocusTitle(context)) }
                     var focusBusy by remember { mutableStateOf(false) }
                     var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+                    LaunchedEffect(focusSyncVersion) {
+                        focusRunning = AgentPreferences.isActiveFocusRunning(context)
+                        focusEndsAt = AgentPreferences.getActiveFocusEndsAt(context)
+                        focusStartedAt = AgentPreferences.getActiveFocusStartedAt(context)
+                        focusMode = AgentPreferences.getActiveFocusMode(context)
+                        focusPlannedMin = AgentPreferences.getActiveFocusPlannedMinutes(context)
+                        focusSessionId = AgentPreferences.getActiveFocusSessionId(context)
+                        focusTitle = AgentPreferences.getActiveFocusTitle(context)
+                    }
 
                     LaunchedEffect(focusRunning) {
                         while (focusRunning) {
@@ -1288,17 +1326,33 @@ fun HomeScreen(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 if (focusRunning) {
-                                    val remSec = ((focusEndsAt - nowTick).coerceAtLeast(0L) / 1000L).toInt()
-                                    val mm = remSec / 60
-                                    val ss = remSec % 60
+                                    val isOpenEnded = focusMode == "open_ended"
+                                    val displaySec = if (isOpenEnded && focusStartedAt > 0L) {
+                                        ((nowTick - focusStartedAt).coerceAtLeast(0L) / 1000L).toInt()
+                                    } else {
+                                        ((focusEndsAt - nowTick).coerceAtLeast(0L) / 1000L).toInt()
+                                    }
+                                    val hrs = displaySec / 3600
+                                    val mm = (displaySec % 3600) / 60
+                                    val ss = displaySec % 60
+                                    val clockText = if (hrs > 0) {
+                                        "%d:%02d".format(hrs, mm)
+                                    } else {
+                                        "%02d:%02d".format(mm, ss)
+                                    }
                                     val ringPrimary = MaterialTheme.colorScheme.primary
                                     val ringTrack = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                                    val sweep = ((remSec.toFloat() / 1500f).coerceIn(0.04f, 1f)) * 360f
+                                    val denom = if (isOpenEnded) 3600f else (focusPlannedMin * 60f).coerceAtLeast(60f)
+                                    val sweep = if (isOpenEnded) {
+                                        (((displaySec % 3600).toFloat() / denom).coerceIn(0.04f, 1f)) * 360f
+                                    } else {
+                                        ((displaySec.toFloat() / denom).coerceIn(0.04f, 1f)) * 360f
+                                    }
                                     Box(
-                                        modifier = Modifier.size(56.dp),
+                                        modifier = Modifier.size(62.dp),
                                         contentAlignment = Alignment.Center,
                                     ) {
-                                        Canvas(modifier = Modifier.size(56.dp)) {
+                                        Canvas(modifier = Modifier.size(62.dp)) {
                                             val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
                                             drawArc(
                                                 color = ringTrack,
@@ -1316,10 +1370,12 @@ fun HomeScreen(
                                             )
                                         }
                                         Text(
-                                            text = "%02d:%02d".format(mm, ss),
+                                            text = clockText,
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = ringPrimary,
+                                            maxLines = 1,
+                                            softWrap = false,
                                         )
                                     }
                                 }

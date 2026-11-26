@@ -289,17 +289,29 @@ object PlanSyncManager {
                     if (active && session != null) {
                         val id = session.optString("id", "")
                         val title = session.optString("taskTitle", "").ifBlank { "Focus Sprint" }
+                        val mode = session.optString("mode", "pomodoro_25_5")
+                        val plannedMinutes = session.optInt("plannedMinutes", 25).coerceAtLeast(1)
                         val remainingSec = session.optLong("remainingSeconds", 0L)
+                        val elapsedSec = if (session.has("elapsedSeconds")) {
+                            session.optLong("elapsedSeconds", 0L).coerceAtLeast(0L)
+                        } else {
+                            (plannedMinutes * 60L - remainingSec).coerceAtLeast(0L)
+                        }
                         val status = session.optString("status", "running")
-                        val endsAt = System.currentTimeMillis() + remainingSec * 1000L
+                        val nowMs = System.currentTimeMillis()
+                        val startedAtMs = nowMs - elapsedSec * 1000L
+                        val endsAt = nowMs + remainingSec * 1000L
                         AgentPreferences.setActiveFocusRunning(context, status == "running")
                         AgentPreferences.setActiveFocusSessionId(context, id)
                         AgentPreferences.setActiveFocusTitle(context, title)
+                        AgentPreferences.setActiveFocusMode(context, mode)
+                        AgentPreferences.setActiveFocusPlannedMinutes(context, plannedMinutes)
+                        AgentPreferences.setActiveFocusStartedAt(context, startedAtMs)
                         AgentPreferences.setActiveFocusEndsAt(context, endsAt)
                         Notifications.showLiveFocusNotification(
                             context = context,
                             taskTitle = title,
-                            endsAtEpochMs = endsAt,
+                            endsAtEpochMs = if (mode == "open_ended") 0L else endsAt,
                             isPaused = status == "paused",
                         )
                         true
@@ -307,6 +319,7 @@ object PlanSyncManager {
                         AgentPreferences.setActiveFocusRunning(context, false)
                         AgentPreferences.setActiveFocusSessionId(context, null)
                         AgentPreferences.setActiveFocusEndsAt(context, 0L)
+                        AgentPreferences.setActiveFocusStartedAt(context, 0L)
                         Notifications.cancelLiveFocusNotification(context)
                         false
                     }

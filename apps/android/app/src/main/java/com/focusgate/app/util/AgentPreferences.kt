@@ -255,6 +255,27 @@ object AgentPreferences {
         prefs(context).edit().putString("active_focus_title", title).apply()
     }
 
+    fun getActiveFocusMode(context: Context): String =
+        prefs(context).getString("active_focus_mode", "pomodoro_25_5") ?: "pomodoro_25_5"
+
+    fun setActiveFocusMode(context: Context, mode: String) {
+        prefs(context).edit().putString("active_focus_mode", mode).apply()
+    }
+
+    fun getActiveFocusStartedAt(context: Context): Long =
+        prefs(context).getLong("active_focus_started_at", 0L)
+
+    fun setActiveFocusStartedAt(context: Context, startedAtMs: Long) {
+        prefs(context).edit().putLong("active_focus_started_at", startedAtMs).apply()
+    }
+
+    fun getActiveFocusPlannedMinutes(context: Context): Int =
+        prefs(context).getInt("active_focus_planned_minutes", 25).coerceAtLeast(1)
+
+    fun setActiveFocusPlannedMinutes(context: Context, minutes: Int) {
+        prefs(context).edit().putInt("active_focus_planned_minutes", minutes.coerceAtLeast(1)).apply()
+    }
+
     fun getAppThemePreset(context: Context): String =
         prefs(context).getString("app_theme_preset", "auto") ?: "auto"
 

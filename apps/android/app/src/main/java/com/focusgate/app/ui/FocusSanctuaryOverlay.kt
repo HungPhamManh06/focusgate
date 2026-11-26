@@ -62,6 +62,8 @@ import kotlinx.coroutines.delay
 fun FocusSanctuaryOverlay(
     taskTitle: String,
     endsAtEpochMs: Long,
+    startedAtEpochMs: Long = 0L,
+    isOpenEnded: Boolean = false,
     totalDurationMs: Long = 25 * 60_000L,
     themePreset: String = "espresso",
     isVi: Boolean = false,
@@ -93,12 +95,17 @@ fun FocusSanctuaryOverlay(
 
     val activeEndsAt = if (breakMode && breakEndsAtMs > 0L) breakEndsAtMs else endsAtEpochMs
     val activeDuration = if (breakMode) 5 * 60_000L else totalDurationMs
-    val remainingMs = (activeEndsAt - nowMs).coerceAtLeast(0L)
-    val totalSec = (remainingMs / 1000L).toInt()
+    val totalSec = if (!breakMode && isOpenEnded && startedAtEpochMs > 0L) {
+        ((nowMs - startedAtEpochMs).coerceAtLeast(0L) / 1000L).toInt()
+    } else {
+        ((activeEndsAt - nowMs).coerceAtLeast(0L) / 1000L).toInt()
+    }
     val mm = totalSec / 60
     val ss = totalSec % 60
-    val progress = if (activeDuration > 0L) {
-        (1f - remainingMs.toFloat() / activeDuration.toFloat()).coerceIn(0f, 1f)
+    val progress = if (!breakMode && isOpenEnded) {
+        ((totalSec % 3600).toFloat() / 3600f).coerceIn(0.04f, 1f)
+    } else if (activeDuration > 0L) {
+        (1f - (totalSec * 1000f) / activeDuration.toFloat()).coerceIn(0f, 1f)
     } else {
         0f
     }
