@@ -579,6 +579,27 @@ export function FocusTimer({
 
         {/* Task & Authoritative State Banner */}
         <div className="mt-7 w-full max-w-md text-center">
+          {/* FocusGate 10.0: Mid-Session 15m Milestone Bar */}
+          <div className="mb-3 flex items-center justify-center gap-1.5">
+            {[15, 30, 45, 60].map((m) => {
+              const reached = timerState.elapsedMinutes >= m;
+              return (
+                <span
+                  key={m}
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold tabular-nums transition-colors",
+                    reached
+                      ? "border-success/40 bg-success-soft text-success"
+                      : zenMode
+                        ? "border-white/15 bg-white/5 text-white/45"
+                        : "border-line bg-surface-2 text-muted",
+                  )}
+                >
+                  {reached ? `✓ ${m}m` : `${m}m`}
+                </span>
+              );
+            })}
+          </div>
           <p className="text-[16px] font-semibold text-ink">
             {session.taskTitle ?? (isVi ? "Tập trung tự do" : "Free focus")}
           </p>

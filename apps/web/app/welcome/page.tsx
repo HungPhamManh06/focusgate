@@ -59,7 +59,52 @@ export default function WelcomeLandingPage() {
           </div>
         </div>
 
-        <section className="mt-20 grid gap-4 sm:grid-cols-3">
+        {/* FocusGate 10.0: Before / After Focus Day Comparison */}
+        <section className="mt-16 rounded-3xl border border-line bg-surface p-6 sm:p-8">
+          <div className="text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+              Before &amp; After
+            </p>
+            <h2 className="mt-2 font-display text-2xl font-bold sm:text-3xl">
+              Một ngày bị phân mảnh vs. Một ngày có FocusGate
+            </h2>
+          </div>
+          <div className="mt-6 grid gap-5 md:grid-cols-2">
+            <div className="rounded-2xl border border-line bg-surface-2/50 p-5">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+                Trước đây · Mất kiểm soát chú ý
+              </p>
+              <div className="mt-3 flex h-3.5 w-full overflow-hidden rounded-full bg-surface">
+                <div className="w-[15%] bg-ink/40" />
+                <div className="w-[25%] bg-danger/55" />
+                <div className="w-[12%] bg-ink/40" />
+                <div className="w-[30%] bg-danger/55" />
+                <div className="w-[18%] bg-warning/60" />
+              </div>
+              <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
+                Chuyển tab liên tục giữa công việc và mạng xã hội, kết thúc ngày trong cảm giác bận
+                rộn nhưng chưa xong việc trọng tâm.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-accent/35 bg-accent-soft/35 p-5">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-accent">
+                Với FocusGate · Làm sâu, hưởng trọn
+              </p>
+              <div className="mt-3 flex h-3.5 w-full overflow-hidden rounded-full bg-surface">
+                <div className="w-[38%] bg-accent" />
+                <div className="w-[8%] bg-surface-2" />
+                <div className="w-[32%] bg-accent" />
+                <div className="w-[22%] bg-success" />
+              </div>
+              <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
+                Khóa xao nhãng theo kế hoạch Bắt buộc, hoàn thành 2–3 khối tập trung sâu rồi mở khóa
+                giải trí hoàn toàn xứng đáng.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-14 grid gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-line bg-surface p-5">
             <Smartphone className="size-5 text-accent" />
             <h3 className="mt-3 text-[15px] font-bold">Android Native Guard</h3>

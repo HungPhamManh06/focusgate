@@ -115,7 +115,27 @@ export function FloatingFocusPill() {
     return () => window.clearInterval(tick);
   }, [session]);
 
-  if (pathname === "/focus" || !session) return null;
+  if (pathname === "/focus") return null;
+
+  if (!session) {
+    return (
+      <div className="fixed bottom-16 right-5 z-30 hidden items-center gap-1 rounded-full border border-line bg-surface/92 p-1 shadow-lift backdrop-blur-md lg:inline-flex">
+        <span className="flex items-center gap-1 pl-2 pr-1 text-[10.5px] font-semibold text-muted">
+          <Timer className="size-3 text-accent" />
+          {isVi ? "Focus:" : "Focus:"}
+        </span>
+        {[15, 25, 45].map((m) => (
+          <Link
+            key={m}
+            href={`/focus?preset=${m}`}
+            className="rounded-full px-2 py-0.5 font-mono text-[10.5px] font-semibold text-ink-soft transition-colors hover:bg-accent hover:text-white tabular-nums"
+          >
+            {m}m
+          </Link>
+        ))}
+      </div>
+    );
+  }
 
   const isPaused = session.status === "paused";
   const isOpenEnded = session.mode === "open_ended";

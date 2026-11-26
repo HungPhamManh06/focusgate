@@ -28,6 +28,7 @@ fun QuickStatsSheetContent(
     totalToday: Int,
     blockedCount: Int,
     weeklyBars: List<Pair<String, Int>>,
+    recentFocusTitle: String? = null,
     isVi: Boolean,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -117,7 +118,7 @@ fun QuickStatsSheetContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 6.dp, bottom = 18.dp),
+                .padding(top = 6.dp, bottom = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             weeklyBars.forEach { (dayLabel, _) ->
@@ -125,6 +126,30 @@ fun QuickStatsSheetContent(
                     text = dayLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (!recentFocusTitle.isNullOrBlank()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 18.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    text = if (isVi) "PHIÊN TẬP TRUNG GẦN NHẤT" else "LATEST FOCUS SPRINT",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = recentFocusTitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }

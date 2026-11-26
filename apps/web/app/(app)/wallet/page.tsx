@@ -32,6 +32,7 @@ import { getWorkspace } from "@/lib/data/workspace";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { DistractionCostCalculator } from "./distraction-cost-calculator";
 import { EarnedTimeCard } from "./earned-time-card";
+import { FocusBalanceScale } from "./focus-balance-scale";
 import { QuickRedeemVault } from "./quick-redeem-vault";
 import { RewardWishlistCard } from "./reward-wishlist-card";
 import { SpendForm } from "./spend-form";
@@ -117,6 +118,10 @@ export default async function WalletPage() {
       />
 
       <DistractionCostCalculator availableMinutes={wallet.availableMinutes} />
+      <FocusBalanceScale
+        earnedMinutes={wallet.earnedMinutes}
+        consumedMinutes={wallet.consumedMinutes}
+      />
 
       <QuickRedeemVault
         grants={activeGrants}

@@ -42,6 +42,7 @@ import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { AddPlanTask } from "./add-plan-task";
 import { CapacityForecastRing } from "./capacity-forecast-ring";
+import { DayEndCountdownPill } from "./day-end-countdown-pill";
 import { DeadlineMiniCalendar } from "./deadline-mini-calendar";
 import { PlanTaskRow } from "./plan-task-row";
 import { PlannerTabsShell } from "./planner-tabs-shell";
@@ -634,6 +635,9 @@ export default async function PlannerPage() {
       <PlannerTabsShell
         timelinePanel={
           <>
+            <div className="mt-4 flex justify-end">
+              <DayEndCountdownPill endHour={22} />
+            </div>
             <CapacityForecastRing
               focusDone={plan?.progress.focusDone ?? 0}
               pendingMinutes={pendingEstimatedMinutes}

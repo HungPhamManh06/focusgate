@@ -110,6 +110,10 @@ export function TasksWorkspaceClient({
   const openMinutesBudget = tasks
     .filter((t) => t.status !== "completed")
     .reduce((acc, t) => acc + (t.estimatedMinutes || 0), 0);
+  const completedCount = tasks.filter((t) => t.status === "completed").length;
+  const completedMinutesTotal = tasks
+    .filter((t) => t.status === "completed")
+    .reduce((acc, t) => acc + (t.estimatedMinutes || 0), 0);
   const dailyBudgetCap = 360;
   const budgetPct = Math.min(100, Math.round((openMinutesBudget / dailyBudgetCap) * 100));
   const overBudget = openMinutesBudget > dailyBudgetCap;
@@ -231,7 +235,12 @@ export function TasksWorkspaceClient({
               );
             })}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {completedCount > 0 ? (
+              <span className="hidden rounded-full border border-success/30 bg-success-soft/60 px-2.5 py-0.5 text-[10.5px] font-semibold text-success tabular-nums sm:inline-flex">
+                ✓ {completedCount} {isVi ? "đã xong" : "done"} · {completedMinutesTotal}m
+              </span>
+            ) : null}
             <span className={cn("font-medium tabular-nums", overBudget ? "text-warning" : "text-muted")}>
               {isVi ? "Ngân sách ngày:" : "Time budget:"} {Math.floor(openMinutesBudget / 60)}h{openMinutesBudget % 60}m / 6h
             </span>

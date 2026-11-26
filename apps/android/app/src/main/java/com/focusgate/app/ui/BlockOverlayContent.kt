@@ -72,6 +72,7 @@ fun BlockOverlayContent(
     var countdownSeconds by remember { mutableIntStateOf(30) }
     var breathPauseActive by remember { mutableStateOf(false) }
     var breathPauseLeft by remember { mutableIntStateOf(10) }
+    var impulseTag by remember { mutableStateOf<String?>(null) }
     var typedPledge by remember { mutableStateOf("") }
     val requiredPledge = if (isVi) "Toi chon xao nhang" else "I choose distraction"
     val pledgeMatched = !strictFrictionMode ||
@@ -271,6 +272,38 @@ fun BlockOverlayContent(
                         color = overlayAccent,
                         fontWeight = FontWeight.SemiBold,
                     )
+                }
+            }
+
+            // FocusGate 10.0: Impulse Trigger Quick-Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val chips = if (isVi) {
+                    listOf("bored" to "Chán", "habit" to "Thói quen", "info" to "Tìm tin")
+                } else {
+                    listOf("bored" to "Bored", "habit" to "Habit", "info" to "Quick check")
+                }
+                chips.forEach { (id, label) ->
+                    val picked = impulseTag == id
+                    TextButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            impulseTag = if (picked) null else id
+                        },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (picked) overlayAccent.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.06f)),
+                    ) {
+                        Text(
+                            text = if (picked) "✓ $label" else label,
+                            color = if (picked) Color.White else Color(0xFFD9CBCD),
+                            fontSize = 11.sp,
+                        )
+                    }
                 }
             }
 

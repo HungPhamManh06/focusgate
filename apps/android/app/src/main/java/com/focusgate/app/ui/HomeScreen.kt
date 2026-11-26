@@ -154,6 +154,8 @@ fun HomeScreen(
     var showQuickStatsSheet by remember { mutableStateOf(false) }
     var showSoundscapeSheet by remember { mutableStateOf(false) }
     var showScratchpadSheet by remember { mutableStateOf(false) }
+    var showThemePickerSheet by remember { mutableStateOf(false) }
+    var dailyFocusGoalMin by remember { mutableIntStateOf(90) }
     var activeSoundMode by remember { mutableStateOf(FocusSoundscapePlayer.getMode()) }
     var lastSyncedAtMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -677,6 +679,20 @@ fun HomeScreen(
         )
     }
 
+    if (showThemePickerSheet) {
+        ModalBottomSheet(onDismissRequest = { showThemePickerSheet = false }) {
+            ThemePickerSheetContent(
+                currentPreset = themePreset,
+                isVi = isVi,
+                onSelect = { preset ->
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onThemePresetChange(preset)
+                    showThemePickerSheet = false
+                },
+            )
+        }
+    }
+
     if (showScratchpadSheet) {
         ModalBottomSheet(onDismissRequest = { showScratchpadSheet = false }) {
             ScratchpadSheetContent(
@@ -730,6 +746,7 @@ fun HomeScreen(
                 totalToday = totalCount,
                 blockedCount = pendingBlocked.size,
                 weeklyBars = weeklyBars,
+                recentFocusTitle = AgentPreferences.getActiveFocusTitle(context),
                 isVi = isVi,
             )
         }
@@ -787,9 +804,7 @@ fun HomeScreen(
                     TextButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            val order = listOf("crimson", "espresso", "matcha", "nordic")
-                            val next = order[(order.indexOf(themePreset) + 1) % order.size]
-                            onThemePresetChange(next)
+                            showThemePickerSheet = true
                         },
                     ) {
                         Text(tr("Theme", "Màu"))
@@ -1170,6 +1185,47 @@ fun HomeScreen(
                                 )
                             }
                         }
+                    }
+                    // FocusGate 10.0: Daily Focus Goal Progress Bar
+                    val estimatedDoneMin = (mustDoDone * 25).coerceAtMost(dailyFocusGoalMin)
+                    val goalFraction = (estimatedDoneMin.toFloat() / dailyFocusGoalMin.toFloat()).coerceIn(0f, 1f)
+                    Spacer(Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                dailyFocusGoalMin = when (dailyFocusGoalMin) {
+                                    60 -> 90
+                                    90 -> 120
+                                    else -> 60
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = tr("Daily Focus Goal (tap to cycle)", "Mục tiêu Tập trung Ngày (chạm để đổi)"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = "${estimatedDoneMin}m / ${dailyFocusGoalMin}m",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { goalFraction },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
                 item {
@@ -2303,6 +2359,40 @@ fun HomeScreen(
                             isVi = isVi,
                             onOpenSetup = onOpenSetup,
                         )
+                        Spacer(Modifier.height(10.dp))
+                        val emergencyAvailable = AgentPreferences.canUseEmergencyToday(context)
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = tr("Emergency Access (10m/day)", "Quyền Khẩn cấp (10p/ngày)"),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        text = if (emergencyAvailable) {
+                                            tr("Ready (1/1 remaining today)", "Sẵn sàng (còn 1/1 lần hôm nay)")
+                                        } else {
+                                            tr("Used today · Resets at 00:00", "Đã dùng hôm nay · Đặt lại lúc 00:00")
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Text(
+                                    text = if (emergencyAvailable) "1/1" else "0/1",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (emergencyAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(10.dp))
                         BedtimeArcCard(
                             enabled = bedtimeEnabled,

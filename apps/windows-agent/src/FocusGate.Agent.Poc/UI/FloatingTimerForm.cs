@@ -19,6 +19,7 @@ public sealed class FloatingTimerForm : Form
     private int _elapsedSeconds;
     private bool _microMode;
     private int _themeIndex;
+    private int _opacityIndex;
     private Color _borderColor = Color.FromArgb(220, 56, 56);
 
     public event EventHandler? CompleteRequested;
@@ -122,6 +123,14 @@ public sealed class FloatingTimerForm : Form
         Controls.Add(_themeButton);
         Controls.Add(_doneButton);
         Controls.Add(_microButton);
+
+        // FocusGate 10.0: Right-click menu for Opacity Cycle & Pin-On-Top Toggle
+        var ctxMenu = new ContextMenuStrip();
+        var pinItem = new ToolStripMenuItem("Always on Top") { Checked = true, CheckOnClick = true };
+        pinItem.Click += (_, _) => TopMost = pinItem.Checked;
+        var opacityItem = new ToolStripMenuItem("Cycle Opacity (96% → 80% → 65%)", null, (_, _) => CycleOpacity());
+        ctxMenu.Items.AddRange([pinItem, opacityItem]);
+        ContextMenuStrip = ctxMenu;
 
         foreach (Control ctrl in new Control[] { this, _clockLabel, _titleLabel })
         {
@@ -236,6 +245,17 @@ public sealed class FloatingTimerForm : Form
         _doneButton.BackColor = border;
         _borderColor = border;
         Invalidate();
+    }
+
+    private void CycleOpacity()
+    {
+        _opacityIndex = (_opacityIndex + 1) % 3;
+        Opacity = _opacityIndex switch
+        {
+            1 => 0.80,
+            2 => 0.65,
+            _ => 0.96,
+        };
     }
 
     private void ApplyRoundedRegion(int radius)

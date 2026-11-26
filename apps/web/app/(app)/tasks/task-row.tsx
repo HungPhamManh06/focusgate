@@ -215,6 +215,15 @@ export function TaskRow({
             </Badge>
           ) : null}
           {task.isDailyHabit ? <HabitStreakStrip completedToday={completed} /> : null}
+          {!completed ? (
+            <Link
+              href={`/focus?taskId=${task.id}`}
+              title={isVi ? "Tập trung ngay cho việc này" : "Start focus on this task"}
+              className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-soft/70 px-2 py-0.5 text-[10.5px] font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+            >
+              ▶ {isVi ? "Focus" : "Focus"}
+            </Link>
+          ) : null}
           {isStale ? (
             <Badge tone="neutral">
               {isVi ? `Mở ${ageDays} ngày` : `Open ${ageDays}d`}

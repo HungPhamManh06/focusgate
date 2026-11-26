@@ -11,6 +11,7 @@ import { getWorkspace } from "@/lib/data/workspace";
 import { BlockRulesCard } from "./block-rules-card";
 import { DeviceRow } from "./device-row";
 import { GatePreviewCard } from "./gate-preview-card";
+import { QuickConnectCard } from "./quick-connect-card";
 import { RegisterDeviceForm } from "./register-device-form";
 import { V2ProfilesCard } from "./v2-profiles-card";
 
@@ -119,6 +120,8 @@ export default async function DevicesPage() {
         <BlockRulesCard devices={devices} rules={rules} />
         <GatePreviewCard rules={rules} />
       </div>
+
+      <QuickConnectCard />
 
       <V2ProfilesCard settings={v2} discoveredApps={discoveredApps} />
 

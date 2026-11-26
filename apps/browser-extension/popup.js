@@ -232,4 +232,39 @@ document.querySelectorAll(".theme-dot").forEach((btn) => {
   } catch {
     // ignore
   }
+  const quoteEl = document.getElementById("quoteFooter");
+  if (quoteEl) {
+    const isVi = policy?.language === "vi";
+    const quotes = isVi
+      ? ["Một phiên sâu giá trị hơn mười ý định dở dang.", "Bảo vệ giờ đầu tiên của ngày.", "Làm trước, hưởng trọn sau."]
+      : ["One finished deep block beats ten intentions.", "Guard your first focused hour.", "Earn your freedom first."];
+    quoteEl.textContent = `“${quotes[new Date().getDate() % quotes.length]}”`;
+  }
 })();
+
+document.getElementById("quickTaskForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("quickTaskInput");
+  const msg = document.getElementById("quickTaskMsg");
+  const title = input?.value?.trim();
+  if (!title) return;
+  const { accessToken, apiBaseUrl, policy } = await chrome.storage.local.get(["accessToken", "apiBaseUrl", "policy"]);
+  const isVi = policy?.language === "vi";
+  if (!accessToken) return;
+  const base = (apiBaseUrl || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${base}/api/agent/tasks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ title, kind: "must_do", requiredFocusMinutes: 25, addToTodayPlan: true }),
+    });
+    if (!res.ok) throw new Error("Failed");
+    input.value = "";
+    if (msg) msg.textContent = isVi ? `✓ Đã thêm "${title}" vào hôm nay.` : `✓ Added "${title}" to today.`;
+  } catch {
+    if (msg) msg.textContent = isVi ? "Không thể thêm việc lúc này." : "Could not add task right now.";
+  }
+});

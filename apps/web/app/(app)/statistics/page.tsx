@@ -20,6 +20,7 @@ import { AnalyticsStudioCharts } from "@/components/domain/analytics-studio-char
 import { CircadianFocusHeatmap } from "@/components/domain/circadian-focus-heatmap";
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { FocusGardenAndLetter } from "@/components/domain/focus-garden-letter";
+import { MonthlyTargetAndTriggers } from "@/components/domain/monthly-target-triggers";
 import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
 import { FocusQuestsAndGateCard } from "@/components/domain/focus-quests-card";
@@ -208,6 +209,8 @@ export default async function StatisticsPage({
         bestDayMinutes={stats.bestDay?.focusMinutes ?? 0}
         locale={locale}
       />
+
+      <MonthlyTargetAndTriggers focusMinutes={stats.focusMinutes} locale={locale} />
 
       <HallOfFameCard
         bestDayMinutes={stats.bestDay?.focusMinutes ?? 0}

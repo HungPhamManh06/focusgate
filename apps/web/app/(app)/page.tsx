@@ -11,6 +11,7 @@ import { FocusFootprintBar } from "@/components/domain/focus-footprint-bar";
 import { GettingStartedStrip } from "@/components/domain/getting-started-strip";
 import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
 import { MorningRitualBanner } from "@/components/domain/morning-ritual-banner";
+import { MottoCarouselStrip } from "@/components/domain/motto-carousel-strip";
 import { NextMoveCard } from "@/components/domain/next-move-card";
 import { OneThingSpotlight } from "@/components/domain/one-thing-spotlight";
 import { OnboardingTourModal } from "@/components/domain/onboarding-tour-modal";
@@ -182,6 +183,7 @@ export default async function DashboardPage() {
         hasPlan={Boolean(plan)}
         hasSessions={sessions.length > 0 || focus.minutes > 0}
       />
+      <MottoCarouselStrip />
       {!plan ? (
         <div data-bento-id="ritual">
           <MorningRitualBanner suggestedTasks={upcomingRaw} />
