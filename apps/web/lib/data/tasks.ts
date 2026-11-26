@@ -173,6 +173,8 @@ export async function listTasks(filters: TaskFilters = {}): Promise<Task[]> {
       query = query.in("status", ["todo", "in_progress"]);
     } else if (filters.view === "done") {
       query = query.eq("status", "completed");
+    } else {
+      query = query.neq("status", "cancelled");
     }
 
     if (filters.kind) {
@@ -197,6 +199,8 @@ export async function listTasks(filters: TaskFilters = {}): Promise<Task[]> {
       sql += ` and status in ('todo', 'in_progress')`;
     } else if (filters.view === "done") {
       sql += ` and status = 'completed'`;
+    } else {
+      sql += ` and status <> 'cancelled'`;
     }
 
     if (filters.kind) {
@@ -390,17 +394,76 @@ export async function updateTask(id: string, input: TaskInput): Promise<Task> {
 export async function deleteTask(id: string): Promise<void> {
   const ctx = await getSupabaseContext();
   if (ctx) {
-    assertSupabaseOk(
-      await ctx.supabase.from("tasks").delete().eq("id", id).eq("user_id", ctx.userId),
-    );
+    const delRes = await ctx.supabase
+      .from("tasks")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", ctx.userId);
+
+    if (!delRes.error) return;
+
+    // If referenced by historical daily_plan_tasks or focus_sessions (FK 23503),
+    // soft-delete (`status = 'cancelled', is_daily_habit = false`) unless it is
+    // locked inside today's active/confirmed plan.
+    if (delRes.error.code === "23503") {
+      const timezone = await getSupabaseUserTimezone(ctx.supabase, ctx.userId);
+      const today = localDateInTimezone(timezone);
+      const { data: activeLinks } = await ctx.supabase
+        .from("daily_plan_tasks")
+        .select("id, daily_plans!inner(plan_date, status)")
+        .eq("user_id", ctx.userId)
+        .eq("task_id", id)
+        .eq("daily_plans.plan_date", today)
+        .in("daily_plans.status", ["confirmed", "active"])
+        .limit(1);
+
+      if (activeLinks && activeLinks.length > 0) {
+        throw new Error("This task is locked in today's active plan and cannot be deleted.");
+      }
+
+      assertSupabaseOk(
+        await ctx.supabase
+          .from("tasks")
+          .update({ status: "cancelled", is_daily_habit: false })
+          .eq("id", id)
+          .eq("user_id", ctx.userId),
+      );
+      return;
+    }
+
+    assertSupabaseOk(delRes);
     return;
   }
 
   await withUser(async (db) => {
-    await db.query("delete from public.tasks where id = $1 and user_id = $2", [
-      id,
-      LOCAL_USER_ID,
-    ]);
+    try {
+      await db.query("delete from public.tasks where id = $1 and user_id = $2", [
+        id,
+        LOCAL_USER_ID,
+      ]);
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code !== "23503") throw err;
+      const locked = await db.query<{ id: string }>(
+        `select pt.id
+         from public.daily_plan_tasks pt
+         join public.daily_plans p on p.id = pt.plan_id
+         join public.profiles pr on pr.id = p.user_id
+         where pt.user_id = $1 and pt.task_id = $2
+           and p.plan_date = (now() at time zone pr.timezone)::date
+           and p.status in ('confirmed', 'active')
+         limit 1`,
+        [LOCAL_USER_ID, id],
+      );
+      if (locked.rows.length > 0) {
+        throw new Error("This task is locked in today's active plan and cannot be deleted.");
+      }
+      await db.query(
+        `update public.tasks set status = 'cancelled', is_daily_habit = false
+         where id = $1 and user_id = $2`,
+        [id, LOCAL_USER_ID],
+      );
+    }
   });
 }
 
