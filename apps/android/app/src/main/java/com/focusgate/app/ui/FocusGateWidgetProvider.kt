@@ -31,6 +31,7 @@ class FocusGateWidgetProvider : AppWidgetProvider() {
             for (id in ids) {
                 updateWidget(context, manager, id)
             }
+            FocusGateStreakWidgetProvider.updateAll(context)
         }
 
         private fun updateWidget(

@@ -34,8 +34,15 @@ export function LiveGreetingHeader({
     dateLabel: initialDateLabel,
     greetingText: initialGreeting,
   });
+  const [customName, setCustomName] = useState<string | null>(null);
 
   useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("focusgate-custom-greeting")?.trim();
+      if (saved) setCustomName(saved);
+    } catch {
+      // ignore
+    }
     const sync = () => {
       const next = computeLocalHeaderState(locale);
       setHeader((prev) =>
@@ -53,7 +60,7 @@ export function LiveGreetingHeader({
   return (
     <PageHeader
       eyebrow={header.dateLabel}
-      title={`${header.greetingText}, ${firstName}.`}
+      title={`${header.greetingText}, ${customName || firstName}.`}
       description={description}
     />
   );

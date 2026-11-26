@@ -1,9 +1,15 @@
 "use client";
 
-import { Check, LayoutGrid, Palette, Sparkles, Sunrise, Type } from "lucide-react";
+import { Check, LayoutGrid, Palette, Sparkles, Sunrise, Type, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/i18n/language-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  isGateSfxEnabled,
+  playFocusStartSfx,
+  playTaskTickSfx,
+  setGateSfxEnabled,
+} from "@/lib/domain/gate-sfx";
 import { cn } from "@/lib/utils";
 
 type VisualPreset = "crimson" | "espresso" | "matcha" | "nordic";
@@ -85,6 +91,11 @@ export function ThemePreviewPicker() {
   const [texture, setTexture] = useState<"plain" | "dots" | "paper">("plain");
   const [autoSunset, setAutoSunset] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [textSize, setTextSize] = useState<"sm" | "md" | "lg">("md");
+  const [sfxEnabled, setSfxEnabled] = useState(true);
+  const [customGreeting, setCustomGreeting] = useState("");
+  const [dailyGoalMin, setDailyGoalMin] = useState(120);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("focusgate-preset") as VisualPreset | null;
@@ -108,7 +119,39 @@ export function ThemePreviewPicker() {
     if (savedTex === "dots" || savedTex === "paper") setTexture(savedTex);
     if (window.localStorage.getItem("focusgate-auto-sunset") === "1") setAutoSunset(true);
     if (window.localStorage.getItem("focusgate-contrast") === "high") setHighContrast(true);
+    if (window.localStorage.getItem("focusgate-motion") === "reduced") setReducedMotion(true);
+    const savedSize = window.localStorage.getItem("focusgate-text-size");
+    if (savedSize === "sm" || savedSize === "lg") setTextSize(savedSize);
+    setSfxEnabled(isGateSfxEnabled());
+    setCustomGreeting(window.localStorage.getItem("focusgate-custom-greeting") ?? "");
+    const savedGoal = Number(window.localStorage.getItem("focusgate-daily-goal-min"));
+    if (Number.isFinite(savedGoal) && savedGoal >= 30 && savedGoal <= 480) setDailyGoalMin(savedGoal);
   }, []);
+
+  const toggleReducedMotion = () => {
+    setReducedMotion((prev) => {
+      const next = !prev;
+      if (next) document.documentElement.setAttribute("data-motion", "reduced");
+      else document.documentElement.removeAttribute("data-motion");
+      try {
+        window.localStorage.setItem("focusgate-motion", next ? "reduced" : "normal");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const applyTextSize = (size: "sm" | "md" | "lg") => {
+    setTextSize(size);
+    if (size === "md") document.documentElement.removeAttribute("data-text-size");
+    else document.documentElement.setAttribute("data-text-size", size);
+    try {
+      window.localStorage.setItem("focusgate-text-size", size);
+    } catch {
+      // ignore
+    }
+  };
 
   const toggleHighContrast = () => {
     setHighContrast((prev) => {
@@ -450,6 +493,149 @@ export function ThemePreviewPicker() {
             >
               {highContrast ? (isVi ? "Đang bật" : "On") : isVi ? "Đang tắt" : "Off"}
             </button>
+          </div>
+
+          {/* FocusGate 7.0: Reduced Motion & Text Scale */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+              <Sparkles className="size-3.5 text-accent" />
+              <span>{isVi ? "Giảm chuyển động (Reduce Motion)" : "Reduce Motion"}</span>
+            </div>
+            <button
+              type="button"
+              onClick={toggleReducedMotion}
+              className={cn(
+                "rounded-full border px-3 py-0.5 text-[11px] font-semibold transition-colors",
+                reducedMotion
+                  ? "border-accent bg-accent text-white"
+                  : "border-line bg-surface text-muted hover:text-ink",
+              )}
+            >
+              {reducedMotion ? (isVi ? "Đang bật" : "On") : isVi ? "Đang tắt" : "Off"}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+              <Type className="size-3.5 text-accent" />
+              <span>{isVi ? "Cỡ chữ toàn trang" : "Interface text size"}</span>
+            </div>
+            <div className="inline-flex rounded-full border border-line bg-surface p-0.5 text-[11px]">
+              {(
+                [
+                  { id: "sm", label: isVi ? "Nhỏ" : "Sm" },
+                  { id: "md", label: isVi ? "Chuẩn" : "Std" },
+                  { id: "lg", label: isVi ? "Lớn" : "Lg" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => applyTextSize(opt.id)}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                    textSize === opt.id ? "bg-ink text-canvas" : "text-muted hover:text-ink",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* FocusGate 7.0: Tactile Micro-Sound Pack */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 sm:col-span-2">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+              <Volume2 className="size-3.5 text-accent" />
+              <span>{isVi ? "Âm thanh phản hồi xúc giác (Micro-SFX)" : "Tactile Micro-Sound Pack"}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => playTaskTickSfx()}
+                className="rounded-full border border-line bg-surface px-2.5 py-0.5 text-[11px] font-medium text-muted hover:text-ink"
+              >
+                {isVi ? "Thử tiếng Tick" : "Test Tick"}
+              </button>
+              <button
+                type="button"
+                onClick={() => playFocusStartSfx()}
+                className="rounded-full border border-line bg-surface px-2.5 py-0.5 text-[11px] font-medium text-muted hover:text-ink"
+              >
+                {isVi ? "Thử Focus" : "Test Focus"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !sfxEnabled;
+                  setSfxEnabled(next);
+                  setGateSfxEnabled(next);
+                  if (next) playTaskTickSfx();
+                }}
+                className={cn(
+                  "rounded-full border px-3 py-0.5 text-[11px] font-semibold transition-colors",
+                  sfxEnabled
+                    ? "border-accent bg-accent text-white"
+                    : "border-line bg-surface text-muted hover:text-ink",
+                )}
+              >
+                {sfxEnabled ? (isVi ? "Đang bật" : "On") : isVi ? "Đang tắt" : "Off"}
+              </button>
+            </div>
+          </div>
+
+          {/* FocusGate 7.0: Personal Ritual & Greeting Studio */}
+          <div className="grid gap-3 rounded-xl border border-line bg-surface-2/60 p-3.5 sm:col-span-2 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="fg-custom-greeting"
+                className="block text-[11.5px] font-semibold text-ink"
+              >
+                {isVi ? "Biệt danh lời chào cá nhân" : "Personal greeting nickname"}
+              </label>
+              <input
+                id="fg-custom-greeting"
+                type="text"
+                value={customGreeting}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCustomGreeting(v);
+                  try {
+                    window.localStorage.setItem("focusgate-custom-greeting", v);
+                  } catch {
+                    // ignore
+                  }
+                }}
+                placeholder={isVi ? "Để trống để dùng tên tài khoản…" : "Leave blank for account name…"}
+                className="mt-1.5 w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] text-ink outline-none focus:border-accent"
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-[11.5px] font-semibold text-ink">
+                <label htmlFor="fg-daily-goal">
+                  {isVi ? "Mục tiêu tập trung hiển thị" : "Visual daily focus target"}
+                </label>
+                <span className="font-mono text-accent tabular-nums">{dailyGoalMin}m</span>
+              </div>
+              <input
+                id="fg-daily-goal"
+                type="range"
+                min={30}
+                max={360}
+                step={15}
+                value={dailyGoalMin}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setDailyGoalMin(val);
+                  try {
+                    window.localStorage.setItem("focusgate-daily-goal-min", String(val));
+                  } catch {
+                    // ignore
+                  }
+                }}
+                className="mt-2.5 w-full accent-[var(--accent)]"
+              />
+            </div>
           </div>
         </div>
       </CardContent>

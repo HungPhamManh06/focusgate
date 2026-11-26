@@ -17,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/ui/stat-card";
 import { getCategoryLabel } from "@/components/domain/labels";
 import { AnalyticsStudioCharts } from "@/components/domain/analytics-studio-charts";
+import { CircadianFocusHeatmap } from "@/components/domain/circadian-focus-heatmap";
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
@@ -187,6 +188,15 @@ export default async function StatisticsPage({
         locale={locale}
       />
 
+      <CircadianFocusHeatmap
+        days={stats.days.map((d) => ({
+          date: d.date,
+          focusMinutes: d.focusMinutes,
+          tasksCompleted: d.tasksCompleted,
+        }))}
+        locale={locale}
+      />
+
       <HallOfFameCard
         bestDayMinutes={stats.bestDay?.focusMinutes ?? 0}
         bestDayLabel={bestLabel}
@@ -216,6 +226,11 @@ export default async function StatisticsPage({
         avgSleepMinutes={health.avgSleepMinutes}
         avgSteps={health.avgSteps}
         locale={locale}
+        recentDays={stats.days.map((d) => ({
+          date: d.date,
+          focusMinutes: d.focusMinutes,
+          tasksCompleted: d.tasksCompleted,
+        }))}
       />
 
       {!hasActivity ? (

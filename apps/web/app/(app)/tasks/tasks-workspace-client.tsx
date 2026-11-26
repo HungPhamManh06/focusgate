@@ -24,6 +24,7 @@ import { getCategoryLabel, getKindLabel, kindDescriptions } from "@/components/d
 import { TaskInspectorDrawer } from "@/components/domain/task-inspector-drawer";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./task-row";
+import { TaskTemplatesStrip } from "./task-templates-strip";
 
 const KIND_ORDER: TaskKind[] = ["must_do", "should_do", "bonus"];
 
@@ -177,6 +178,9 @@ export function TasksWorkspaceClient({
 
   return (
     <div>
+      <div className="mb-3">
+        <TaskTemplatesStrip />
+      </div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-full border border-line bg-surface p-0.5 text-[11.5px]">
           <button

@@ -48,6 +48,7 @@ import { TemplatesRoutinesCard } from "./templates-routines-card";
 import { TomorrowPreviewCard } from "./tomorrow-preview-card";
 import { V2PlannerTools } from "./v2-planner-tools";
 import { V3GoalsTimeline } from "./v3-goals-timeline";
+import { WeeklyTimeGrid } from "./weekly-time-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -636,6 +637,12 @@ export default async function PlannerPage() {
               goals={goals}
               schedules={schedules}
               pendingEstimatedMinutes={pendingEstimatedMinutes}
+            />
+            <WeeklyTimeGrid
+              todayIso={today}
+              schedules={schedules}
+              backlog={backlog}
+              todayFocusDone={plan?.progress.focusDone ?? 0}
             />
             <DeadlineMiniCalendar
               items={backlog.map((t) => ({

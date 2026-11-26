@@ -96,3 +96,80 @@ export function playGateUnlockSfx(): void {
     // ignore
   }
 }
+
+/**
+ * FocusGate 7.0 Tactile Micro-Sound Pack (Web Audio API, zero external assets).
+ */
+export function playTaskTickSfx(): void {
+  if (!isGateSfxEnabled()) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(1320, now + 0.06);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.08, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.12);
+    window.setTimeout(() => void ctx.close().catch(() => {}), 220);
+  } catch {
+    // ignore
+  }
+}
+
+export function playTabSwitchSfx(): void {
+  if (!isGateSfxEnabled()) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(520, now + 0.035);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.045, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.06);
+    window.setTimeout(() => void ctx.close().catch(() => {}), 150);
+  } catch {
+    // ignore
+  }
+}
+
+export function playFocusStartSfx(): void {
+  if (!isGateSfxEnabled()) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    [329.63, 440].forEach((freq, idx) => {
+      const start = now + idx * 0.06;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.linearRampToValueAtTime(0.075, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.45);
+    });
+    window.setTimeout(() => void ctx.close().catch(() => {}), 650);
+  } catch {
+    // ignore
+  }
+}

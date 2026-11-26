@@ -336,3 +336,28 @@
   --muted: #d6c8ca;
   --line: rgba(255, 232, 235, 0.28);
 }
+
+/* FocusGate 7.0: Compact Side-Window, Reduced Motion & Text Scale */
+:root[data-compact-window="1"] [data-hide-compact="true"] {
+  display: none !important;
+}
+:root[data-compact-window="1"] main > div {
+  max-width: 720px;
+  padding-top: 1.25rem;
+  padding-bottom: 1.5rem;
+}
+
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+:root[data-text-size="sm"] {
+  font-size: 14px;
+}
+:root[data-text-size="lg"] {
+  font-size: 16.5px;
+}

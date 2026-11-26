@@ -72,19 +72,26 @@ class FocusGateTileService : TileService() {
 
     private fun refreshTile() {
         val tile = qsTile ?: return
+        val isVi = AgentPreferences.getLanguage(this) == "vi"
         val focusing = AgentPreferences.isActiveFocusRunning(this)
         val locked = AgentPreferences.isMonitorEnabled(this) && !AgentPreferences.isPlanUnlocked(this)
+        val remainingMin = ((AgentPreferences.getActiveFocusEndsAt(this) - System.currentTimeMillis()) / 60_000L)
+            .coerceAtLeast(1L)
         tile.state = when {
             focusing -> Tile.STATE_ACTIVE
             locked -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
-        tile.label = if (focusing) "FocusGate · Focusing" else "FocusGate"
+        tile.label = if (focusing) {
+            if (isVi) "FocusGate · Tập trung" else "FocusGate · Focusing"
+        } else {
+            "FocusGate"
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = when {
-                focusing -> "25m Sprint Active"
-                locked -> "Gate Locked"
-                else -> "Tap for 25m Focus"
+                focusing -> if (isVi) "Còn ${remainingMin}p · Đang khóa" else "${remainingMin}m left · Locked"
+                locked -> if (isVi) "Cổng đang khóa" else "Gate Locked"
+                else -> if (isVi) "Chạm để Focus 25p" else "Tap for 25m Focus"
             }
         }
         tile.updateTile()

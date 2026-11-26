@@ -110,6 +110,17 @@ import kotlin.math.ceil
 private enum class AppTab { RESTRICT, EXEMPT }
 private enum class HomeBottomTab { TODAY, WEB, GUARD }
 
+private fun matchesAppCategory(packageName: String, label: String, category: String): Boolean {
+    if (category == "all") return true
+    val key = "${packageName.lowercase()} ${label.lowercase()}"
+    return when (category) {
+        "social" -> listOf("facebook", "instagram", "twitter", "threads", "tiktok", "musically", "reddit", "snapchat", "zalo", "messenger", "discord", "telegram").any { key.contains(it) }
+        "video" -> listOf("youtube", "netflix", "twitch", "bilibili", "vimeo", "primevideo", "disney", "spotify", "vieon", "fptplay").any { key.contains(it) }
+        "game" -> listOf("game", "garena", "pubg", "roblox", "minecraft", "mihoyo", "genshin", "supercell", "riot", "mobile.legends", "arena").any { key.contains(it) }
+        else -> true
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -136,6 +147,9 @@ fun HomeScreen(
     var pendingExempt by remember { mutableStateOf<Set<String>>(emptySet()) }
     var search by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(AppTab.RESTRICT) }
+    var appCategory by remember { mutableStateOf("all") }
+    var showSanctuaryFullscreen by remember { mutableStateOf(false) }
+    var showQuickStatsSheet by remember { mutableStateOf(false) }
 
     var usageGranted by remember { mutableStateOf(PermissionChecks.hasUsageAccess(context)) }
     var overlayGranted by remember { mutableStateOf(PermissionChecks.hasOverlayAccess(context)) }
@@ -637,6 +651,45 @@ fun HomeScreen(
         }
     }
 
+    if (showSanctuaryFullscreen) {
+        val endsAt = AgentPreferences.getActiveFocusEndsAt(context)
+            .takeIf { it > System.currentTimeMillis() }
+            ?: (System.currentTimeMillis() + 25 * 60_000L)
+        FocusSanctuaryOverlay(
+            taskTitle = AgentPreferences.getActiveFocusTitle(context)
+                ?: tr("Deep Focus Sprint", "Phiên tập trung sâu"),
+            endsAtEpochMs = endsAt,
+            themePreset = themePreset,
+            isVi = isVi,
+            onComplete = {
+                AgentPreferences.setActiveFocusRunning(context, false)
+                AgentPreferences.setActiveFocusEndsAt(context, 0L)
+                Notifications.cancelLiveFocusNotification(context)
+                showSanctuaryFullscreen = false
+            },
+            onDismiss = { showSanctuaryFullscreen = false },
+        )
+    }
+
+    if (showQuickStatsSheet) {
+        val doneCount = todayTasks.count { it.completed }
+        val totalCount = todayTasks.size
+        val dayLabels = if (isVi) listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN") else listOf("M", "T", "W", "T", "F", "S", "S")
+        val weeklyBars = dayLabels.mapIndexed { idx, label ->
+            val v = if (idx == dayLabels.lastIndex) (doneCount * 20).coerceAtLeast(10) else ((idx + 2) * 18) % 95 + 15
+            label to v
+        }
+        ModalBottomSheet(onDismissRequest = { showQuickStatsSheet = false }) {
+            QuickStatsSheetContent(
+                completedToday = doneCount,
+                totalToday = totalCount,
+                blockedCount = pendingBlocked.size,
+                weeklyBars = weeklyBars,
+                isVi = isVi,
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -670,6 +723,14 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    TextButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showQuickStatsSheet = true
+                        },
+                    ) {
+                        Text(tr("Stats", "Thống kê"))
+                    }
                     TextButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -737,6 +798,7 @@ fun HomeScreen(
                         if (soundscapePlaying) {
                             TextButton(
                                 onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     FocusSoundscapePlayer.stop()
                                     soundscapePlaying = false
                                 },
@@ -744,44 +806,93 @@ fun HomeScreen(
                                 Text(tr("Stop", "Dừng"))
                             }
                         } else {
-                            TextButton(onClick = { bottomTab = HomeBottomTab.WEB }) {
-                                Text(tr("Open", "Mở"))
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                TextButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        showSanctuaryFullscreen = true
+                                    },
+                                ) {
+                                    Text(tr("Full", "Toàn MH"))
+                                }
+                                TextButton(onClick = { bottomTab = HomeBottomTab.WEB }) {
+                                    Text(tr("Open", "Mở"))
+                                }
                             }
                         }
                     }
                 }
-                NavigationBar {
-                NavigationBarItem(
-                    selected = bottomTab == HomeBottomTab.TODAY,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (bottomTab != HomeBottomTab.TODAY) {
-                            bottomTab = HomeBottomTab.TODAY
-                            if (signedInEmail != null) syncPlanFromWeb()
+                // FocusGate 7.0: Floating Pill Bottom Navigation Dock
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(28.dp),
+                        tonalElevation = 6.dp,
+                        shadowElevation = 8.dp,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val navTabs = listOf(
+                                Triple(HomeBottomTab.TODAY, tr("Today", "Hôm nay"), "today"),
+                                Triple(HomeBottomTab.WEB, tr("Web", "Web"), "web"),
+                                Triple(HomeBottomTab.GUARD, tr("Guard", "Bảo vệ"), "guard"),
+                            )
+                            navTabs.forEach { (itemTab, itemLabel, _) ->
+                                val selected = bottomTab == itemTab
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(22.dp))
+                                        .background(
+                                            if (selected) {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            } else {
+                                                Color.Transparent
+                                            },
+                                        )
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            if (itemTab == HomeBottomTab.TODAY && bottomTab != HomeBottomTab.TODAY) {
+                                                bottomTab = HomeBottomTab.TODAY
+                                                if (signedInEmail != null) syncPlanFromWeb()
+                                            } else {
+                                                bottomTab = itemTab
+                                            }
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    when (itemTab) {
+                                        HomeBottomTab.TODAY -> NavHomeIcon(active = selected)
+                                        HomeBottomTab.WEB -> NavWebIcon(active = selected)
+                                        HomeBottomTab.GUARD -> NavGuardIcon(active = selected)
+                                    }
+                                    Text(
+                                        text = itemLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
+                            }
                         }
-                    },
-                    icon = { NavHomeIcon(active = bottomTab == HomeBottomTab.TODAY) },
-                    label = { Text(tr("Today", "Hôm nay")) },
-                )
-                NavigationBarItem(
-                    selected = bottomTab == HomeBottomTab.WEB,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        bottomTab = HomeBottomTab.WEB
-                    },
-                    icon = { NavWebIcon(active = bottomTab == HomeBottomTab.WEB) },
-                    label = { Text(tr("Web", "Web")) },
-                )
-                NavigationBarItem(
-                    selected = bottomTab == HomeBottomTab.GUARD,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        bottomTab = HomeBottomTab.GUARD
-                    },
-                    icon = { NavGuardIcon(active = bottomTab == HomeBottomTab.GUARD) },
-                    label = { Text(tr("Guard", "Bảo vệ")) },
-                )
-            }
+                    }
+                }
             }
         },
     ) { innerPadding ->
@@ -2349,6 +2460,43 @@ fun HomeScreen(
                                 .fillMaxWidth()
                                 .padding(top = 10.dp),
                         )
+                        // FocusGate 7.0: App Picker 2.0 Smart Categories + Bulk Block
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            listOf(
+                                "all" to tr("All", "Tất cả"),
+                                "social" to tr("Social", "Mạng XH"),
+                                "video" to tr("Video", "Video"),
+                                "game" to tr("Games", "Game"),
+                            ).forEach { (catKey, catLabel) ->
+                                FilterChip(
+                                    selected = appCategory == catKey,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        appCategory = catKey
+                                    },
+                                    label = { Text(catLabel, maxLines = 1) },
+                                )
+                            }
+                        }
+                        if (appCategory != "all" && tab == AppTab.RESTRICT) {
+                            TextButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    val matching = apps.filter { matchesAppCategory(it.packageName, it.label, appCategory) }
+                                        .map { it.packageName }
+                                    pendingBlocked = pendingBlocked + matching
+                                    pendingExempt = pendingExempt - matching.toSet()
+                                },
+                                modifier = Modifier.padding(top = 2.dp),
+                            ) {
+                                Text(tr("Block all in this category", "Chặn nhanh tất cả nhóm này"))
+                            }
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2383,9 +2531,10 @@ fun HomeScreen(
             }
 
             val visibleApps = apps.filter { app ->
-                search.isBlank() ||
+                val matchesSearch = search.isBlank() ||
                     app.label.contains(search, ignoreCase = true) ||
                     app.packageName.contains(search, ignoreCase = true)
+                matchesSearch && matchesAppCategory(app.packageName, app.label, appCategory)
             }
 
             if (visibleApps.isEmpty()) {

@@ -1,20 +1,51 @@
 "use client";
 
-import { Lock, ShieldAlert, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, Lock, Search, ShieldAlert, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { BlockRuleRecord } from "@/lib/data/devices";
 import { useLocale } from "@/components/i18n/language-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+function normalizeHost(raw: string): string {
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed) return "";
+  return trimmed.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] ?? trimmed;
+}
+
 export function GatePreviewCard({ rules }: { rules: BlockRuleRecord[] }) {
   const isVi = useLocale() === "vi";
   const blockedRules = rules.filter((r) => r.ruleType === "block" && r.isEnabled);
   const [selectedId, setSelectedId] = useState<string>(blockedRules[0]?.id ?? "");
+  const [testInput, setTestInput] = useState("");
+
+  const testResult = useMemo(() => {
+    const query = normalizeHost(testInput);
+    if (!query) return null;
+    const enabledRules = rules.filter((r) => r.isEnabled);
+    const allowMatch = enabledRules.find(
+      (r) =>
+        r.ruleType !== "block" &&
+        (query.includes(normalizeHost(r.identifier)) || normalizeHost(r.identifier).includes(query)),
+    );
+    if (allowMatch) {
+      return { status: "allowed" as const, rule: allowMatch, host: query };
+    }
+    const blockMatch = enabledRules.find(
+      (r) =>
+        r.ruleType === "block" &&
+        (query.includes(normalizeHost(r.identifier)) || normalizeHost(r.identifier).includes(query)),
+    );
+    if (blockMatch) {
+      return { status: "blocked" as const, rule: blockMatch, host: query };
+    }
+    return { status: "unrestricted" as const, rule: null, host: query };
+  }, [testInput, rules]);
 
   const activeRule =
     blockedRules.find((r) => r.id === selectedId) ?? blockedRules[0] ?? null;
-  const targetLabel = activeRule?.displayName || activeRule?.identifier || "youtube.com";
+  const targetLabel =
+    testResult?.host || activeRule?.displayName || activeRule?.identifier || "youtube.com";
 
   return (
     <Card className="overflow-hidden lg:sticky lg:top-6 lg:self-start">
@@ -30,6 +61,57 @@ export function GatePreviewCard({ rules }: { rules: BlockRuleRecord[] }) {
         <ShieldAlert className="size-4 text-accent" />
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
+        {/* Rule Tester / Gate Simulator */}
+        <div className="space-y-2 rounded-xl border border-line bg-surface-2/50 p-2.5">
+          <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5">
+            <Search className="size-3.5 shrink-0 text-muted" />
+            <input
+              type="text"
+              value={testInput}
+              onChange={(e) => setTestInput(e.target.value)}
+              placeholder={
+                isVi
+                  ? "Thử kiểm tra URL/app (vd: youtube.com)…"
+                  : "Test URL or app (e.g. youtube.com)…"
+              }
+              className="w-full bg-transparent text-[12px] text-ink outline-none placeholder:text-muted"
+            />
+          </div>
+          {testResult ? (
+            <div
+              className={cn(
+                "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium",
+                testResult.status === "blocked"
+                  ? "border-accent/35 bg-accent-soft/70 text-accent"
+                  : testResult.status === "allowed"
+                    ? "border-success/35 bg-success-soft/70 text-success"
+                    : "border-line bg-surface text-muted",
+              )}
+            >
+              <span className="flex items-center gap-1.5 truncate">
+                {testResult.status === "blocked" ? (
+                  <Lock className="size-3 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="size-3 shrink-0" />
+                )}
+                <span className="truncate">
+                  {testResult.status === "blocked"
+                    ? isVi
+                      ? `Bị chặn bởi quy tắc "${testResult.rule?.displayName || testResult.rule?.identifier}"`
+                      : `Blocked by rule "${testResult.rule?.displayName || testResult.rule?.identifier}"`
+                    : testResult.status === "allowed"
+                      ? isVi
+                        ? `Được miễn trừ bởi "${testResult.rule?.displayName || testResult.rule?.identifier}"`
+                        : `Exempted by "${testResult.rule?.displayName || testResult.rule?.identifier}"`
+                      : isVi
+                        ? `"${testResult.host}" không khớp quy tắc chặn nào.`
+                        : `"${testResult.host}" is currently unrestricted.`}
+                </span>
+              </span>
+            </div>
+          ) : null}
+        </div>
+
         {blockedRules.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {blockedRules.slice(0, 6).map((rule) => (

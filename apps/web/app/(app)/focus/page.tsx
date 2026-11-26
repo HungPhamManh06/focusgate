@@ -266,7 +266,15 @@ export default async function FocusPage({
           ) : null}
 
           {active ? (
-            <FocusTimer session={active} minValidMinutes={workspace.settings.minValidFocusMinutes} />
+            <FocusTimer
+              session={active}
+              minValidMinutes={workspace.settings.minValidFocusMinutes}
+              queueItems={candidates.slice(0, 6).map((c) => ({
+                id: c.id,
+                title: c.title,
+                requiredMinutes: c.requiredFocusMinutes,
+              }))}
+            />
           ) : (
             <FocusStarter
               candidates={candidates}

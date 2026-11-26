@@ -194,11 +194,13 @@ object Notifications {
             )
 
         if (!isPaused && endsAtEpochMs > System.currentTimeMillis()) {
+            val remainingMin = ((endsAtEpochMs - System.currentTimeMillis()) / 60_000L).toInt().coerceIn(0, 25)
             builder
                 .setWhen(endsAtEpochMs)
                 .setShowWhen(true)
                 .setUsesChronometer(true)
                 .setChronometerCountDown(true)
+                .setProgress(25, (25 - remainingMin).coerceIn(0, 25), false)
         }
 
         post(context, NotificationIds.LIVE_FOCUS_NOTIFICATION, builder.build())

@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Check,
   Clock3,
+  Columns2,
   Loader2,
   Maximize2,
   Minimize2,
@@ -48,9 +49,11 @@ import { cn } from "@/lib/utils";
 export function FocusTimer({
   session,
   minValidMinutes,
+  queueItems = [],
 }: {
   session: FocusSession;
   minValidMinutes: number;
+  queueItems?: Array<{ id: string; title: string; requiredMinutes: number }>;
 }) {
   const isVi = useLocale() === "vi";
   const router = useRouter();
@@ -61,6 +64,9 @@ export function FocusTimer({
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [zenMode, setZenMode] = useState(false);
+  const [splitView, setSplitView] = useState(false);
+  const [splitTab, setSplitTab] = useState<"notes" | "queue">("notes");
+  const [splitNote, setSplitNote] = useState("");
   const [zenControlsDimmed, setZenControlsDimmed] = useState(false);
   const [activeSound, setActiveSound] = useState<SoundPreset>("off");
   const [clockStyle, setClockStyle] = useState<"dial" | "flip" | "minimal">("dial");
@@ -375,6 +381,21 @@ export function FocusTimer({
               ? `${formatFocusModeLabel(session.mode)} · ${formatMinutes(effectiveMinValidMinutes)} min threshold`
               : `${formatFocusModeLabel(session.mode)} · ${session.plannedMinutes} min planned · ${formatMinutes(effectiveMinValidMinutes)} min threshold (max ${timerState.maxCreditedMinutes}m credit)`}
           </p>
+          <button
+            type="button"
+            onClick={() => setSplitView((prev) => !prev)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+              splitView
+                ? "border-accent bg-accent-soft text-accent"
+                : zenMode
+                  ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                  : "border-line bg-surface-2 text-ink hover:border-accent/40 hover:text-accent",
+            )}
+          >
+            <Columns2 className="size-3.5" />
+            {isVi ? "Chia đôi" : "Split-View"}
+          </button>
           <button
             type="button"
             onClick={() => setZenMode((prev) => !prev)}
@@ -766,6 +787,93 @@ export function FocusTimer({
         </div>
 
         <FocusSoundscape onPresetChange={setActiveSound} darkSurface={zenMode} />
+
+        {splitView ? (
+          <div
+            className={cn(
+              "mt-6 w-full max-w-xl rounded-2xl border p-4 text-left",
+              zenMode
+                ? "border-white/15 bg-black/30 text-[#f5eeee] backdrop-blur-md"
+                : "border-line bg-surface-2/60 text-ink",
+            )}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-2.5">
+              <div className="inline-flex gap-1 rounded-full border border-line/70 bg-surface/60 p-0.5 text-[11px] font-medium">
+                <button
+                  type="button"
+                  onClick={() => setSplitTab("notes")}
+                  className={cn(
+                    "rounded-full px-3 py-1 transition-colors",
+                    splitTab === "notes"
+                      ? "bg-ink text-canvas"
+                      : zenMode
+                        ? "text-white/70 hover:text-white"
+                        : "text-muted hover:text-ink",
+                  )}
+                >
+                  {isVi ? "Ghi chú nhanh" : "Scratchpad"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSplitTab("queue")}
+                  className={cn(
+                    "rounded-full px-3 py-1 transition-colors",
+                    splitTab === "queue"
+                      ? "bg-ink text-canvas"
+                      : zenMode
+                        ? "text-white/70 hover:text-white"
+                        : "text-muted hover:text-ink",
+                  )}
+                >
+                  {isVi ? `Hàng đợi (${queueItems.length})` : `Queue (${queueItems.length})`}
+                </button>
+              </div>
+              <span className="text-[10.5px] text-muted">
+                {isVi ? "Split-View đang bật" : "Split-View active"}
+              </span>
+            </div>
+
+            {splitTab === "notes" ? (
+              <textarea
+                rows={4}
+                value={splitNote}
+                onChange={(e) => setSplitNote(e.target.value)}
+                placeholder={
+                  isVi
+                    ? "Ghi nhanh ý tưởng hoặc việc cần làm tiếp để không bị phân tâm…"
+                    : "Jot down stray thoughts or next steps without leaving focus…"
+                }
+                className={cn(
+                  "mt-3 w-full resize-none rounded-xl border px-3 py-2 text-[12.5px] outline-none",
+                  zenMode
+                    ? "border-white/15 bg-white/5 text-white placeholder:text-white/45"
+                    : "border-line bg-surface text-ink placeholder:text-muted",
+                )}
+              />
+            ) : queueItems.length === 0 ? (
+              <p className="mt-3 text-[12px] text-muted">
+                {isVi ? "Chưa có việc nào trong hàng đợi." : "No queued tasks yet."}
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-1.5">
+                {queueItems.map((item) => (
+                  <li
+                    key={item.id}
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-[12px]",
+                      zenMode ? "border-white/10 bg-white/5" : "border-line bg-surface",
+                    )}
+                  >
+                    <span className="truncate font-medium">{item.title}</span>
+                    <span className="shrink-0 font-mono text-[10.5px] opacity-75 tabular-nums">
+                      {item.requiredMinutes > 0 ? `${item.requiredMinutes}m` : "—"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
 
         <p className="mt-5 flex items-center gap-1.5 text-[11px] text-muted">
           <Clock3 className="size-3" />

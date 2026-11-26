@@ -8,6 +8,7 @@ import {
   Lock,
   LockOpen,
   LogOut,
+  Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -51,6 +52,7 @@ export function Sidebar({
   const hasAvailableTime = isSidebarWalletActive(availableMinutes);
   const isVi = language === "vi";
   const [collapsed, setCollapsed] = useState(false);
+  const [compactWin, setCompactWin] = useState(false);
   const [activePreset, setActivePreset] = useState<string>("crimson");
 
   useEffect(() => {
@@ -58,6 +60,9 @@ export function Sidebar({
       const savedCollapsed = window.localStorage.getItem("focusgate-sidebar-collapsed") === "1";
       setCollapsed(savedCollapsed);
       document.documentElement.style.setProperty("--sidebar-w", savedCollapsed ? "76px" : "250px");
+      const savedCompact = window.localStorage.getItem("focusgate-compact-window") === "1";
+      setCompactWin(savedCompact);
+      if (savedCompact) document.documentElement.setAttribute("data-compact-window", "1");
 
       const savedPreset = window.localStorage.getItem("focusgate-preset");
       if (savedPreset) setActivePreset(savedPreset);
@@ -346,6 +351,30 @@ export function Sidebar({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !compactWin;
+                setCompactWin(next);
+                if (next) document.documentElement.setAttribute("data-compact-window", "1");
+                else document.documentElement.removeAttribute("data-compact-window");
+                try {
+                  window.localStorage.setItem("focusgate-compact-window", next ? "1" : "0");
+                } catch {
+                  // ignore
+                }
+              }}
+              title={isVi ? "Chế độ Cửa sổ Thu gọn" : "Compact Side-Window mode"}
+              aria-label={isVi ? "Chế độ Cửa sổ Thu gọn" : "Compact Side-Window mode"}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-lg transition-colors",
+                compactWin
+                  ? "bg-accent-soft text-accent"
+                  : "text-muted hover:bg-surface-2 hover:text-ink",
+              )}
+            >
+              <Minimize2 className="size-3.5" />
+            </button>
             <ActivityBellDrawer collapsed={collapsed} />
             {authEmail && !collapsed ? (
               <form action="/auth/signout" method="post">

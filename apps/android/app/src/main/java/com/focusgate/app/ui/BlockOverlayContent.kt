@@ -44,6 +44,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -60,12 +62,16 @@ fun BlockOverlayContent(
     onQuickFocus15: (() -> Unit)? = null,
     isVi: Boolean = false,
     planSummary: String = "",
+    topPriorityTask: String = "",
     strictFrictionMode: Boolean = false,
     isBedtimeMode: Boolean = false,
     themePreset: String = "auto",
 ) {
+    val haptic = LocalHapticFeedback.current
     var confirmEmergency by remember { mutableStateOf(false) }
     var countdownSeconds by remember { mutableIntStateOf(30) }
+    var breathPauseActive by remember { mutableStateOf(false) }
+    var breathPauseLeft by remember { mutableIntStateOf(10) }
     var typedPledge by remember { mutableStateOf("") }
     val requiredPledge = if (isVi) "Toi chon xao nhang" else "I choose distraction"
     val pledgeMatched = !strictFrictionMode ||
@@ -89,6 +95,17 @@ fun BlockOverlayContent(
                 delay(1_000L)
                 countdownSeconds -= 1
             }
+        }
+    }
+
+    LaunchedEffect(breathPauseActive) {
+        if (breathPauseActive) {
+            breathPauseLeft = 10
+            while (breathPauseLeft > 0) {
+                delay(1_000L)
+                breathPauseLeft -= 1
+            }
+            breathPauseActive = false
         }
     }
 
@@ -178,6 +195,35 @@ fun BlockOverlayContent(
                 textAlign = TextAlign.Start,
             )
 
+            if (topPriorityTask.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(overlayAccent.copy(alpha = 0.14f))
+                        .border(1.dp, overlayAccent.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Column {
+                        Text(
+                            text = if (isVi) "VIỆC ƯU TIÊN SỐ 1 ĐANG CHỜ" else "TOP PRIORITY WAITING",
+                            color = overlayAccent,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.2.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = topPriorityTask,
+                            color = Color(0xFFFAF7F5),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 3.dp),
+                        )
+                    }
+                }
+            }
+
             if (planSummary.isNotBlank()) {
                 Box(
                     modifier = Modifier
@@ -229,7 +275,29 @@ fun BlockOverlayContent(
             }
 
             OutlinedButton(
-                onClick = onBackHome,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    breathPauseActive = !breathPauseActive
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+            ) {
+                Text(
+                    text = if (breathPauseActive) {
+                        if (isVi) "🌬️ Đang hít thở chậm… còn ${breathPauseLeft}s" else "🌬️ Breathing pause… ${breathPauseLeft}s left"
+                    } else {
+                        if (isVi) "🌬️ Hít thở 10 giây cắt cơn lướt" else "🌬️ 10-Second Mindful Breath"
+                    },
+                    color = Color(0xFFFAF7F5),
+                )
+            }
+
+            OutlinedButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onBackHome()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 10.dp),

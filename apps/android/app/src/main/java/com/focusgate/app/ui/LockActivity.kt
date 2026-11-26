@@ -54,6 +54,11 @@ class LockActivity : ComponentActivity() {
                     },
                     isVi = AgentPreferences.getLanguage(this) == "vi",
                     planSummary = AgentPreferences.getPlanSummaryText(this),
+                    topPriorityTask = AgentPreferences.getWidgetTasksPreview(this)
+                        .lineSequence()
+                        .map { it.trim().removePrefix("•").removePrefix("☐").trim() }
+                        .firstOrNull { it.isNotBlank() && !it.startsWith("✓") }
+                        .orEmpty(),
                     themePreset = preset,
                 )
             }

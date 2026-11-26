@@ -74,6 +74,7 @@ export function DailyReceiptCard({
   avgSleepMinutes,
   avgSteps,
   locale = "en",
+  recentDays = [],
 }: {
   displayName: string;
   periodDays: number;
@@ -84,11 +85,17 @@ export function DailyReceiptCard({
   avgSleepMinutes: number;
   avgSteps: number;
   locale?: "en" | "vi";
+  recentDays?: Array<{ date: string; focusMinutes: number; tasksCompleted: number }>;
 }) {
   const isVi = locale === "vi";
   const [exporting, setExporting] = useState(false);
   const [ratio, setRatio] = useState<ReceiptRatio>("story");
   const [theme, setTheme] = useState<ReceiptTheme>("espresso");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  const activeDay = selectedDay ? recentDays.find((d) => d.date === selectedDay) ?? null : null;
+  const shownFocus = activeDay ? activeDay.focusMinutes : focusMinutes;
+  const shownTasks = activeDay ? activeDay.tasksCompleted : tasksCompleted;
 
   function downloadReceiptPng() {
     setExporting(true);
@@ -347,14 +354,50 @@ export function DailyReceiptCard({
           </div>
         </div>
 
+        {recentDays.length > 0 ? (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setSelectedDay(null)}
+              className={cn(
+                "shrink-0 rounded-xl border px-3 py-1.5 text-left text-[11px] transition-colors",
+                selectedDay === null
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-line bg-surface text-muted hover:text-ink",
+              )}
+            >
+              <p className="font-semibold">{isVi ? `Tổng ${periodDays} ngày` : `${periodDays}d Total`}</p>
+              <p className="mt-0.5 tabular-nums opacity-80">{formatMinutes(focusMinutes)}</p>
+            </button>
+            {recentDays.slice(-7).map((d) => (
+              <button
+                key={d.date}
+                type="button"
+                onClick={() => setSelectedDay(d.date)}
+                className={cn(
+                  "shrink-0 rounded-xl border px-3 py-1.5 text-left text-[11px] transition-colors",
+                  selectedDay === d.date
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-line bg-surface text-muted hover:text-ink",
+                )}
+              >
+                <p className="font-semibold tabular-nums">{d.date.slice(5)}</p>
+                <p className="mt-0.5 tabular-nums opacity-80">
+                  {formatMinutes(d.focusMinutes)} · {d.tasksCompleted}✓
+                </p>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="grid gap-3 rounded-2xl border border-dashed border-line bg-surface-2/60 p-4 sm:grid-cols-4">
           <div>
             <p className="text-[11px] text-muted">{isVi ? "Tập trung" : "Focus"}</p>
-            <p className="mt-0.5 font-display text-[22px] tabular-nums">{formatMinutes(focusMinutes)}</p>
+            <p className="mt-0.5 font-display text-[22px] tabular-nums">{formatMinutes(shownFocus)}</p>
           </div>
           <div>
             <p className="text-[11px] text-muted">{isVi ? "Hoàn thành" : "Completed"}</p>
-            <p className="mt-0.5 font-display text-[22px] tabular-nums">{tasksCompleted}</p>
+            <p className="mt-0.5 font-display text-[22px] tabular-nums">{shownTasks}</p>
           </div>
           <div>
             <p className="text-[11px] text-muted">{isVi ? "Chuỗi ngày" : "Streak"}</p>
