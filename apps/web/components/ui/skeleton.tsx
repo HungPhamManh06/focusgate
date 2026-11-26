@@ -6,22 +6,33 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function PageSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 py-7 sm:px-8 sm:py-9">
-      <Skeleton className="h-3 w-28" />
-      <Skeleton className="mt-4 h-11 w-2/3 max-w-[420px]" />
-      <Skeleton className="mt-3 h-4 w-1/2 max-w-[340px]" />
-      <div className="mt-7 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <Skeleton key={index} className="h-[118px] rounded-[18px]" />
-        ))}
+    <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-8 sm:py-8 lg:px-10">
+      {/* Greeting + Compact Metric Strip */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-2.5">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-10 w-64 sm:w-80" />
+          <Skeleton className="h-4 w-72 sm:w-96" />
+        </div>
+        <Skeleton className="h-[68px] w-full rounded-2xl lg:w-[390px]" />
       </div>
-      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.95fr)_minmax(320px,1fr)]">
-        <Skeleton className="h-[380px] rounded-[18px]" />
-        <Skeleton className="h-[380px] rounded-[18px]" />
+
+      {/* Day Timeline Ribbon */}
+      <Skeleton className="mt-5 h-[72px] w-full rounded-2xl" />
+
+      {/* Hero Bento Stage */}
+      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.95fr)_minmax(340px,1fr)]">
+        <Skeleton className="h-[420px] rounded-[18px]" />
+        <div className="flex flex-col gap-5">
+          <Skeleton className="h-[220px] rounded-[18px]" />
+          <Skeleton className="h-[180px] rounded-[18px]" />
+        </div>
       </div>
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Skeleton className="h-[260px] rounded-[18px]" />
-        <Skeleton className="h-[260px] rounded-[18px]" />
+
+      {/* Bottom 2-Column Activity + Coach */}
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Skeleton className="h-[240px] rounded-[18px]" />
+        <Skeleton className="h-[240px] rounded-[18px]" />
       </div>
     </div>
   );

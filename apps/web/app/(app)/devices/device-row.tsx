@@ -66,10 +66,24 @@ export function DeviceRow({
   }
 
   return (
-    <div className="flex flex-col gap-3 border-b border-line px-5 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+    <div className="flex flex-col gap-3 border-b border-line px-5 py-4 transition-colors last:border-b-0 hover:bg-surface-2/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-line bg-surface-2 text-ink-soft">
+        <span
+          className={`relative mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border ${
+            device.platform === "android"
+              ? "border-success/30 bg-success-soft/50 text-success"
+              : device.platform === "windows"
+                ? "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                : "border-accent/30 bg-accent-soft/60 text-accent"
+          }`}
+        >
           <PlatformIcon platform={device.platform} />
+          <span
+            aria-hidden
+            className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-surface ${
+              isRevoked ? "bg-muted" : "bg-success"
+            }`}
+          />
         </span>
 
         <div className="min-w-0 flex-1">

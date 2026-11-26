@@ -15,6 +15,7 @@ import { completePlanTaskAction } from "@/lib/actions/planner";
 import { quickAddTodayTaskAction } from "@/lib/actions/v5";
 import { formatMinutes } from "@/lib/data/format";
 import type { PlanStatus, PlanTask } from "@/lib/data/types";
+import { GateUnlockCelebration } from "@/components/domain/gate-unlock-celebration";
 import { KindBadge } from "@/components/domain/labels";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ export function MissionInteractiveChecklist({
 }) {
   const isVi = locale === "vi";
   const [expanded, setExpanded] = useState(false);
+  const [celebrateUnlock, setCelebrateUnlock] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [optimisticDone, setOptimisticDone] = useState<Record<string, boolean>>({});
   const [quickTitle, setQuickTitle] = useState("");
@@ -55,6 +57,9 @@ export function MissionInteractiveChecklist({
 
   const handleComplete = (task: PlanTask) => {
     if (!canCompleteDirectly || busyTaskId) return;
+    const remainingBefore = tasks.filter(
+      (t) => !(Boolean(t.completedAt) || t.status === "completed" || optimisticDone[t.id]),
+    ).length;
     setBusyTaskId(task.id);
     setOptimisticDone((prev) => ({ ...prev, [task.id]: true }));
     startCompleteTransition(async () => {
@@ -64,6 +69,9 @@ export function MissionInteractiveChecklist({
         setOptimisticDone((prev) => ({ ...prev, [task.id]: false }));
         toast.push("error", res.error);
       } else {
+        if (remainingBefore <= 1) {
+          setCelebrateUnlock(true);
+        }
         toast.push(
           "success",
           isVi ? `Đã hoàn thành "${task.title}"!` : `Completed "${task.title}"!`,
@@ -88,6 +96,10 @@ export function MissionInteractiveChecklist({
 
   return (
     <div>
+      <GateUnlockCelebration
+        visible={celebrateUnlock}
+        onDone={() => setCelebrateUnlock(false)}
+      />
       <div className="mb-2 flex items-center justify-between text-[11px] text-muted">
         <span>
           {isVi ? "Nhiệm vụ đã cam kết (" : "Committed tasks ("}

@@ -1,3 +1,4 @@
+import { ThemePreviewPicker } from "@/components/domain/theme-preview-picker";
 import { V5IntegrationsCard } from "@/components/domain/v5-integrations-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getV2Settings } from "@/lib/data/v2-settings";
@@ -21,6 +22,8 @@ export default async function SettingsPage() {
             : "Switch between English and Vietnamese, and configure your daily focus and health targets."
         }
       />
+
+      <ThemePreviewPicker />
 
       <SettingsForm
         settings={settings}

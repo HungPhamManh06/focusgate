@@ -1,6 +1,7 @@
 package com.focusgate.app.ui
 
 import android.content.Intent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,6 +36,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -101,6 +110,7 @@ fun HomeScreen(
     openAddTaskOnLaunch: Boolean = false,
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val database = remember { FocusGateDatabase.get(context) }
@@ -645,24 +655,31 @@ fun HomeScreen(
                 NavigationBarItem(
                     selected = bottomTab == HomeBottomTab.TODAY,
                     onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         if (bottomTab != HomeBottomTab.TODAY) {
                             bottomTab = HomeBottomTab.TODAY
                             if (signedInEmail != null) syncPlanFromWeb()
                         }
                     },
-                    icon = { Text("⌂") },
+                    icon = { NavHomeIcon(active = bottomTab == HomeBottomTab.TODAY) },
                     label = { Text(tr("Today", "Hôm nay")) },
                 )
                 NavigationBarItem(
                     selected = bottomTab == HomeBottomTab.WEB,
-                    onClick = { bottomTab = HomeBottomTab.WEB },
-                    icon = { Text("◎") },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        bottomTab = HomeBottomTab.WEB
+                    },
+                    icon = { NavWebIcon(active = bottomTab == HomeBottomTab.WEB) },
                     label = { Text(tr("Web", "Web")) },
                 )
                 NavigationBarItem(
                     selected = bottomTab == HomeBottomTab.GUARD,
-                    onClick = { bottomTab = HomeBottomTab.GUARD },
-                    icon = { Text("◈") },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        bottomTab = HomeBottomTab.GUARD
+                    },
+                    icon = { NavGuardIcon(active = bottomTab == HomeBottomTab.GUARD) },
                     label = { Text(tr("Guard", "Bảo vệ")) },
                 )
             }
@@ -678,10 +695,15 @@ fun HomeScreen(
                 modifier = Modifier.padding(innerPadding),
             )
         } else {
-        LazyColumn(
+        PullToRefreshBox(
+            isRefreshing = planSyncBusy,
+            onRefresh = { if (signedInEmail != null) syncPlanFromWeb() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
+        ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp),
         ) {
             item {
@@ -2019,6 +2041,7 @@ fun HomeScreen(
             }
             } // end HomeBottomTab.GUARD
         }
+        } // end PullToRefreshBox
         }
     }
 }
@@ -2057,4 +2080,58 @@ private fun StatusRow(
 private fun formatRemaining(millis: Long): String {
     val seconds = ceil(millis / 1000.0).toLong().coerceAtLeast(0)
     return "${seconds / 60}m ${seconds % 60}s"
+}
+
+@Composable
+private fun NavHomeIcon(active: Boolean) {
+    val color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Canvas(modifier = Modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val stroke = Stroke(width = if (active) 2.2.dp.toPx() else 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val path = Path().apply {
+            moveTo(w * 0.14f, h * 0.48f)
+            lineTo(w * 0.50f, h * 0.16f)
+            lineTo(w * 0.86f, h * 0.48f)
+            moveTo(w * 0.24f, h * 0.44f)
+            lineTo(w * 0.24f, h * 0.84f)
+            lineTo(w * 0.76f, h * 0.84f)
+            lineTo(w * 0.76f, h * 0.44f)
+        }
+        drawPath(path = path, color = color, style = stroke)
+    }
+}
+
+@Composable
+private fun NavWebIcon(active: Boolean) {
+    val color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Canvas(modifier = Modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val r = w * 0.38f
+        val stroke = Stroke(width = if (active) 2.2.dp.toPx() else 1.8.dp.toPx(), cap = StrokeCap.Round)
+        drawCircle(color = color, radius = r, center = Offset(w / 2f, h / 2f), style = stroke)
+        drawLine(color = color, start = Offset(w / 2f - r, h / 2f), end = Offset(w / 2f + r, h / 2f), strokeWidth = stroke.width)
+        drawLine(color = color, start = Offset(w / 2f, h / 2f - r), end = Offset(w / 2f, h / 2f + r), strokeWidth = stroke.width)
+    }
+}
+
+@Composable
+private fun NavGuardIcon(active: Boolean) {
+    val color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Canvas(modifier = Modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val stroke = Stroke(width = if (active) 2.2.dp.toPx() else 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val path = Path().apply {
+            moveTo(w * 0.50f, h * 0.14f)
+            lineTo(w * 0.82f, h * 0.26f)
+            lineTo(w * 0.82f, h * 0.52f)
+            cubicTo(w * 0.82f, h * 0.72f, w * 0.65f, h * 0.83f, w * 0.50f, h * 0.88f)
+            cubicTo(w * 0.35f, h * 0.83f, w * 0.18f, h * 0.72f, w * 0.18f, h * 0.52f)
+            lineTo(w * 0.18f, h * 0.26f)
+            close()
+        }
+        drawPath(path = path, color = color, style = stroke)
+    }
 }
