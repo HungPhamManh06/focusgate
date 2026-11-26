@@ -71,8 +71,22 @@ export function TaskRow({
       const result = completed
         ? await reopenTaskAction(task.id)
         : await completeTaskAction(task.id);
-      if (result.error) toast.push("error", result.error);
-      else if (result.success) toast.push("success", result.success);
+      if (result.error) {
+        toast.push("error", result.error);
+      } else if (result.success) {
+        if (!completed) {
+          toast.push("success", result.success, {
+            label: isVi ? "Hoàn tác" : "Undo",
+            onClick: () => {
+              startTransition(async () => {
+                await reopenTaskAction(task.id);
+              });
+            },
+          });
+        } else {
+          toast.push("success", result.success);
+        }
+      }
     });
   }
 

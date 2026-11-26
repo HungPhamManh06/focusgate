@@ -1,6 +1,7 @@
 package com.focusgate.app.ui
 
 import android.content.Intent
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,6 +29,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
@@ -219,6 +221,13 @@ fun HomeScreen(
                 planUnlocked = snapshot.unlocked
                 signedInEmail = AgentPreferences.getUserEmail(context)
                 earnedMinutesBalance = AgentPreferences.getEarnedMinutesBalance(context)
+                val topMustDos = snapshot.plan?.tasks
+                    ?.filter { it.kind == "must_do" && it.status != "completed" }
+                    ?.take(3)
+                    ?.joinToString("\n") { "• ${it.title}" }
+                    .orEmpty()
+                AgentPreferences.setWidgetTasksPreview(context, topMustDos)
+                FocusGateWidgetProvider.updateAll(context)
             } catch (e: Exception) {
                 syncError = e.message ?: "Could not sync plan."
             } finally {
@@ -509,114 +518,122 @@ fun HomeScreen(
     }
 
     if (showAddTaskDialog) {
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { if (!addTaskBusy) showAddTaskDialog = false },
-            title = { Text(tr("Add new task", "Thêm nhiệm vụ mới")) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = newTaskTitle,
-                        onValueChange = { newTaskTitle = it },
-                        label = { Text(tr("Task title", "Tên nhiệm vụ")) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(
-                            "must_do" to tr("Must do", "Bắt buộc"),
-                            "should_do" to tr("Should do", "Nên làm"),
-                            "bonus" to tr("Bonus", "Thưởng"),
-                        ).forEach { (kindKey, label) ->
-                            FilterChip(
-                                selected = newTaskKind == kindKey,
-                                onClick = { newTaskKind = kindKey },
-                                label = { Text(label) },
-                            )
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(0, 25, 50).forEach { mins ->
-                            FilterChip(
-                                selected = newTaskFocusMinutes == mins,
-                                onClick = { newTaskFocusMinutes = mins },
-                                label = {
-                                    Text(
-                                        if (mins == 0) {
-                                            tr("0m focus", "0p tập trung")
-                                        } else {
-                                            "${mins}m"
-                                        },
-                                    )
-                                },
-                            )
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            tr("Add to today's plan", "Thêm vào kế hoạch hôm nay"),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Switch(
-                            checked = newTaskAddToToday,
-                            onCheckedChange = { newTaskAddToToday = it },
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    tr("Add new task", "Thêm nhiệm vụ mới"),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                OutlinedTextField(
+                    value = newTaskTitle,
+                    onValueChange = { newTaskTitle = it },
+                    label = { Text(tr("Task title", "Tên nhiệm vụ")) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "must_do" to tr("Must do", "Bắt buộc"),
+                        "should_do" to tr("Should do", "Nên làm"),
+                        "bonus" to tr("Bonus", "Thưởng"),
+                    ).forEach { (kindKey, label) ->
+                        FilterChip(
+                            selected = newTaskKind == kindKey,
+                            onClick = { newTaskKind = kindKey },
+                            label = { Text(label) },
                         )
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !addTaskBusy && newTaskTitle.trim().isNotEmpty(),
-                    onClick = {
-                        val title = newTaskTitle.trim()
-                        if (title.isEmpty()) return@TextButton
-                        addTaskBusy = true
-                        syncError = null
-                        scope.launch {
-                            try {
-                                val snap = withContext(Dispatchers.IO) {
-                                    PlanSyncManager.createTaskAndSync(
-                                        context = context,
-                                        title = title,
-                                        kind = newTaskKind,
-                                        requiredFocusMinutes = newTaskFocusMinutes,
-                                        addToTodayPlan = newTaskAddToToday,
-                                    )
-                                }
-                                planSnapshot = snap
-                                planUnlocked = snap.unlocked
-                                language = AgentPreferences.getLanguage(context)
-                                newTaskTitle = ""
-                                showAddTaskDialog = false
-                                banner = tr(
-                                    "Task saved and synced to FocusGate Web.",
-                                    "Đã thêm nhiệm vụ và đồng bộ lên FocusGate Web.",
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(0, 15, 25, 45).forEach { mins ->
+                        FilterChip(
+                            selected = newTaskFocusMinutes == mins,
+                            onClick = { newTaskFocusMinutes = mins },
+                            label = {
+                                Text(
+                                    if (mins == 0) tr("0m", "0p") else "${mins}m",
                                 )
-                            } catch (t: Throwable) {
-                                syncError = t.message ?: tr("Could not add task", "Không thể thêm nhiệm vụ")
-                                showAddTaskDialog = false
-                            } finally {
-                                addTaskBusy = false
+                            },
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        tr("Add to today's plan", "Thêm vào kế hoạch hôm nay"),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = newTaskAddToToday,
+                        onCheckedChange = { newTaskAddToToday = it },
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    OutlinedButton(
+                        enabled = !addTaskBusy,
+                        onClick = { showAddTaskDialog = false },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(tr("Cancel", "Hủy"))
+                    }
+                    Button(
+                        enabled = !addTaskBusy && newTaskTitle.trim().isNotEmpty(),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val title = newTaskTitle.trim()
+                            if (title.isEmpty()) return@Button
+                            addTaskBusy = true
+                            syncError = null
+                            scope.launch {
+                                try {
+                                    val snap = withContext(Dispatchers.IO) {
+                                        PlanSyncManager.createTaskAndSync(
+                                            context = context,
+                                            title = title,
+                                            kind = newTaskKind,
+                                            requiredFocusMinutes = newTaskFocusMinutes,
+                                            addToTodayPlan = newTaskAddToToday,
+                                        )
+                                    }
+                                    planSnapshot = snap
+                                    planUnlocked = snap.unlocked
+                                    language = AgentPreferences.getLanguage(context)
+                                    newTaskTitle = ""
+                                    showAddTaskDialog = false
+                                    banner = tr(
+                                        "Task saved and synced to FocusGate Web.",
+                                        "Đã thêm nhiệm vụ và đồng bộ lên FocusGate Web.",
+                                    )
+                                } catch (t: Throwable) {
+                                    syncError = t.message ?: tr("Could not add task", "Không thể thêm nhiệm vụ")
+                                    showAddTaskDialog = false
+                                } finally {
+                                    addTaskBusy = false
+                                }
                             }
-                        }
-                    },
-                ) {
-                    Text(if (addTaskBusy) tr("Saving...", "Đang lưu...") else tr("Save", "Lưu"))
+                        },
+                    ) {
+                        Text(if (addTaskBusy) tr("Saving...", "Đang lưu...") else tr("Save", "Lưu"))
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !addTaskBusy,
-                    onClick = { showAddTaskDialog = false },
-                ) {
-                    Text(tr("Cancel", "Hủy"))
-                }
-            },
-        )
+            }
+        }
     }
 
     Scaffold(
@@ -757,7 +774,8 @@ fun HomeScreen(
             }
         },
     ) { innerPadding ->
-        if (bottomTab == HomeBottomTab.WEB) {
+        Crossfade(targetState = bottomTab, label = "home_tab") { activeTab ->
+        if (activeTab == HomeBottomTab.WEB) {
             WebDashboardScreen(
                 isVi = isVi,
                 onSyncToNative = {
@@ -2405,6 +2423,7 @@ fun HomeScreen(
         }
         } // end PullToRefreshBox
         }
+        } // end Crossfade
     }
 }
 

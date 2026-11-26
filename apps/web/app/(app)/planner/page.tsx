@@ -41,6 +41,7 @@ import { getWorkspace } from "@/lib/data/workspace";
 import type { Plan, PlanStatus, TaskKind } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { AddPlanTask } from "./add-plan-task";
+import { DeadlineMiniCalendar } from "./deadline-mini-calendar";
 import { PlanTaskRow } from "./plan-task-row";
 import { PlannerTabsShell } from "./planner-tabs-shell";
 import { TemplatesRoutinesCard } from "./templates-routines-card";
@@ -629,11 +630,21 @@ export default async function PlannerPage() {
 
       <PlannerTabsShell
         timelinePanel={
-          <V3GoalsTimeline
-            goals={goals}
-            schedules={schedules}
-            pendingEstimatedMinutes={pendingEstimatedMinutes}
-          />
+          <>
+            <V3GoalsTimeline
+              goals={goals}
+              schedules={schedules}
+              pendingEstimatedMinutes={pendingEstimatedMinutes}
+            />
+            <DeadlineMiniCalendar
+              items={backlog.map((t) => ({
+                id: t.id,
+                title: t.title,
+                dueDate: t.dueDate,
+                kind: t.kind,
+              }))}
+            />
+          </>
         }
         templatesPanel={
           <TemplatesRoutinesCard

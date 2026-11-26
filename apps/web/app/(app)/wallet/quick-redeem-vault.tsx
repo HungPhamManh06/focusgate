@@ -22,10 +22,14 @@ export function QuickRedeemVault({
   grants,
   availableMinutes,
   dailyCapMinutes,
+  earnedMinutes = 0,
+  spentMinutes = 0,
 }: {
   grants: Grant[];
   availableMinutes: number;
   dailyCapMinutes: number;
+  earnedMinutes?: number;
+  spentMinutes?: number;
 }) {
   const isVi = useLocale() === "vi";
   const toast = useToast();
@@ -34,6 +38,10 @@ export function QuickRedeemVault({
 
   const primaryGrant = grants.find((g) => g.remainingMinutes > 0) ?? null;
   const pct = Math.min(100, Math.round((availableMinutes / Math.max(1, dailyCapMinutes)) * 100));
+  const ratioTotal = Math.max(1, earnedMinutes + spentMinutes);
+  const earnedPct = Math.round((earnedMinutes / ratioTotal) * 100);
+  const ringR = 20;
+  const ringC = 2 * Math.PI * ringR;
 
   function redeemPreset(preset: (typeof PASS_PRESETS)[number]) {
     const grant = grants.find((g) => g.remainingMinutes >= preset.minutes) ?? primaryGrant;
@@ -88,14 +96,38 @@ export function QuickRedeemVault({
       </CardHeader>
 
       <CardContent className="space-y-4 pt-3">
-        <div>
-          <div className="mb-1.5 flex items-center justify-between text-[11px] text-muted">
-            <span>{isVi ? "Năng lượng Ví hôm nay" : "Wallet capacity"}</span>
-            <span className="tabular-nums">
-              {formatMinutes(availableMinutes)} / {formatMinutes(dailyCapMinutes)} ({pct}%)
-            </span>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <div>
+            <div className="mb-1.5 flex items-center justify-between text-[11px] text-muted">
+              <span>{isVi ? "Năng lượng Ví hôm nay" : "Wallet capacity"}</span>
+              <span className="tabular-nums">
+                {formatMinutes(availableMinutes)} / {formatMinutes(dailyCapMinutes)} ({pct}%)
+              </span>
+            </div>
+            <Progress value={pct} tone="accent" className="h-2" />
           </div>
-          <Progress value={pct} tone="accent" className="h-2" />
+          <div className="flex items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2">
+            <svg viewBox="0 0 48 48" className="size-11 -rotate-90 shrink-0" aria-hidden>
+              <circle cx="24" cy="24" r={ringR} fill="none" stroke="#d97706" strokeWidth="5" strokeOpacity="0.35" />
+              <circle
+                cx="24"
+                cy="24"
+                r={ringR}
+                fill="none"
+                stroke="#0d7a58"
+                strokeWidth="5"
+                strokeDasharray={`${(earnedPct / 100) * ringC} ${ringC}`}
+              />
+            </svg>
+            <div className="text-[11px] leading-snug">
+              <p className="font-semibold text-success">
+                +{formatMinutes(earnedMinutes)} {isVi ? "kiếm" : "earned"}
+              </p>
+              <p className="text-warning">
+                -{formatMinutes(spentMinutes)} {isVi ? "dùng" : "spent"}
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">

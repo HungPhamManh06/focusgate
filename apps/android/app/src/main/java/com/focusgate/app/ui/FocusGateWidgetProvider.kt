@@ -41,7 +41,9 @@ class FocusGateWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_focusgate)
             val isVi = AgentPreferences.getLanguage(context) == "vi"
             val summary = AgentPreferences.getPlanSummaryText(context)
+            val preview = AgentPreferences.getWidgetTasksPreview(context)
             views.setTextViewText(R.id.widget_status, summary)
+            views.setTextViewText(R.id.widget_tasks_preview, preview)
             views.setTextViewText(R.id.widget_add_btn, if (isVi) "+ Thêm" else "+ Add")
 
             val launchIntent = Intent(context, MainActivity::class.java)

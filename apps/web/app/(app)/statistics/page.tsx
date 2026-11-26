@@ -21,6 +21,7 @@ import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { DistractionSleepCard } from "@/components/domain/distraction-sleep-card";
 import { FocusPassportCard } from "@/components/domain/focus-passport-card";
 import { FocusQuestsAndGateCard } from "@/components/domain/focus-quests-card";
+import { HallOfFameCard } from "@/components/domain/hall-of-fame-card";
 import { WeeklyReviewCard } from "@/components/domain/weekly-review-modal";
 import { YearlyDisciplineGrid } from "@/components/domain/yearly-discipline-grid";
 import { buildDailySeals } from "@/lib/domain/focus-passport";
@@ -182,6 +183,15 @@ export default async function StatisticsPage({
         avgSleepMinutes={health.avgSleepMinutes}
         avgSteps={health.avgSteps}
         currentStreak={passportSummary.currentStreak}
+        locale={locale}
+      />
+
+      <HallOfFameCard
+        bestDayMinutes={stats.bestDay?.focusMinutes ?? 0}
+        bestDayLabel={bestLabel}
+        bestStreak={stats.bestStreak ?? passportSummary.currentStreak}
+        totalFocusMinutes={stats.focusMinutes}
+        goldSeals={passportSummary.goldCount}
         locale={locale}
       />
 

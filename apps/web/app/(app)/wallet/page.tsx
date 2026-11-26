@@ -117,6 +117,8 @@ export default async function WalletPage() {
         grants={activeGrants}
         availableMinutes={wallet.availableMinutes}
         dailyCapMinutes={workspace.settings.dailyCapMinutes}
+        earnedMinutes={wallet.earnedMinutes}
+        spentMinutes={wallet.consumedMinutes}
       />
 
       {plan?.status === "completed" ? (

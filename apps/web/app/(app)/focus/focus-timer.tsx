@@ -182,6 +182,17 @@ export function FocusTimer({
     pausedSeconds: optimisticSession.pausedSeconds,
   });
 
+  // Dynamic Browser Tab Title synced with live Focus Clock
+  useEffect(() => {
+    const prevTitle = document.title;
+    const prefix = optimisticSession.status === "paused" ? "⏸ " : "● ";
+    const label = session.taskTitle || (isVi ? "Đang tập trung" : "Focusing");
+    document.title = `${prefix}${timerState.clockDisplay} · ${label} | FocusGate`;
+    return () => {
+      document.title = prevTitle;
+    };
+  }, [timerState.clockDisplay, session.taskTitle, optimisticSession.status, isVi]);
+
   const uiLabels = getFocusSubmissionUiLabels(submission, pending);
 
   function performComplete() {
@@ -451,6 +462,11 @@ export function FocusTimer({
             <p className="mt-3 text-[12px] font-medium text-ink-soft tabular-nums">
               {timerState.subLabel}
             </p>
+            {timerState.meetsMinimumThreshold ? (
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-success/35 bg-success-soft px-2.5 py-0.5 text-[11px] font-semibold text-success">
+                ✓ {isVi ? "Đã đạt ngưỡng phiên hợp lệ" : "Verified threshold reached"}
+              </span>
+            ) : null}
           </div>
         ) : clockStyle === "minimal" ? (
           <div className="flex flex-col items-center py-6">

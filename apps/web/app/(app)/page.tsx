@@ -8,6 +8,7 @@ import { EveningWrapupTrigger } from "@/components/domain/evening-wrapup-modal";
 import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
 import { MorningRitualBanner } from "@/components/domain/morning-ritual-banner";
 import { NextMoveCard } from "@/components/domain/next-move-card";
+import { OneThingSpotlight } from "@/components/domain/one-thing-spotlight";
 import { OnboardingTourModal } from "@/components/domain/onboarding-tour-modal";
 import { RewardWalletCard } from "@/components/domain/reward-wallet-card";
 import { WeeklyPeekStrip } from "@/components/domain/weekly-peek-strip";
@@ -114,12 +115,19 @@ export default async function DashboardPage() {
                 : "Finish what matters right here, focus deeply, and unlock guilt-free freedom."
             }
           />
-          <EveningWrapupTrigger
-            focusMinutes={focus.minutes}
-            completedCount={(plan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).length}
-            earnedMinutes={wallet.availableMinutes}
-            remainingTasks={(plan?.tasks ?? []).filter((t) => !t.completedAt)}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <OneThingSpotlight
+              taskId={nextMove?.task.id ?? null}
+              taskTitle={nextMove?.task.title ?? null}
+              estimatedMinutes={nextMove?.task.estimatedMinutes}
+            />
+            <EveningWrapupTrigger
+              focusMinutes={focus.minutes}
+              completedCount={(plan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).length}
+              earnedMinutes={wallet.availableMinutes}
+              remainingTasks={(plan?.tasks ?? []).filter((t) => !t.completedAt)}
+            />
+          </div>
         </div>
 
         <div

@@ -4,13 +4,14 @@ import {
   Check,
   CheckSquare,
   Columns3,
+  GripVertical,
   List,
   Plus,
   Square,
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { addSuggestedTaskToTodayPlanAction } from "@/lib/actions/planner";
 import { completeTaskAction, deleteTaskAction } from "@/lib/actions/tasks";
 import type { PlanStatus, PlanTask, Task, TaskKind } from "@/lib/data/types";
@@ -59,10 +60,37 @@ export function TasksWorkspaceClient({
   const toast = useToast();
   const [layout, setLayout] = useState<"list" | "board">("list");
   const [sortBy, setSortBy] = useState<"default" | "priority" | "shortest" | "due">("default");
+  const [customOrder, setCustomOrder] = useState<string[]>([]);
+  const [dragId, setDragId] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [inspectTask, setInspectTask] = useState<Task | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem("focusgate-task-order") || "[]") as string[];
+      if (Array.isArray(saved)) setCustomOrder(saved);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  function moveTaskBefore(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    const base = tasks.map((t) => t.id);
+    const merged = [...customOrder.filter((id) => base.includes(id)), ...base.filter((id) => !customOrder.includes(id))];
+    const next = merged.filter((id) => id !== sourceId);
+    const targetIdx = next.indexOf(targetId);
+    if (targetIdx === -1) next.push(sourceId);
+    else next.splice(targetIdx, 0, sourceId);
+    setCustomOrder(next);
+    try {
+      window.localStorage.setItem("focusgate-task-order", JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }
 
   const planTaskByTaskId = new Map<string, PlanTask>(planTasks.map((pt) => [pt.taskId, pt]));
 
@@ -78,6 +106,13 @@ export function TasksWorkspaceClient({
       const da = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
       const db = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
       return da - db;
+    }
+    if (customOrder.length > 0) {
+      const ia = customOrder.indexOf(a.id);
+      const ib = customOrder.indexOf(b.id);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
     }
     return 0;
   });
@@ -221,7 +256,31 @@ export function TasksWorkspaceClient({
                 </div>
                 <Card className="overflow-hidden">
                   {group.tasks.map((task) => (
-                    <div key={task.id} className="flex items-stretch">
+                    <div
+                      key={task.id}
+                      draggable={sortBy === "default"}
+                      onDragStart={() => setDragId(task.id)}
+                      onDragOver={(e) => {
+                        if (sortBy === "default") e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragId && sortBy === "default") moveTaskBefore(dragId, task.id);
+                        setDragId(null);
+                      }}
+                      className={cn(
+                        "flex items-stretch",
+                        dragId === task.id && "opacity-50",
+                      )}
+                    >
+                      {sortBy === "default" && !selectMode ? (
+                        <span
+                          title={isVi ? "Kéo để sắp xếp lại" : "Drag to reorder"}
+                          className="hidden cursor-grab items-center pl-2 text-muted/45 hover:text-ink sm:flex"
+                        >
+                          <GripVertical className="size-3.5" />
+                        </span>
+                      ) : null}
                       {selectMode ? (
                         <button
                           type="button"

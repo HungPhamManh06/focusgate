@@ -15,6 +15,7 @@ const PRESETS: Array<{ id: MiniPreset; label: string; labelVi: string }> = [
 export function SidebarAmbientPlayer({ isVi }: { isVi: boolean }) {
   const [playing, setPlaying] = useState(false);
   const [preset, setPreset] = useState<MiniPreset>("brown");
+  const [bars, setBars] = useState<number[]>([4, 8, 12, 7, 5]);
   const ctxRef = useRef<AudioContext | null>(null);
 
   const stop = () => {
@@ -69,15 +70,37 @@ export function SidebarAmbientPlayer({ isVi }: { isVi: boolean }) {
     filter.type = preset === "rain" ? "bandpass" : "lowpass";
     filter.frequency.value = preset === "rain" ? 1350 : preset === "fireplace" ? 420 : 340;
 
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 32;
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+
     const gain = ctx.createGain();
     gain.gain.value = 0.22;
 
     src.connect(filter);
-    filter.connect(gain);
+    filter.connect(analyser);
+    analyser.connect(gain);
     gain.connect(ctx.destination);
     src.start();
 
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    let intervalId = 0;
+    if (!prefersReduced) {
+      intervalId = window.setInterval(() => {
+        analyser.getByteFrequencyData(freqData);
+        const next = [0, 1, 2, 3, 4].map((idx) => {
+          const val = freqData[idx] ?? 0;
+          return Math.max(4, Math.min(18, Math.round((val / 255) * 18) + 3));
+        });
+        setBars(next);
+      }, 120);
+    }
+
     return () => {
+      if (intervalId) window.clearInterval(intervalId);
       try {
         src.stop();
         src.disconnect();
@@ -123,10 +146,14 @@ export function SidebarAmbientPlayer({ isVi }: { isVi: boolean }) {
         </button>
 
         {playing ? (
-          <div className="flex items-end gap-0.5 pr-1" aria-hidden>
-            <span className="h-3 w-0.5 animate-pulse rounded-full bg-accent" />
-            <span className="h-4 w-0.5 animate-pulse rounded-full bg-accent [animation-delay:150ms]" />
-            <span className="h-2.5 w-0.5 animate-pulse rounded-full bg-accent [animation-delay:300ms]" />
+          <div className="flex h-5 items-end gap-0.5 pr-1" aria-hidden>
+            {bars.map((h, idx) => (
+              <span
+                key={idx}
+                className="w-0.5 rounded-full bg-accent transition-all duration-100"
+                style={{ height: `${h}px` }}
+              />
+            ))}
           </div>
         ) : (
           <VolumeX className="size-3.5 text-muted/60" />

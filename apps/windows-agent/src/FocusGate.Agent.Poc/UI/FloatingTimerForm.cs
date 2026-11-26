@@ -24,10 +24,12 @@ public sealed class FloatingTimerForm : Form
         StartPosition = FormStartPosition.Manual;
         TopMost = true;
         ShowInTaskbar = false;
-        Width = 264;
-        Height = 46;
-        BackColor = Color.FromArgb(24, 20, 20);
+        Width = 276;
+        Height = 48;
+        Opacity = 0.94;
+        BackColor = Color.FromArgb(22, 16, 18);
         ForeColor = Color.FromArgb(250, 247, 245);
+        ApplyRoundedRegion(22);
 
         var area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
         Location = new Point(area.Right - Width - 20, area.Bottom - Height - 20);
@@ -92,7 +94,11 @@ public sealed class FloatingTimerForm : Form
                 if (!_dragging) return;
                 Location = new Point(Left + e.X - _dragStart.X, Top + e.Y - _dragStart.Y);
             };
-            ctrl.MouseUp += (_, _) => _dragging = false;
+            ctrl.MouseUp += (_, _) =>
+            {
+                _dragging = false;
+                SnapToScreenEdge();
+            };
         }
 
         _tickTimer = new System.Windows.Forms.Timer { Interval = 1000 };
@@ -127,9 +133,42 @@ public sealed class FloatingTimerForm : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        using var pen = new Pen(Color.FromArgb(185, 28, 28), 1.5f);
+        using var path = CreateRoundedPath(new Rectangle(1, 1, Width - 3, Height - 3), 22);
+        using var pen = new Pen(Color.FromArgb(220, 56, 56), 1.5f);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        e.Graphics.DrawRectangle(pen, 1, 1, Width - 2, Height - 2);
+        e.Graphics.DrawPath(pen, path);
+    }
+
+    private void ApplyRoundedRegion(int radius)
+    {
+        using var path = CreateRoundedPath(new Rectangle(0, 0, Width, Height), radius);
+        Region = new Region(path);
+    }
+
+    private static GraphicsPath CreateRoundedPath(Rectangle bounds, int radius)
+    {
+        var path = new GraphicsPath();
+        var d = radius * 2;
+        path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+        path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+        path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+        path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+
+    private void SnapToScreenEdge()
+    {
+        var area = Screen.FromControl(this).WorkingArea;
+        var x = Left;
+        var y = Top;
+        const int margin = 16;
+        const int snap = 36;
+        if (Math.Abs(Left - area.Left) < snap) x = area.Left + margin;
+        else if (Math.Abs(area.Right - Right) < snap) x = area.Right - Width - margin;
+        if (Math.Abs(Top - area.Top) < snap) y = area.Top + margin;
+        else if (Math.Abs(area.Bottom - Bottom) < snap) y = area.Bottom - Height - margin;
+        Location = new Point(x, y);
     }
 
     private static string FormatClock(int seconds)

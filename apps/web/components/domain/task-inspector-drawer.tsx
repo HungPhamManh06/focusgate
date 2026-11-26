@@ -1,7 +1,7 @@
 "use client";
 
-import { Calendar, Clock, Repeat, Save, X } from "lucide-react";
-import { useActionState, useEffect } from "react";
+import { Calendar, Check, Clock, Plus, Repeat, Save, Trash2, X } from "lucide-react";
+import { useActionState, useEffect, useState } from "react";
 import { updateTaskAction } from "@/lib/actions/tasks";
 import type { ActionState } from "@/lib/actions/types";
 import type { Task } from "@/lib/data/types";
@@ -24,6 +24,32 @@ export function TaskInspectorDrawer({
   const isVi = useLocale() === "vi";
   const toast = useToast();
   const [state, formAction, pending] = useActionState(updateTaskAction, initialState);
+  const [subtasks, setSubtasks] = useState<Array<{ id: string; text: string; done: boolean }>>([]);
+  const [newSubtask, setNewSubtask] = useState("");
+  const subKey = `focusgate:subtasks:${task.id}`;
+
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(subKey) || "[]") as Array<{
+        id: string;
+        text: string;
+        done: boolean;
+      }>;
+      if (Array.isArray(saved)) setSubtasks(saved);
+    } catch {
+      // ignore
+    }
+  }, [open, subKey]);
+
+  function saveSubtasks(next: Array<{ id: string; text: string; done: boolean }>) {
+    setSubtasks(next);
+    try {
+      window.localStorage.setItem(subKey, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -185,6 +211,81 @@ export function TaskInspectorDrawer({
                 {isVi ? "Lặp lại mỗi ngày (Thói quen hằng ngày)" : "Repeat every day (Daily habit)"}
               </span>
             </label>
+
+            <div className="rounded-xl border border-line bg-surface-2/40 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11.5px] font-semibold text-ink">
+                  {isVi ? "Các bước nhỏ (Subtasks)" : "Subtasks checklist"}
+                </span>
+                {subtasks.length > 0 ? (
+                  <span className="text-[11px] tabular-nums text-muted">
+                    {subtasks.filter((s) => s.done).length}/{subtasks.length}
+                  </span>
+                ) : null}
+              </div>
+              <div className="space-y-1.5">
+                {subtasks.map((sub) => (
+                  <div key={sub.id} className="flex items-center gap-2 text-[12px]">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        saveSubtasks(
+                          subtasks.map((s) => (s.id === sub.id ? { ...s, done: !s.done } : s)),
+                        )
+                      }
+                      className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                        sub.done
+                          ? "border-success bg-success text-white"
+                          : "border-line bg-surface"
+                      }`}
+                    >
+                      {sub.done ? <Check className="size-2.5" strokeWidth={3} /> : null}
+                    </button>
+                    <span className={`flex-1 ${sub.done ? "text-muted line-through" : "text-ink"}`}>
+                      {sub.text}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => saveSubtasks(subtasks.filter((s) => s.id !== sub.id))}
+                      className="text-muted hover:text-danger"
+                      aria-label="Remove subtask"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-1.5">
+                <Input
+                  value={newSubtask}
+                  onChange={(e) => setNewSubtask(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const clean = newSubtask.trim();
+                      if (!clean) return;
+                      saveSubtasks([...subtasks, { id: String(Date.now()), text: clean, done: false }]);
+                      setNewSubtask("");
+                    }
+                  }}
+                  placeholder={isVi ? "Thêm bước nhỏ…" : "Add a step…"}
+                  className="h-8 text-[12px]"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const clean = newSubtask.trim();
+                    if (!clean) return;
+                    saveSubtasks([...subtasks, { id: String(Date.now()), text: clean, done: false }]);
+                    setNewSubtask("");
+                  }}
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="mt-auto flex items-center justify-end gap-2 border-t border-line pt-4">

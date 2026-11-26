@@ -300,3 +300,19 @@
 :root[data-radius="sharp"] .rounded-3xl { border-radius: 0.75rem; }
 :root[data-radius="sharp"] .rounded-2xl { border-radius: 0.5rem; }
 :root[data-radius="sharp"] .rounded-xl { border-radius: 0.375rem; }
+
+/* FocusGate 4.0: Subtle Canvas Textures */
+:root[data-texture="dots"] body {
+  background-image: radial-gradient(color-mix(in srgb, var(--ink) 12%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+:root[data-texture="paper"] body {
+  background-image: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--ink) 3%, transparent) 0px,
+    color-mix(in srgb, var(--ink) 3%, transparent) 1px,
+    transparent 1px,
+    transparent 28px
+  );
+}

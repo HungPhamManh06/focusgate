@@ -33,7 +33,18 @@
             android:layout_marginTop="4dp"
             android:text="Sync to load today's tasks"
             android:textColor="#D9CBCD"
-            android:textSize="12sp" />
+            android:textSize="11.5sp" />
+
+        <TextView
+            android:id="@+id/widget_tasks_preview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="3"
+            android:text=""
+            android:textColor="#FAF7F5"
+            android:textSize="11.5sp" />
     </LinearLayout>
 
     <TextView

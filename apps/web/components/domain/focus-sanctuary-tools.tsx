@@ -1,9 +1,23 @@
 "use client";
 
-import { Maximize2, Minimize2, NotebookPen, Wind, X } from "lucide-react";
+import { Maximize2, Minimize2, NotebookPen, Quote, RefreshCw, Wind, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/i18n/language-provider";
 import { cn } from "@/lib/utils";
+
+const MANTRAS_VI = [
+  "Kỷ luật là chọn điều bạn thực sự muốn thay vì điều bạn muốn ngay lúc này.",
+  "Một giờ tập trung sâu giá trị hơn cả ngày phân tâm.",
+  "Hoàn thành việc khó trước, sự tự do sẽ ngọt ngào hơn gấp bội.",
+  "Sự bình tĩnh sinh ra từ việc làm chủ sự chú ý của chính mình.",
+];
+
+const MANTRAS_EN = [
+  "Discipline is choosing what you want most over what you want now.",
+  "One hour of deep focus outweighs a full day of shallow motion.",
+  "Finish the hard thing first; earned freedom tastes twice as sweet.",
+  "Calm comes from commanding your own attention.",
+];
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -18,6 +32,8 @@ export function FocusSanctuaryTools({ darkSurface = true }: { darkSurface?: bool
   const [breathingOpen, setBreathingOpen] = useState(false);
   const [scratchText, setScratchText] = useState("");
   const [breathPhase, setBreathPhase] = useState<0 | 1 | 2>(0); // 0=Inhale, 1=Hold, 2=Exhale
+  const [mantraIdx, setMantraIdx] = useState(0);
+  const [showMantra, setShowMantra] = useState(true);
 
   const todayKey = `focusgate:scratchpad:${new Date().toISOString().slice(0, 10)}`;
 
@@ -185,6 +201,38 @@ export function FocusSanctuaryTools({ darkSurface = true }: { darkSurface?: bool
             <span className="relative size-10 rounded-full border border-emerald-300/60 bg-emerald-500/30" />
           </div>
           <p className="text-[12.5px] font-medium text-emerald-200">{phaseLabel}</p>
+        </div>
+      ) : null}
+
+      {showMantra ? (
+        <div
+          className={cn(
+            "flex max-w-lg items-center gap-2 rounded-full border px-3.5 py-1 text-[11px]",
+            darkSurface
+              ? "border-white/10 bg-white/5 text-white/70"
+              : "border-line bg-surface-2/60 text-muted",
+          )}
+        >
+          <Quote className="size-3 shrink-0 text-accent" />
+          <span className="truncate italic">
+            {(isVi ? MANTRAS_VI : MANTRAS_EN)[mantraIdx % MANTRAS_VI.length]}
+          </span>
+          <button
+            type="button"
+            onClick={() => setMantraIdx((i) => (i + 1) % MANTRAS_VI.length)}
+            title={isVi ? "Đổi câu khác" : "Next mantra"}
+            className="shrink-0 opacity-70 hover:opacity-100"
+          >
+            <RefreshCw className="size-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowMantra(false)}
+            title={isVi ? "Ẩn" : "Hide"}
+            className="shrink-0 opacity-70 hover:opacity-100"
+          >
+            <X className="size-3" />
+          </button>
         </div>
       ) : null}
     </div>

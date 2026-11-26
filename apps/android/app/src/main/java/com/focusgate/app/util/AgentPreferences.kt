@@ -265,4 +265,11 @@ object AgentPreferences {
         }
         prefs(context).edit().putString("app_theme_preset", normalized).apply()
     }
+
+    fun getWidgetTasksPreview(context: Context): String =
+        prefs(context).getString("widget_tasks_preview", "") ?: ""
+
+    fun setWidgetTasksPreview(context: Context, text: String) {
+        prefs(context).edit().putString("widget_tasks_preview", text).apply()
+    }
 }
