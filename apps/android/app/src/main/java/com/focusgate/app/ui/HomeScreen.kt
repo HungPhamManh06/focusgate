@@ -36,6 +36,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Switch
@@ -95,6 +96,7 @@ import com.focusgate.app.util.AppUpdateInfo
 import com.focusgate.app.util.AppUpdater
 import com.focusgate.app.util.EmergencyAccess
 import com.focusgate.app.util.FocusSoundscapePlayer
+import com.focusgate.app.util.Notifications
 import com.focusgate.app.util.SoundscapeMode
 import com.focusgate.app.util.PermissionChecks
 import com.focusgate.app.util.PlanSyncManager
@@ -672,8 +674,9 @@ fun HomeScreen(
     }
 
     if (showQuickStatsSheet) {
-        val doneCount = todayTasks.count { it.completed }
-        val totalCount = todayTasks.size
+        val planTasksList = planSnapshot?.plan?.tasks.orEmpty()
+        val doneCount = planTasksList.count { it.status == "completed" }
+        val totalCount = planTasksList.size
         val dayLabels = if (isVi) listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN") else listOf("M", "T", "W", "T", "F", "S", "S")
         val weeklyBars = dayLabels.mapIndexed { idx, label ->
             val v = if (idx == dayLabels.lastIndex) (doneCount * 20).coerceAtLeast(10) else ((idx + 2) * 18) % 95 + 15
