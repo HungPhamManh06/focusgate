@@ -30,6 +30,11 @@ private val CrimsonLightColors = lightColorScheme(
     onSurface = Color(0xFF181213),
     surfaceVariant = Color(0xFFF1E9E9),
     onSurfaceVariant = Color(0xFF625355),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFFAF6F6),
+    surfaceContainer = Color(0xFFF3ECEC),
+    surfaceContainerHigh = Color(0xFFEEE5E5),
+    surfaceContainerHighest = Color(0xFFEBE1E1),
     outline = Color(0xFFE8DEDE),
 )
 
@@ -49,6 +54,11 @@ private val EspressoDarkColors = darkColorScheme(
     onSurface = Color(0xFFF5EEEE),
     surfaceVariant = Color(0xFF241A1C),
     onSurfaceVariant = Color(0xFFB4A3A6),
+    surfaceContainerLowest = Color(0xFF0C0809),
+    surfaceContainerLow = Color(0xFF171012),
+    surfaceContainer = Color(0xFF1E1517),
+    surfaceContainerHigh = Color(0xFF251B1D),
+    surfaceContainerHighest = Color(0xFF2C2023),
     outline = Color(0xFF352629),
 )
 
@@ -68,6 +78,11 @@ private val KyotoMatchaColors = lightColorScheme(
     onSurface = Color(0xFF1C241D),
     surfaceVariant = Color(0xFFEBECE2),
     onSurfaceVariant = Color(0xFF58665A),
+    surfaceContainerLowest = Color(0xFFFCFBF7),
+    surfaceContainerLow = Color(0xFFF5F4ED),
+    surfaceContainer = Color(0xFFEFEEE5),
+    surfaceContainerHigh = Color(0xFFE9E9DF),
+    surfaceContainerHighest = Color(0xFFE4E6DA),
     outline = Color(0xFFDCE0D5),
 )
 
@@ -87,6 +102,11 @@ private val NordicSlateColors = darkColorScheme(
     onSurface = Color(0xFFF1F5F9),
     surfaceVariant = Color(0xFF1A2540),
     onSurfaceVariant = Color(0xFF94A3B8),
+    surfaceContainerLowest = Color(0xFF080D19),
+    surfaceContainerLow = Color(0xFF10182A),
+    surfaceContainer = Color(0xFF162036),
+    surfaceContainerHigh = Color(0xFF1C2843),
+    surfaceContainerHighest = Color(0xFF223050),
     outline = Color(0xFF273452),
 )
 

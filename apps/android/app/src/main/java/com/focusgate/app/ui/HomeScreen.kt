@@ -1257,7 +1257,7 @@ fun HomeScreen(
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                                                     .padding(vertical = 6.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
