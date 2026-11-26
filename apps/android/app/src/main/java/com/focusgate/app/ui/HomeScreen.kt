@@ -670,6 +670,16 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    TextButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            val order = listOf("crimson", "espresso", "matcha", "nordic")
+                            val next = order[(order.indexOf(themePreset) + 1) % order.size]
+                            onThemePresetChange(next)
+                        },
+                    ) {
+                        Text(tr("Theme", "Màu"))
+                    }
                     TextButton(onClick = onOpenSetup) { Text(tr("Setup", "Thiết lập")) }
                 },
             )
@@ -1181,6 +1191,27 @@ fun HomeScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                     Spacer(Modifier.height(8.dp))
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.padding(bottom = 8.dp),
+                                    ) {
+                                        val quickSuggestions = listOf(
+                                            tr("Meditate 10m", "Thiền 10p"),
+                                            tr("Read 20m", "Đọc sách 20p"),
+                                            tr("Exercise 30m", "Tập thể dục 30p"),
+                                        )
+                                        items(quickSuggestions) { title ->
+                                            FilterChip(
+                                                selected = false,
+                                                onClick = {
+                                                    newTaskTitle = title
+                                                    newTaskKind = "must_do"
+                                                    showAddTaskDialog = true
+                                                },
+                                                label = { Text("+ $title") },
+                                            )
+                                        }
+                                    }
                                     Button(
                                         enabled = !planSyncBusy,
                                         onClick = {
@@ -1254,6 +1285,27 @@ fun HomeScreen(
                                         }
                                     }
                                     Spacer(Modifier.height(8.dp))
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.padding(bottom = 8.dp),
+                                    ) {
+                                        val quickSuggestions = listOf(
+                                            tr("Meditate 10m", "Thiền 10p"),
+                                            tr("Read 20m", "Đọc sách 20p"),
+                                            tr("Exercise 30m", "Tập thể dục 30p"),
+                                        )
+                                        items(quickSuggestions) { title ->
+                                            FilterChip(
+                                                selected = false,
+                                                onClick = {
+                                                    newTaskTitle = title
+                                                    newTaskKind = "must_do"
+                                                    showAddTaskDialog = true
+                                                },
+                                                label = { Text("+ $title") },
+                                            )
+                                        }
+                                    }
                                     Button(
                                         enabled = !planSyncBusy,
                                         onClick = {

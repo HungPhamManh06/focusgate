@@ -6,12 +6,14 @@ import { DashboardActivityTabs } from "@/components/domain/dashboard-activity-ta
 import { DayTimelineRibbon } from "@/components/domain/day-timeline-ribbon";
 import { EnergyCheckinPill } from "@/components/domain/energy-checkin-pill";
 import { EveningWrapupTrigger } from "@/components/domain/evening-wrapup-modal";
+import { GettingStartedStrip } from "@/components/domain/getting-started-strip";
 import { LiveGreetingHeader } from "@/components/domain/live-greeting-header";
 import { MorningRitualBanner } from "@/components/domain/morning-ritual-banner";
 import { NextMoveCard } from "@/components/domain/next-move-card";
 import { OneThingSpotlight } from "@/components/domain/one-thing-spotlight";
 import { OnboardingTourModal } from "@/components/domain/onboarding-tour-modal";
 import { RewardWalletCard } from "@/components/domain/reward-wallet-card";
+import { TodaysWinsStrip } from "@/components/domain/todays-wins-strip";
 import { WeeklyPeekStrip } from "@/components/domain/weekly-peek-strip";
 import { getNextMoveCandidate, getUpcomingTasks } from "@/lib/data/dashboard";
 import { formatMinutes, greeting, todayIso } from "@/lib/data/format";
@@ -172,7 +174,16 @@ export default async function DashboardPage() {
       </div>
 
       {/* 2. Live Focus Banner & Day-Progress Timeline Ribbon (08:00 -> 22:00) */}
+      <GettingStartedStrip
+        hasTasks={counts.total > 0}
+        hasPlan={Boolean(plan)}
+        hasSessions={sessions.length > 0 || focus.minutes > 0}
+      />
       {!plan ? <MorningRitualBanner suggestedTasks={upcomingRaw} /> : null}
+      <TodaysWinsStrip
+        completedTitles={(plan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).map((t) => t.title)}
+        locale={locale}
+      />
       <section className="mt-5">
         <DayTimelineRibbon
           schedules={schedules}

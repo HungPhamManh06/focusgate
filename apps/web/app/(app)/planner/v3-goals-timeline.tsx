@@ -300,9 +300,28 @@ export function V3GoalsTimeline({
                               )}
                             >
                               <span className="truncate max-w-[190px]">{item.title}</span>
-                              <span className="font-mono text-[10px] text-muted">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!item.scheduledStart) return;
+                                  const [sh = 8, sm = 0] = item.scheduledStart.split(":").map(Number);
+                                  const [eh = sh + 1, em = 0] = (item.scheduledEnd || addMinutesToTime(item.scheduledStart, 60)).split(":").map(Number);
+                                  const curDur = Math.max(30, eh * 60 + em - (sh * 60 + sm));
+                                  const nextDur = curDur < 60 ? 60 : curDur < 90 ? 90 : 30;
+                                  const nextEnd = addMinutesToTime(item.scheduledStart, nextDur);
+                                  startTransition(async () => {
+                                    await setPlanTaskScheduleAction({
+                                      planTaskId: item.planTaskId,
+                                      start: item.scheduledStart!,
+                                      end: nextEnd,
+                                    });
+                                  });
+                                }}
+                                title={isVi ? "Bấm để đổi độ dài (30→60→90p)" : "Click to resize block (30→60→90m)"}
+                                className="rounded px-1 font-mono text-[10px] text-muted hover:bg-surface-2 hover:text-accent"
+                              >
                                 {item.scheduledStart}–{item.scheduledEnd ?? ""}
-                              </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => clearSchedule(item.planTaskId)}

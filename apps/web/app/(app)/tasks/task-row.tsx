@@ -54,6 +54,10 @@ export function TaskRow({
   const toast = useToast();
   const rowStatus = formatTaskRowStatus(task, timezone, locale);
   const { completed } = rowStatus;
+  const ageDays = Math.floor(
+    (Date.now() - new Date(task.createdAt).getTime()) / 86_400_000,
+  );
+  const isStale = !completed && Number.isFinite(ageDays) && ageDays >= 7;
   const needsFocusInActivePlan =
     planStatus === "active" &&
     planTask !== null &&
@@ -197,6 +201,11 @@ export function TaskRow({
             </Badge>
           ) : null}
           {task.isDailyHabit ? <HabitStreakStrip completedToday={completed} /> : null}
+          {isStale ? (
+            <Badge tone="neutral">
+              {isVi ? `Mở ${ageDays} ngày` : `Open ${ageDays}d`}
+            </Badge>
+          ) : null}
         </div>
 
         {task.description ? (

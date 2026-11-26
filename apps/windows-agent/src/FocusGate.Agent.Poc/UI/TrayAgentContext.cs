@@ -61,6 +61,11 @@ public sealed class TrayAgentContext : ApplicationContext
         _policyItem = new ToolStripMenuItem("Policy: Not pulled yet") { Enabled = false };
 
         _openAppItem = new ToolStripMenuItem("Open FocusGate App", null, (_, _) => ShowDesktopWindow());
+        var openFocusStudioItem = new ToolStripMenuItem("Open Focus Studio (Web)", null, (_, _) =>
+        {
+            var baseUrl = string.IsNullOrWhiteSpace(_options.ApiBaseUrl) ? "https://focusgate-blue.vercel.app" : _options.ApiBaseUrl.TrimEnd('/');
+            try { Process.Start(new ProcessStartInfo($"{baseUrl}/focus") { UseShellExecute = true }); } catch { }
+        });
         _syncNowItem = new ToolStripMenuItem("Sync policy now", null, async (_, _) => await SyncPolicyAsync());
         _unlockPassItem = new ToolStripMenuItem("Use 10m Earned Time Pass", null, async (_, _) => await UseUnlockPassAsync());
         _startupItem = new ToolStripMenuItem("Auto-start with Windows")
@@ -84,6 +89,7 @@ public sealed class TrayAgentContext : ApplicationContext
             _policyItem,
             new ToolStripSeparator(),
             _openAppItem,
+            openFocusStudioItem,
             _syncNowItem,
             _unlockPassItem,
             _startupItem,

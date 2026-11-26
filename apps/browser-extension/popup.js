@@ -156,3 +156,8 @@ document.getElementById("signOutBtn").addEventListener("click", async () => {
 });
 
 render();
+
+document.getElementById("focusBtn")?.addEventListener("click", async () => {
+  const { apiBaseUrl } = await chrome.storage.local.get(["apiBaseUrl"]);
+  chrome.tabs.create({ url: `${apiBaseUrl || DEFAULT_API_BASE_URL}/focus` });
+});

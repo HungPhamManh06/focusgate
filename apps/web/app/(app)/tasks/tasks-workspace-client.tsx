@@ -60,6 +60,7 @@ export function TasksWorkspaceClient({
   const toast = useToast();
   const [layout, setLayout] = useState<"list" | "board" | "matrix">("list");
   const [smartFilter, setSmartFilter] = useState<"all" | "habit" | "due" | "high">("all");
+  const [hideCompleted, setHideCompleted] = useState(false);
   const [sortBy, setSortBy] = useState<"default" | "priority" | "shortest" | "due">("default");
   const [customOrder, setCustomOrder] = useState<string[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -96,6 +97,7 @@ export function TasksWorkspaceClient({
   const planTaskByTaskId = new Map<string, PlanTask>(planTasks.map((pt) => [pt.taskId, pt]));
 
   const filteredTasks = tasks.filter((t) => {
+    if (hideCompleted && t.status === "completed") return false;
     if (smartFilter === "habit") return Boolean(t.isDailyHabit);
     if (smartFilter === "due") return Boolean(t.dueDate);
     if (smartFilter === "high") return t.priority === "urgent" || t.priority === "high";
@@ -250,6 +252,27 @@ export function TasksWorkspaceClient({
             <option value="shortest">{isVi ? "Ngắn nhất trước" : "Shortest first"}</option>
             <option value="due">{isVi ? "Hạn gần nhất" : "Soonest due"}</option>
           </select>
+
+          {tasks.some((t) => t.status === "completed") ? (
+            <button
+              type="button"
+              onClick={() => setHideCompleted((v) => !v)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-[11.5px] font-medium transition-colors",
+                hideCompleted
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-line bg-surface text-muted hover:text-ink",
+              )}
+            >
+              {hideCompleted
+                ? isVi
+                  ? "Hiện việc đã xong"
+                  : "Show done"
+                : isVi
+                  ? "Ẩn việc đã xong"
+                  : "Hide done"}
+            </button>
+          ) : null}
 
           <button
             type="button"

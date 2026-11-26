@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import {
   ArrowUpRight,
   Laptop,
+  Lock,
+  LockOpen,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -34,12 +36,16 @@ export function Sidebar({
   walletError = false,
   authEmail = null,
   language = "en",
+  gateUnlocked = false,
+  mustDoRemaining = 0,
 }: {
   displayName: string;
   availableMinutes: number | null;
   walletError?: boolean;
   authEmail?: string | null;
   language?: "en" | "vi";
+  gateUnlocked?: boolean;
+  mustDoRemaining?: number;
 }) {
   const pathname = usePathname();
   const hasAvailableTime = isSidebarWalletActive(availableMinutes);
@@ -145,6 +151,33 @@ export function Sidebar({
             </kbd>
           </button>
         )}
+
+        {!collapsed ? (
+          <Link
+            href="/planner"
+            className={cn(
+              "mt-2.5 flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition-colors",
+              gateUnlocked
+                ? "border-success/35 bg-success-soft/60 text-success"
+                : "border-accent/25 bg-accent-soft/60 text-accent",
+            )}
+          >
+            {gateUnlocked ? <LockOpen className="size-3.5 shrink-0" /> : <Lock className="size-3.5 shrink-0" />}
+            <span className="truncate">
+              {gateUnlocked
+                ? isVi
+                  ? "Cổng hôm nay đã mở"
+                  : "Gate unlocked today"
+                : mustDoRemaining > 0
+                  ? isVi
+                    ? `Còn ${mustDoRemaining} việc Bắt buộc`
+                    : `${mustDoRemaining} Must-Do left`
+                  : isVi
+                    ? "Chưa lập Cổng hôm nay"
+                    : "Build today's gate"}
+            </span>
+          </Link>
+        ) : null}
       </div>
 
       <nav aria-label="Primary" className="flex-1 overflow-y-auto px-3">

@@ -41,6 +41,7 @@ import {
   findReadyToCompletePlanTasks,
   resolveInitialFocusTaskId,
 } from "@/lib/domain/tasks-planner-state";
+import { BreakTimerCard } from "./break-timer-card";
 import { FocusQueueCard } from "./focus-queue-card";
 import { FocusStarter } from "./focus-starter";
 import { FocusTimer } from "./focus-timer";
@@ -509,6 +510,7 @@ export default async function FocusPage({
         )}
       </section>
 
+      <BreakTimerCard />
       <FocusQueueCard />
       <SessionNotesCard items={focusNotes} />
     </div>

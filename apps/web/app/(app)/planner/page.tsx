@@ -45,6 +45,7 @@ import { DeadlineMiniCalendar } from "./deadline-mini-calendar";
 import { PlanTaskRow } from "./plan-task-row";
 import { PlannerTabsShell } from "./planner-tabs-shell";
 import { TemplatesRoutinesCard } from "./templates-routines-card";
+import { TomorrowPreviewCard } from "./tomorrow-preview-card";
 import { V2PlannerTools } from "./v2-planner-tools";
 import { V3GoalsTimeline } from "./v3-goals-timeline";
 
@@ -643,6 +644,11 @@ export default async function PlannerPage() {
                 dueDate: t.dueDate,
                 kind: t.kind,
               }))}
+            />
+            <TomorrowPreviewCard
+              tasks={backlog}
+              tomorrowDate={new Date(new Date(`${today}T12:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10)}
+              locale={locale}
             />
           </>
         }

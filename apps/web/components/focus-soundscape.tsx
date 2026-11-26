@@ -90,6 +90,7 @@ export function FocusSoundscape({
   const [volume, setVolume] = useState(0.28);
   const [layer2, setLayer2] = useState<"off" | "rain" | "fireplace" | "cafe">("off");
   const [layer2Volume, setLayer2Volume] = useState(0.22);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const ctxRef = useRef<AudioContext | null>(null);
   const gainRef = useRef<GainNode | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -106,6 +107,8 @@ export function FocusSoundscape({
       if (savedPreset && savedPreset !== "off" && SOUNDSCAPE_PRESETS.some((p) => p.id === savedPreset)) {
         setLastPreset(savedPreset);
       }
+      const savedFavs = JSON.parse(window.localStorage.getItem("focusgate:sound-favs") || "[]") as string[];
+      if (Array.isArray(savedFavs)) setFavorites(savedFavs);
     } catch {
       // Ignore storage errors in restricted environments.
     }
@@ -677,24 +680,57 @@ export function FocusSoundscape({
       </div>
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">
-        {SOUNDSCAPE_PRESETS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => {
-              if (item.id === "off") stopAllAudio();
-              setPreset(item.id);
-            }}
-            className={cn(
-              "rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
-              preset === item.id
-                ? "border-accent bg-accent text-white"
-                : "border-line bg-surface text-muted hover:text-ink",
-            )}
-          >
-            {isVi ? item.labelVi : item.label}
-          </button>
-        ))}
+        {[...SOUNDSCAPE_PRESETS]
+          .sort((a, b) => {
+            if (a.id === "off") return -1;
+            if (b.id === "off") return 1;
+            const fa = favorites.includes(a.id) ? 0 : 1;
+            const fb = favorites.includes(b.id) ? 0 : 1;
+            return fa - fb;
+          })
+          .map((item) => {
+            const isFav = favorites.includes(item.id);
+            return (
+              <div key={item.id} className="inline-flex items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (item.id === "off") stopAllAudio();
+                    setPreset(item.id);
+                  }}
+                  onContextMenu={(e) => {
+                    if (item.id === "off") return;
+                    e.preventDefault();
+                    const next = isFav
+                      ? favorites.filter((f) => f !== item.id)
+                      : [...favorites, item.id];
+                    setFavorites(next);
+                    try {
+                      window.localStorage.setItem("focusgate:sound-favs", JSON.stringify(next));
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  title={
+                    item.id === "off"
+                      ? undefined
+                      : isVi
+                        ? "Chuột phải để ghim yêu thích ★"
+                        : "Right-click to pin favorite ★"
+                  }
+                  className={cn(
+                    "rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                    preset === item.id
+                      ? "border-accent bg-accent text-white"
+                      : "border-line bg-surface text-muted hover:text-ink",
+                  )}
+                >
+                  {isFav ? "★ " : ""}
+                  {isVi ? item.labelVi : item.label}
+                </button>
+              </div>
+            );
+          })}
       </div>
 
       <p className="mt-2 text-[11px] text-muted">

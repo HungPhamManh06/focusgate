@@ -34,6 +34,7 @@ import { EarnedTimeCard } from "./earned-time-card";
 import { QuickRedeemVault } from "./quick-redeem-vault";
 import { RewardWishlistCard } from "./reward-wishlist-card";
 import { SpendForm } from "./spend-form";
+import { WalletInsightsStrip } from "./wallet-insights-strip";
 
 export const dynamic = "force-dynamic";
 
@@ -123,6 +124,11 @@ export default async function WalletPage() {
       />
 
       <RewardWishlistCard availableMinutes={wallet.availableMinutes} />
+      <WalletInsightsStrip
+        streakFreezeCount={v2.streakFreezeCount}
+        ledger={wallet.ledger}
+        locale={locale}
+      />
 
       {plan?.status === "completed" ? (
         <div className="mt-7 flex flex-col gap-3 rounded-[18px] border border-accent/25 bg-accent-soft/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">

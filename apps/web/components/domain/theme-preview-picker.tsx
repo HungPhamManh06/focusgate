@@ -84,6 +84,7 @@ export function ThemePreviewPicker() {
   const [radius, setRadius] = useState<"soft" | "sharp">("soft");
   const [texture, setTexture] = useState<"plain" | "dots" | "paper">("plain");
   const [autoSunset, setAutoSunset] = useState(false);
+  const [highContrast, setHighContrast] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("focusgate-preset") as VisualPreset | null;
@@ -106,7 +107,22 @@ export function ThemePreviewPicker() {
     const savedTex = window.localStorage.getItem("focusgate-texture");
     if (savedTex === "dots" || savedTex === "paper") setTexture(savedTex);
     if (window.localStorage.getItem("focusgate-auto-sunset") === "1") setAutoSunset(true);
+    if (window.localStorage.getItem("focusgate-contrast") === "high") setHighContrast(true);
   }, []);
+
+  const toggleHighContrast = () => {
+    setHighContrast((prev) => {
+      const next = !prev;
+      if (next) document.documentElement.setAttribute("data-contrast", "high");
+      else document.documentElement.removeAttribute("data-contrast");
+      try {
+        window.localStorage.setItem("focusgate-contrast", next ? "high" : "normal");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   const applyTexture = (next: "plain" | "dots" | "paper") => {
     setTexture(next);
@@ -415,6 +431,24 @@ export function ThemePreviewPicker() {
               )}
             >
               {autoSunset ? (isVi ? "Đang bật" : "On") : isVi ? "Đang tắt" : "Off"}
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 sm:col-span-2">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+              <Type className="size-3.5 text-accent" />
+              <span>{isVi ? "Chế độ Tương phản cao (Dễ đọc)" : "High-Contrast Reading Mode"}</span>
+            </div>
+            <button
+              type="button"
+              onClick={toggleHighContrast}
+              className={cn(
+                "rounded-full border px-3 py-0.5 text-[11px] font-semibold transition-colors",
+                highContrast
+                  ? "border-accent bg-accent text-white"
+                  : "border-line bg-surface text-muted hover:text-ink",
+              )}
+            >
+              {highContrast ? (isVi ? "Đang bật" : "On") : isVi ? "Đang tắt" : "Off"}
             </button>
           </div>
         </div>

@@ -1,9 +1,9 @@
 "use client";
 
-import { Calendar, Check, Clock, Plus, Repeat, Save, Trash2, X } from "lucide-react";
-import { useActionState, useEffect, useState } from "react";
-import { updateTaskAction } from "@/lib/actions/tasks";
-import type { ActionState } from "@/lib/actions/types";
+import { Calendar, Check, Clock, Copy, Plus, Repeat, Save, Trash2, X } from "lucide-react";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { createTaskAction, updateTaskAction } from "@/lib/actions/tasks";
+import { EMPTY_ACTION_STATE, type ActionState } from "@/lib/actions/types";
 import type { Task } from "@/lib/data/types";
 import { useLocale } from "@/components/i18n/language-provider";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ export function TaskInspectorDrawer({
   const isVi = useLocale() === "vi";
   const toast = useToast();
   const [state, formAction, pending] = useActionState(updateTaskAction, initialState);
+  const [dupPending, startDupTransition] = useTransition();
   const [subtasks, setSubtasks] = useState<Array<{ id: string; text: string; done: boolean }>>([]);
   const [newSubtask, setNewSubtask] = useState("");
   const subKey = `focusgate:subtasks:${task.id}`;
@@ -288,14 +289,45 @@ export function TaskInspectorDrawer({
             </div>
           </div>
 
-          <div className="mt-auto flex items-center justify-end gap-2 border-t border-line pt-4">
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              {isVi ? "Hủy" : "Cancel"}
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-line pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={dupPending}
+              onClick={() => {
+                startDupTransition(async () => {
+                  const fd = new FormData();
+                  fd.set("title", `${task.title} (${isVi ? "bản sao" : "copy"})`);
+                  fd.set("description", task.description ?? "");
+                  fd.set("category", task.category);
+                  fd.set("kind", task.kind);
+                  fd.set("priority", task.priority);
+                  fd.set("estimatedMinutes", String(task.estimatedMinutes));
+                  fd.set("requiredFocusMinutes", String(task.requiredFocusMinutes));
+                  fd.set("dueDate", dueDateValue);
+                  if (task.isDailyHabit) fd.set("isDailyHabit", "on");
+                  const res = await createTaskAction(EMPTY_ACTION_STATE, fd);
+                  if (res.error) toast.push("error", res.error);
+                  else {
+                    toast.push("success", isVi ? "Đã nhân bản nhiệm vụ." : "Task duplicated.");
+                    onClose();
+                  }
+                });
+              }}
+            >
+              <Copy className="size-3.5" />
+              {isVi ? "Nhân bản" : "Duplicate"}
             </Button>
-            <Button type="submit" variant="accent" size="sm" disabled={pending}>
-              <Save className="size-3.5" />
-              {pending ? (isVi ? "Đang lưu…" : "Saving…") : isVi ? "Lưu thay đổi" : "Save changes"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+                {isVi ? "Hủy" : "Cancel"}
+              </Button>
+              <Button type="submit" variant="accent" size="sm" disabled={pending}>
+                <Save className="size-3.5" />
+                {pending ? (isVi ? "Đang lưu…" : "Saving…") : isVi ? "Lưu thay đổi" : "Save changes"}
+              </Button>
+            </div>
           </div>
         </form>
       </div>

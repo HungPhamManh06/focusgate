@@ -39,6 +39,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const planTotal = todayPlan?.tasks.length ?? 0;
   const planDone = (todayPlan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).length;
   const topProgressPct = planTotal > 0 ? Math.round((planDone / planTotal) * 100) : 0;
+  const mustDoRemaining = (todayPlan?.tasks ?? []).filter(
+    (t) => t.kind === "must_do" && !t.completedAt,
+  ).length;
+  const gateUnlocked = Boolean(todayPlan && (todayPlan.status === "completed" || mustDoRemaining === 0));
 
   if (!workspaceResult.ok) {
     if (workspaceResult.message.toLowerCase().includes("unauthorized")) {
@@ -74,6 +78,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           walletError={walletSummaryResult.error}
           authEmail={authUser?.email ?? null}
           language={v2Settings?.language ?? "en"}
+          gateUnlocked={gateUnlocked}
+          mustDoRemaining={mustDoRemaining}
         />
 
         <div className="flex min-h-screen min-w-0 flex-col">
