@@ -27,7 +27,7 @@ export function MobileQuickFab() {
       fd.set("kind", kind);
       fd.set("priority", kind === "must_do" ? "high" : "medium");
       fd.set("estimatedMinutes", "25");
-      fd.set("requiredFocusMinutes", "20");
+      fd.set("requiredFocusMinutes", "0");
       fd.set("dueDate", "");
       const res = await createTaskAction(EMPTY_ACTION_STATE, fd);
       if (res.error) {
@@ -46,7 +46,7 @@ export function MobileQuickFab() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={isVi ? "Thêm nhanh nhiệm vụ" : "Quick add task"}
-        className="fixed bottom-20 left-4 z-40 flex size-12 items-center justify-center rounded-full bg-accent text-white shadow-lift transition-transform active:scale-95"
+        className="fixed bottom-24 left-4 z-40 flex size-11 items-center justify-center rounded-full bg-accent text-white shadow-lift transition-transform active:scale-95"
       >
         <Plus className="size-5" strokeWidth={2.4} />
       </button>

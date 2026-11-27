@@ -31,6 +31,7 @@ import { getWallet } from "@/lib/data/rewards";
 import { getWorkspace } from "@/lib/data/workspace";
 import { getV2Settings } from "@/lib/data/v2-settings";
 import { DistractionCostCalculator } from "./distraction-cost-calculator";
+import { DisciplineCurrencyCard } from "./discipline-currency-card";
 import { EarnedTimeCard } from "./earned-time-card";
 import { FocusBalanceScale } from "./focus-balance-scale";
 import { QuickRedeemVault } from "./quick-redeem-vault";
@@ -116,6 +117,14 @@ export default async function WalletPage() {
             </Link>
           </>
         }
+      />
+
+      <DisciplineCurrencyCard
+        availableMinutes={wallet.availableMinutes}
+        earnedMinutes={wallet.earnedMinutes}
+        consumedMinutes={wallet.consumedMinutes}
+        displayName={workspace.profile.displayName}
+        locale={locale}
       />
 
       <DistractionCostCalculator availableMinutes={wallet.availableMinutes} />

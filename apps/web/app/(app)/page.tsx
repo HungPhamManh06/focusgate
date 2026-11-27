@@ -4,6 +4,7 @@ import { AiCoachCard } from "@/components/domain/ai-coach-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
 import { DashboardActivityTabs } from "@/components/domain/dashboard-activity-tabs";
 import { DashboardBentoCustomizer } from "@/components/domain/dashboard-bento-customizer";
+import { DayPulseTabs } from "@/components/domain/day-pulse-tabs";
 import { AnimatedMinutes } from "@/components/ui/animated-counter";
 import { ZenViewToggle } from "@/components/shell/zen-view-toggle";
 import { DayTimelineRibbon } from "@/components/domain/day-timeline-ribbon";
@@ -204,54 +205,18 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* 2. Live Focus Banner & Day-Progress Timeline Ribbon (08:00 -> 22:00) */}
-      <div data-zen-hide="true">
+      {/* 2. Above-the-Fold Hero Bento Stage — Living Gate Mission (~66%) + Wallet & Next Move (~34%) */}
       <GettingStartedStrip
         hasTasks={counts.total > 0}
         hasPlan={Boolean(plan)}
         hasSessions={sessions.length > 0 || focus.minutes > 0}
       />
-      <MottoCarouselStrip />
       {!plan ? (
         <div data-bento-id="ritual">
           <MorningRitualBanner suggestedTasks={upcomingRaw} />
         </div>
       ) : null}
-      <div data-bento-id="wins">
-        <TodaysWinsStrip
-          completedTitles={(plan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).map((t) => t.title)}
-          locale={locale}
-        />
-      </div>
-      <FocusFootprintBar
-        sessions={sessions.map((s) => ({
-          id: s.id,
-          startedAt: s.startedAt,
-          creditedMinutes: s.creditedMinutes,
-          isValid: s.isValid,
-          taskTitle: s.taskTitle,
-        }))}
-        totalMinutes={focus.minutes}
-      />
-      <section className="mt-5">
-        <div data-bento-id="timeline">
-          <DayTimelineRibbon
-            schedules={schedules}
-            busyEvents={busyEvents}
-            activeSession={activeSession}
-            locale={locale}
-          />
-        </div>
-        {weeklyStats ? (
-          <div data-bento-id="weekly">
-            <WeeklyPeekStrip days={weeklyStats.days} locale={locale} />
-          </div>
-        ) : null}
-        <EnergyCheckinPill />
-      </section>
-      </div>
 
-      {/* 3. Hero Bento Stage — Interactive Living Gate Mission (~66%) + Wallet & Next Move (~34%) */}
       <section
         className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1.95fr)_minmax(340px,1fr)]"
         aria-label={isVi ? "Buồng lái tập trung hôm nay" : "Today's focus cockpit"}
@@ -278,6 +243,52 @@ export default async function DashboardPage() {
           />
         </div>
       </section>
+
+      {/* 3. Unified Tabbed Day Pulse Bento (Timeline · Focus Footprint · 7-Day Peek · Wins & Energy) */}
+      <DayPulseTabs
+        locale={locale}
+        timelineSlot={
+          <div data-bento-id="timeline">
+            <DayTimelineRibbon
+              schedules={schedules}
+              busyEvents={busyEvents}
+              activeSession={activeSession}
+              locale={locale}
+            />
+          </div>
+        }
+        footprintSlot={
+          <FocusFootprintBar
+            sessions={sessions.map((s) => ({
+              id: s.id,
+              startedAt: s.startedAt,
+              creditedMinutes: s.creditedMinutes,
+              isValid: s.isValid,
+              taskTitle: s.taskTitle,
+            }))}
+            totalMinutes={focus.minutes}
+          />
+        }
+        weeklySlot={
+          weeklyStats ? (
+            <div data-bento-id="weekly">
+              <WeeklyPeekStrip days={weeklyStats.days} locale={locale} />
+            </div>
+          ) : null
+        }
+        energySlot={
+          <div className="space-y-3">
+            <div data-bento-id="wins">
+              <TodaysWinsStrip
+                completedTitles={(plan?.tasks ?? []).filter((t) => Boolean(t.completedAt)).map((t) => t.title)}
+                locale={locale}
+              />
+            </div>
+            <EnergyCheckinPill />
+            <MottoCarouselStrip />
+          </div>
+        }
+      />
 
       {/* 4. Compact 2-Column Bottom Row — Tabbed Activity (Due Soon / Sessions) + AI Focus Coach */}
       <section

@@ -18,6 +18,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { getCategoryLabel } from "@/components/domain/labels";
 import { AnalyticsStudioCharts } from "@/components/domain/analytics-studio-charts";
 import { CircadianFocusHeatmap } from "@/components/domain/circadian-focus-heatmap";
+import { DisciplineScoreRing } from "@/components/domain/discipline-score-ring";
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { FocusGardenAndLetter } from "@/components/domain/focus-garden-letter";
 import { MonthlyTargetAndTriggers } from "@/components/domain/monthly-target-triggers";
@@ -122,6 +123,14 @@ export default async function StatisticsPage({
           </Link>
         ))}
       </div>
+
+      <DisciplineScoreRing
+        activeDays={activeDays}
+        periodDays={stats.periodDays}
+        focusMinutes={stats.focusMinutes}
+        completionRate={stats.completionRate}
+        locale={locale}
+      />
 
       <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

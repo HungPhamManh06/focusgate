@@ -120,7 +120,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </div>
           </header>
 
-          <main id="main-content" tabIndex={-1} className="flex-1 pb-24 focus:outline-none lg:pb-0">
+          <main id="main-content" tabIndex={-1} className="flex-1 pb-32 focus:outline-none lg:pb-8">
             {children}
           </main>
           <TopProgressBar percent={topProgressPct} />
