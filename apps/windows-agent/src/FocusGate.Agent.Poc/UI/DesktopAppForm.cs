@@ -25,6 +25,7 @@ public sealed class DesktopAppForm : Form
     private readonly Func<Task> _onSyncNow;
     private readonly Func<Task>? _onCheckUpdate;
     private readonly Action<EnforcementAction?> _onEnforcementChanged;
+    private readonly Action? _onMinimizedToTray;
     private readonly Label _statusLabel;
     private readonly Button _enforceBtn;
     private readonly Button _updateBtn;
@@ -39,13 +40,15 @@ public sealed class DesktopAppForm : Form
         Func<string, string?, Task> onSessionToken,
         Func<Task> onSyncNow,
         Action<EnforcementAction?> onEnforcementChanged,
-        Func<Task>? onCheckUpdate = null)
+        Func<Task>? onCheckUpdate = null,
+        Action? onMinimizedToTray = null)
     {
         _apiBaseUrl = apiBaseUrl.TrimEnd('/');
         _onSessionToken = onSessionToken;
         _onSyncNow = onSyncNow;
         _onCheckUpdate = onCheckUpdate;
         _onEnforcementChanged = onEnforcementChanged;
+        _onMinimizedToTray = onMinimizedToTray;
 
         Text = "FocusGate";
         Width = 1280;
@@ -220,7 +223,11 @@ public sealed class DesktopAppForm : Form
             Cursor = Cursors.Hand,
         };
         hideBtn.FlatAppearance.BorderSize = 0;
-        hideBtn.Click += (_, _) => Hide();
+        hideBtn.Click += (_, _) =>
+        {
+            Hide();
+            _onMinimizedToTray?.Invoke();
+        };
 
         rightPanel.Controls.Add(_updateBtn);
         rightPanel.Controls.Add(_enforceBtn);
@@ -246,6 +253,7 @@ public sealed class DesktopAppForm : Form
             {
                 e.Cancel = true;
                 Hide();
+                _onMinimizedToTray?.Invoke();
             }
         };
     }

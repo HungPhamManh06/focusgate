@@ -128,6 +128,10 @@ public sealed class TrayAgentContext : ApplicationContext
             Visible = true,
         };
         _trayIcon.DoubleClick += (_, _) => ShowDesktopWindow();
+        _trayIcon.MouseClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left) ShowDesktopWindow();
+        };
 
         _syncTimer = new System.Windows.Forms.Timer { Interval = 15_000 };
         _syncTimer.Tick += async (_, _) => await SyncPolicyAsync();
@@ -311,6 +315,16 @@ public sealed class TrayAgentContext : ApplicationContext
             $"FocusGate PC · {_credentials.DeviceName} · {(_lastPolicy is null ? Tr("Syncing...", "Đang đồng bộ...") : _lastPolicy.LockActive ? Tr($"Lock Active ({_lastPolicy.BlockedProcesses.Count} rules)", $"Đang khóa ({_lastPolicy.BlockedProcesses.Count} quy tắc)") : Tr("Unlocked", "Đã mở khóa"))}");
     }
 
+    public void RequestShowFromExternalSignal()
+    {
+        if (_desktopForm is not null && !_desktopForm.IsDisposed && _desktopForm.InvokeRequired)
+        {
+            _desktopForm.BeginInvoke(ShowDesktopWindow);
+            return;
+        }
+        ShowDesktopWindow();
+    }
+
     private void ShowDesktopWindow()
     {
         if (_desktopForm is null || _desktopForm.IsDisposed)
@@ -325,7 +339,17 @@ public sealed class TrayAgentContext : ApplicationContext
                     _enforcementMode = next;
                     if (next is null) HideOverlay();
                 },
-                CheckForUpdatesAsync);
+                CheckForUpdatesAsync,
+                onMinimizedToTray: () =>
+                {
+                    _trayIcon.ShowBalloonTip(
+                        3000,
+                        "FocusGate",
+                        Tr(
+                            "FocusGate is running in the system tray. Click the tray icon to reopen.",
+                            "FocusGate đang chạy nền ở khay hệ thống (góc dưới phải). Bấm vào icon để mở lại."),
+                        ToolTipIcon.Info);
+                });
         }
         _desktopForm.Show();
         if (_desktopForm.WindowState == FormWindowState.Minimized)
@@ -333,6 +357,7 @@ public sealed class TrayAgentContext : ApplicationContext
             _desktopForm.WindowState = FormWindowState.Normal;
         }
         _desktopForm.Activate();
+        _desktopForm.BringToFront();
         UpdateMenuLabels();
         if (_pendingUpdate is not null)
         {

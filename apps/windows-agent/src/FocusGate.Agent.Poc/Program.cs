@@ -137,12 +137,39 @@ internal static class Program
         Application.SetCompatibleTextRenderingDefault(false);
 
         var store = new DpapiCredentialStore();
+        using var singleInstanceMutex = new Mutex(true, @"Local\FocusGate.DesktopAgent.SingleInstance", out var isFirstInstance);
+        using var showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\FocusGate.DesktopAgent.ShowWindow");
+        if (!isFirstInstance)
+        {
+            showSignal.Set();
+            return 0;
+        }
+
         var policyCache = new PolicyCacheStore();
         var usageQueue = new OfflineUsageQueue();
         var logger = new StructuredLogger();
         using var syncClient = new AgentSyncClient();
         using var context = new TrayAgentContext(options, store, policyCache, usageQueue, logger, syncClient, showDesktopWindow);
-        Application.Run(context);
+
+        using var stopWait = new ManualResetEventSlim(false);
+        var waitHandles = new WaitHandle[] { showSignal, stopWait.WaitHandle };
+        var signalThread = new Thread(() =>
+        {
+            while (WaitHandle.WaitAny(waitHandles) == 0)
+            {
+                try { context.RequestShowFromExternalSignal(); } catch { }
+            }
+        }) { IsBackground = true };
+        signalThread.Start();
+
+        try
+        {
+            Application.Run(context);
+        }
+        finally
+        {
+            stopWait.Set();
+        }
         return 0;
     }
 
