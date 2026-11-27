@@ -58,6 +58,17 @@ function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
   return win.SpeechRecognition ?? win.webkitSpeechRecognition ?? null;
 }
 
+function getWebViewBridge(): { postMessage: (msg: string) => void } | null {
+  if (typeof window === "undefined") return null;
+  const win = window as unknown as {
+    chrome?: { webview?: { postMessage?: (msg: string) => void } };
+  };
+  const bridge = win.chrome?.webview;
+  return bridge && typeof bridge.postMessage === "function"
+    ? { postMessage: (msg: string) => bridge.postMessage!(msg) }
+    : null;
+}
+
 const VOICE_TTS_STORAGE_KEY = "focusgate_ai_tts_enabled";
 const VOICE_LANG_STORAGE_KEY = "focusgate_ai_voice_lang";
 const FAB_POS_STORAGE_KEY = "focusgate_ai_fab_pos";
@@ -98,6 +109,10 @@ export function AiAssistantDrawer() {
   ]);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const voiceTypingModeRef = useRef(false);
   const wantListeningRef = useRef(false);
   const fatalVoiceErrorRef = useRef(false);
   const transcriptRef = useRef("");
@@ -121,7 +136,13 @@ export function AiAssistantDrawer() {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setVoiceSupported(Boolean(getSpeechRecognitionCtor()));
+    const hasMediaRecorder =
+      typeof window !== "undefined" &&
+      typeof MediaRecorder !== "undefined" &&
+      Boolean(navigator.mediaDevices?.getUserMedia);
+    setVoiceSupported(
+      Boolean(getWebViewBridge()) || Boolean(getSpeechRecognitionCtor()) || hasMediaRecorder,
+    );
     try {
       const savedTts = window.localStorage.getItem(VOICE_TTS_STORAGE_KEY);
       if (savedTts === "1") setTtsEnabled(true);
@@ -252,9 +273,19 @@ export function AiAssistantDrawer() {
   const stopListening = useCallback(
     (dispatchPending = false) => {
       wantListeningRef.current = false;
+      voiceTypingModeRef.current = false;
       clearVoiceTimers();
       const pendingText = transcriptRef.current.trim();
       transcriptRef.current = "";
+
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          // Ignore recorder stop errors
+        }
+        return;
+      }
 
       if (recognitionRef.current) {
         try {
@@ -275,6 +306,107 @@ export function AiAssistantDrawer() {
     },
     [clearVoiceTimers, sendMessage],
   );
+
+  const startMediaRecorderFallback = useCallback(async () => {
+    if (
+      typeof window === "undefined" ||
+      typeof MediaRecorder === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      setVoiceIsError(true);
+      setVoiceStatus(
+        isVi
+          ? "Trình duyệt không hỗ trợ ghi âm. Trên Windows hãy bấm Win+H trong ô nhập để nói."
+          : "Browser does not support audio recording. On Windows, press Win+H inside the input box.",
+      );
+      inputRef.current?.focus();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) {
+          audioChunksRef.current.push(ev.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        mediaRecorderRef.current = null;
+        mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+        setListening(false);
+
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        audioChunksRef.current = [];
+        if (blob.size < 400) {
+          setVoiceStatus(null);
+          return;
+        }
+
+        setVoiceIsError(false);
+        setVoiceStatus(isVi ? "Đang chuyển giọng nói thành chữ..." : "Transcribing voice...");
+
+        try {
+          const form = new FormData();
+          form.append("audio", blob, "voice.webm");
+          form.append("lang", voiceLang);
+          const res = await fetch("/api/agent/ai/transcribe", { method: "POST", body: form });
+          const data = (await res.json()) as {
+            transcript?: string;
+            error?: string;
+            needsKey?: boolean;
+          };
+          if (!res.ok) {
+            setVoiceIsError(true);
+            if (data.needsKey) {
+              setVoiceStatus(
+                isVi
+                  ? "Trình duyệt này chặn Google Speech (lỗi network). Hãy bấm Win+H ngay trong ô nhập để nói miễn phí, hoặc thêm GEMINI_API_KEY / GROQ_API_KEY trên server."
+                  : "Browser blocked Google Speech (network). Press Win+H in the input box for free Windows dictation, or configure GEMINI_API_KEY / GROQ_API_KEY.",
+              );
+              inputRef.current?.focus();
+            } else {
+              setVoiceStatus(data.error || (isVi ? "Không chuyển được giọng nói." : "Transcription failed."));
+            }
+            return;
+          }
+          const text = data.transcript?.trim() ?? "";
+          if (text) {
+            setVoiceStatus(null);
+            setVoiceIsError(false);
+            void sendMessage(text, true);
+          } else {
+            setVoiceStatus(isVi ? "Chưa nghe rõ lệnh. Bấm 🎙️ để nói lại." : "Could not hear clearly. Tap 🎙️ to retry.");
+          }
+        } catch {
+          setVoiceIsError(true);
+          setVoiceStatus(isVi ? "Lỗi kết nối khi chuyển giọng nói." : "Network error while transcribing.");
+        }
+      };
+
+      recorder.start();
+      setListening(true);
+      setVoiceIsError(false);
+      setVoiceStatus(
+        isVi
+          ? "Đang ghi âm (chế độ dự phòng)... Nói xong bấm 🎙️ để gửi!"
+          : "Recording (fallback mode)... Tap 🎙️ again when finished!",
+      );
+    } catch {
+      setVoiceIsError(true);
+      setVoiceStatus(
+        isVi
+          ? "Chưa có quyền Micro. Hãy cho phép Micro trên trình duyệt."
+          : "Microphone permission denied. Please allow mic access.",
+      );
+    }
+  }, [isVi, sendMessage, voiceLang]);
 
   const launchRecognitionSession = useCallback(
     (Ctor: SpeechRecognitionCtor) => {
@@ -358,12 +490,15 @@ export function AiAssistantDrawer() {
                 : "No microphone hardware detected. Check your audio input device.",
             );
           } else if (code === "network") {
+            // Automatically switch to MediaRecorder fallback so Chromium/Brave/WebView2 users aren't stuck!
+            setVoiceIsError(false);
             setVoiceStatus(
               isVi
-                ? "Trình duyệt không kết nối được dịch vụ giọng nói (lỗi network). Trên Windows hãy bấm Win+H trong ô nhập để nói bằng Windows Voice Typing."
-                : "Browser speech service unreachable (network). On Windows, press Win+H inside the input box for Windows Voice Typing.",
+                ? "Đang chuyển sang ghi âm trực tiếp..."
+                : "Switching to direct audio recording...",
             );
-            inputRef.current?.focus();
+            void startMediaRecorderFallback();
+            return;
           } else {
             setVoiceStatus(isVi ? `Lỗi thu âm (${code}).` : `Voice error (${code}).`);
           }
@@ -411,23 +546,35 @@ export function AiAssistantDrawer() {
         );
       }
     },
-    [clearVoiceTimers, isVi, sendMessage, stopListening, voiceLang],
+    [clearVoiceTimers, isVi, sendMessage, startMediaRecorderFallback, stopListening, voiceLang],
   );
 
   const startListening = useCallback(async () => {
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      setVoiceIsError(true);
-      setVoiceStatus(
-        isVi
-          ? "Trình duyệt chưa hỗ trợ Web Speech API. Hãy dùng Chrome/Edge hoặc bấm Win+H trong ô nhập."
-          : "Web Speech API not supported here. Use Chrome/Edge or press Win+H in the input box.",
-      );
+    if (listening || wantListeningRef.current || voiceTypingModeRef.current) {
+      stopListening(true);
       return;
     }
 
-    if (listening || wantListeningRef.current) {
-      stopListening(true);
+    // Tier 1: Inside FocusGate Windows PC app (WebView2) -> trigger native Windows Voice Typing (Win+H)
+    const webViewBridge = getWebViewBridge();
+    if (webViewBridge) {
+      fatalVoiceErrorRef.current = false;
+      voiceTypingModeRef.current = true;
+      setListening(true);
+      setVoiceIsError(false);
+      setVoiceStatus(
+        isVi
+          ? "Đã bật Windows Voice Typing (Win+H)... Hãy nói lệnh (tự gửi sau 2s ngừng nói)!"
+          : "Windows Voice Typing (Win+H) active... Speak your command (auto-sends after 2s pause)!",
+      );
+      inputRef.current?.focus();
+      webViewBridge.postMessage("focusgate_start_voice_typing");
+      return;
+    }
+
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) {
+      await startMediaRecorderFallback();
       return;
     }
 
@@ -455,7 +602,7 @@ export function AiAssistantDrawer() {
 
     wantListeningRef.current = true;
     launchRecognitionSession(Ctor);
-  }, [isVi, launchRecognitionSession, listening, stopListening]);
+  }, [isVi, launchRecognitionSession, listening, startMediaRecorderFallback, stopListening]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -799,7 +946,19 @@ export function AiAssistantDrawer() {
               ref={inputRef}
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                const nextVal = e.target.value;
+                setInput(nextVal);
+                if (voiceTypingModeRef.current && nextVal.trim()) {
+                  transcriptRef.current = nextVal.trim();
+                  if (silenceTimerRef.current !== null) window.clearTimeout(silenceTimerRef.current);
+                  silenceTimerRef.current = window.setTimeout(() => {
+                    if (voiceTypingModeRef.current && transcriptRef.current.trim()) {
+                      stopListening(true);
+                    }
+                  }, 2_000);
+                }
+              }}
               placeholder={
                 listening
                   ? isVi

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using FocusGate.Agent.Poc.Models;
 using Microsoft.Web.WebView2.Core;
@@ -7,6 +8,12 @@ namespace FocusGate.Agent.Poc.UI;
 
 public sealed class DesktopAppForm : Form
 {
+    private const byte VkLWin = 0x5B;
+    private const byte VkH = 0x48;
+    private const uint KeyEventFKeyUp = 0x0002;
+
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
     private readonly string _apiBaseUrl;
     private readonly Func<string, string?, Task> _onSessionToken;
     private readonly Func<Task> _onSyncNow;
@@ -224,6 +231,29 @@ public sealed class DesktopAppForm : Form
                     reqUri.Host.Equals(new Uri(_apiBaseUrl).Host, StringComparison.OrdinalIgnoreCase))
                 {
                     args.State = CoreWebView2PermissionState.Allow;
+                }
+            };
+            _webView.CoreWebView2.WebMessageReceived += (_, args) =>
+            {
+                try
+                {
+                    var raw = args.TryGetWebMessageAsString();
+                    if (string.Equals(raw, "focusgate_start_voice_typing", StringComparison.Ordinal))
+                    {
+                        BeginInvoke(() =>
+                        {
+                            Activate();
+                            _webView.Focus();
+                            keybd_event(VkLWin, 0, 0, UIntPtr.Zero);
+                            keybd_event(VkH, 0, 0, UIntPtr.Zero);
+                            keybd_event(VkH, 0, KeyEventFKeyUp, UIntPtr.Zero);
+                            keybd_event(VkLWin, 0, KeyEventFKeyUp, UIntPtr.Zero);
+                        });
+                    }
+                }
+                catch
+                {
+                    // Ignore malformed web messages.
                 }
             };
             _webView.CoreWebView2.NavigationCompleted += async (_, _) => await TryBridgeSessionAsync();
