@@ -458,3 +458,46 @@
 .fg-sparkle {
   animation: fgSparkleFloat 3.6s ease-in-out infinite;
 }
+
+@keyframes fgRobotBlink {
+  0%, 92%, 100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes fgRobotFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes fgRobotWave {
+  0%, 100% {
+    transform: scaleY(0.65);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleY(1.15);
+    opacity: 1;
+  }
+}
+
+.fg-robot-blink {
+  animation: fgRobotBlink 4.6s ease-in-out infinite;
+}
+
+.fg-robot-float {
+  animation: fgRobotFloat 3.4s ease-in-out infinite;
+}
+
+.fg-robot-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fgRobotWave 0.75s ease-in-out infinite;
+}

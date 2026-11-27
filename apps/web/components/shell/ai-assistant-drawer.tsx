@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AiLogoMark } from "@/components/ui/ai-logo";
+import { AiRobotAvatar, type RobotMood } from "@/components/ui/ai-robot-avatar";
 import { useLocale } from "@/components/i18n/language-provider";
 import { executeWebAiCommands } from "@/lib/client/ai-web-executor";
 import {
@@ -109,14 +109,15 @@ export function AiAssistantDrawer() {
   const [fabPos, setFabPos] = useState<FabPosition | null>(null);
   const [dragging, setDragging] = useState(false);
   const [spotlightMode, setSpotlightMode] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<AiPendingConfirmation | null>(null);
   const [messages, setMessages] = useState<ChatEntry[]>(() => [
     {
       id: "welcome",
       role: "assistant",
       text: isVi
-        ? "Chào bạn! Tôi là FocusGate AI. Bạn có thể kéo thả biểu tượng AI đến bất kỳ đâu, gõ lệnh hoặc bấm nút Micro để ra lệnh bằng giọng nói."
-        : "Hi! I'm FocusGate AI. Drag the AI icon anywhere on screen, type a command, or tap the Mic to speak.",
+        ? "Chào bạn! Mình là GateBot — trợ lý đồng hành FocusGate. Bạn có thể kéo mình tới bất kỳ góc nào, nhắn yêu cầu hoặc bấm Micro để nói chuyện nhé!"
+        : "Hi there! I'm GateBot — your FocusGate companion. Drag me anywhere, type a request, or tap the Mic to chat!",
     },
   ]);
 
@@ -284,6 +285,10 @@ export function AiAssistantDrawer() {
           summaryCard: data.summaryCard ?? null,
         };
         setMessages((prev) => [...prev, aiEntry]);
+        if (data.action?.executed) {
+          setCelebrating(true);
+          window.setTimeout(() => setCelebrating(false), 2800);
+        }
         if (data.pendingConfirmation) {
           setPendingConfirm(data.pendingConfirmation);
         }
@@ -794,17 +799,43 @@ export function AiAssistantDrawer() {
 
   const quickChips = isVi
     ? [
-        { label: "Hôm nay còn gì?", prompt: "Hôm nay còn gì?" },
-        { label: "Tập trung 25p", prompt: "Bắt đầu tập trung 25 phút" },
-        { label: "Làm gì tiếp theo?", prompt: "Làm gì tiếp theo?" },
-        { label: "Mở khóa 10p", prompt: "Mở khóa 10 phút giải trí" },
+        { icon: "✨", label: "Hôm nay còn gì?", prompt: "Hôm nay còn gì?" },
+        { icon: "⏱️", label: "Tập trung 25p", prompt: "Bắt đầu tập trung 25 phút" },
+        { icon: "🧭", label: "Làm gì tiếp?", prompt: "Làm gì tiếp theo?" },
+        { icon: "🔓", label: "Mở khóa 10p", prompt: "Mở khóa 10 phút giải trí" },
       ]
     : [
-        { label: "Today's status", prompt: "Today's status" },
-        { label: "Focus 25m", prompt: "Start focus 25 minutes" },
-        { label: "What's next?", prompt: "What's next?" },
-        { label: "Unlock 10m", prompt: "Unlock 10 minutes pass" },
+        { icon: "✨", label: "Today's status", prompt: "Today's status" },
+        { icon: "⏱️", label: "Focus 25m", prompt: "Start focus 25 minutes" },
+        { icon: "🧭", label: "What's next?", prompt: "What's next?" },
+        { icon: "🔓", label: "Unlock 10m", prompt: "Unlock 10 minutes pass" },
       ];
+
+  const robotMood: RobotMood = listening
+    ? "listening"
+    : busy
+      ? "thinking"
+      : voiceIsError
+        ? "error"
+        : celebrating
+          ? "success"
+          : "idle";
+
+  const robotStatusText = listening
+    ? isVi
+      ? "Mình đang nghe đây..."
+      : "Listening closely..."
+    : busy
+      ? isVi
+        ? "Để mình xử lý nhé..."
+        : "Working on it..."
+      : celebrating
+        ? isVi
+          ? "Xong rồi đó!"
+          : "All done!"
+        : isVi
+          ? "Sẵn sàng giúp bạn"
+          : "Ready to help";
 
   const fabStyle = fabPos
     ? { left: `${fabPos.x}px`, top: `${fabPos.y}px`, right: "auto", bottom: "auto" }
@@ -812,7 +843,7 @@ export function AiAssistantDrawer() {
 
   return (
     <>
-      {/* Draggable Floating Keystone Spark Trigger */}
+      {/* Draggable Floating GateBot Companion Trigger */}
       <button
         ref={fabRef}
         type="button"
@@ -826,18 +857,36 @@ export function AiAssistantDrawer() {
         style={fabStyle}
         title={
           isVi
-            ? "Kéo để di chuyển · Bấm để mở FocusGate AI (Alt+A · Giọng nói Alt+Shift+A)"
-            : "Drag to move · Click to open FocusGate AI (Alt+A · Voice Alt+Shift+A)"
+            ? "Kéo để di chuyển · Bấm để trò chuyện với GateBot (Alt+A · Giọng nói Alt+Shift+A)"
+            : "Drag to move · Click to chat with GateBot (Alt+A · Voice Alt+Shift+A)"
         }
-        aria-label="Toggle or drag FocusGate AI assistant"
-        className={`fixed z-40 flex touch-none select-none items-center gap-2 rounded-full border border-line bg-surface/95 p-1.5 pr-3.5 text-ink shadow-lift backdrop-blur-md hover:border-accent/60 ${
+        aria-label="Toggle or drag FocusGate GateBot AI companion"
+        className={`group fixed z-40 flex touch-none select-none items-center gap-2 rounded-full border border-line bg-surface/96 py-1 pl-1.5 pr-3.5 text-ink shadow-lift backdrop-blur-md transition-all hover:border-accent/60 hover:shadow-xl ${
           fabPos ? "" : "bottom-24 right-4 lg:bottom-20 lg:right-6"
-        } ${dragging ? "cursor-grabbing scale-105 border-accent shadow-2xl" : "cursor-grab transition-shadow"}`}
+        } ${dragging ? "cursor-grabbing scale-105 border-accent shadow-2xl" : "cursor-grab"}`}
       >
-        <AiLogoMark size={30} thinking={busy} listening={listening} />
-        <span className="text-[12px] font-semibold tracking-tight">
-          {listening ? (isVi ? "Đang nghe..." : "Listening...") : "AI"}
-        </span>
+        <AiRobotAvatar
+          size={36}
+          mood={robotMood}
+          className="transition-transform duration-200 group-hover:scale-105"
+        />
+        <div className="flex flex-col items-start text-left">
+          <span className="text-[12px] font-semibold leading-none tracking-tight text-ink">
+            {listening ? (isVi ? "Đang nghe..." : "Listening...") : "GateBot"}
+          </span>
+          <span className="mt-0.5 flex items-center gap-1 text-[9.5px] font-medium text-muted">
+            <span
+              className={`size-1.5 rounded-full ${
+                listening
+                  ? "animate-pulse bg-accent"
+                  : busy
+                    ? "animate-pulse bg-amber-500"
+                    : "bg-emerald-500"
+              }`}
+            />
+            {isVi ? "Trợ lý AI" : "AI Buddy"}
+          </span>
+        </div>
       </button>
 
       {/* Interactive Drawer / Center Spotlight */}
@@ -853,21 +902,39 @@ export function AiAssistantDrawer() {
       )}
       {open && (
         <section
-          aria-label="FocusGate AI Assistant"
+          aria-label="FocusGate GateBot AI Companion"
           className={
             spotlightMode
-              ? "fixed left-1/2 top-1/2 z-50 flex h-[min(80vh,560px)] w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-line bg-surface/95 shadow-2xl backdrop-blur-xl"
-              : "fixed bottom-24 right-4 z-50 flex h-[min(78vh,510px)] w-[min(92vw,395px)] flex-col overflow-hidden rounded-2xl border border-line bg-surface/95 shadow-2xl backdrop-blur-xl lg:bottom-20 lg:right-6"
+              ? "fixed left-1/2 top-1/2 z-50 flex h-[min(82vh,580px)] w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[24px] border border-line bg-surface/96 shadow-2xl backdrop-blur-xl"
+              : "fixed bottom-24 right-4 z-50 flex h-[min(78vh,530px)] w-[min(92vw,405px)] flex-col overflow-hidden rounded-[24px] border border-line bg-surface/96 shadow-2xl backdrop-blur-xl lg:bottom-20 lg:right-6"
           }
         >
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-line bg-surface-2/70 px-4 py-3">
+          {/* Friendly Robot Header */}
+          <div className="relative flex items-center justify-between border-b border-line bg-gradient-to-r from-surface-2/90 via-surface-2/70 to-accent-soft/30 px-4 py-3">
             <div className="flex items-center gap-2.5">
-              <AiLogoMark size={30} thinking={busy} listening={listening} />
+              <div className="flex size-10 items-center justify-center rounded-2xl border border-line bg-surface shadow-sm">
+                <AiRobotAvatar size={36} mood={robotMood} />
+              </div>
               <div>
-                <p className="text-[13px] font-semibold leading-tight text-ink">FocusGate AI</p>
-                <p className="text-[10.5px] text-ink-muted">
-                  Web · PC · Android · {voiceLang === "vi-VN" ? "VI" : "EN"}
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[13.5px] font-semibold leading-tight text-ink">GateBot</p>
+                  <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[9.5px] font-semibold text-accent">
+                    AI
+                  </span>
+                </div>
+                <p className="mt-0.5 flex items-center gap-1.5 text-[10.5px] font-medium text-muted">
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      listening
+                        ? "animate-pulse bg-accent"
+                        : busy
+                          ? "animate-pulse bg-amber-500"
+                          : celebrating
+                            ? "bg-emerald-500"
+                            : "bg-emerald-500"
+                    }`}
+                  />
+                  <span>{robotStatusText}</span>
                 </p>
               </div>
             </div>
@@ -923,7 +990,7 @@ export function AiAssistantDrawer() {
                 className={`rounded-lg border px-2 py-1 text-[11px] transition ${
                   ttsEnabled
                     ? "border-accent/60 bg-accent/15 text-accent"
-                    : "border-line bg-surface text-ink-muted hover:text-ink"
+                    : "border-line bg-surface text-muted hover:text-ink"
                 }`}
               >
                 {ttsEnabled ? "🔊" : "🔇"}
@@ -935,7 +1002,7 @@ export function AiAssistantDrawer() {
                   setOpen(false);
                 }}
                 aria-label="Close AI assistant"
-                className="rounded-lg px-2 py-1 text-[13px] text-ink-muted hover:bg-surface hover:text-ink"
+                className="rounded-lg px-2 py-1 text-[13px] text-muted hover:bg-surface hover:text-ink"
               >
                 ✕
               </button>
@@ -943,37 +1010,50 @@ export function AiAssistantDrawer() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-[12.5px]">
+          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3.5 text-[12.5px]">
             {messages.map((msg) => (
               <div
                 key={msg.id}
                 className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
               >
                 <div
-                  className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 leading-relaxed ${
-                    msg.role === "user"
-                      ? "rounded-br-sm bg-accent text-white"
-                      : "rounded-bl-sm border border-line bg-surface-2 text-ink"
+                  className={`flex max-w-[90%] items-end gap-2 ${
+                    msg.role === "user" ? "flex-row-reverse" : "flex-row"
                   }`}
                 >
-                  {msg.viaVoice && (
-                    <span className="mr-1.5 inline-block text-[10px] opacity-85">🎙️</span>
+                  {msg.role === "assistant" && (
+                    <AiRobotAvatar
+                      size={24}
+                      mood={msg.actionExecuted ? "success" : "idle"}
+                      className="mb-0.5 shrink-0"
+                    />
                   )}
-                  {msg.text}
+                  <div
+                    className={`rounded-2xl px-3.5 py-2.5 leading-relaxed ${
+                      msg.role === "user"
+                        ? "rounded-br-sm bg-accent text-white shadow-sm"
+                        : "rounded-bl-sm border border-line bg-surface-2/90 text-ink"
+                    }`}
+                  >
+                    {msg.viaVoice && (
+                      <span className="mr-1.5 inline-block text-[10px] opacity-85">🎙️</span>
+                    )}
+                    {msg.text}
+                  </div>
                 </div>
                 {msg.actionLabel && (
                   <span
-                    className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10.5px] font-medium ${
+                    className={`mt-1 ml-8 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10.5px] font-medium ${
                       msg.actionExecuted
-                        ? "bg-emerald-500/15 text-emerald-500"
-                        : "bg-amber-500/15 text-amber-500"
+                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                        : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
                     }`}
                   >
                     {msg.actionExecuted ? "✓" : "•"} {msg.actionLabel}
                   </span>
                 )}
                 {msg.summaryCard && (
-                  <div className="mt-1.5 w-[86%] rounded-xl border border-line bg-surface p-3 shadow-sm">
+                  <div className="mt-1.5 ml-8 w-[84%] rounded-2xl border border-line bg-surface p-3 shadow-sm">
                     <div className="flex items-center justify-between text-[11px] font-medium text-ink-soft">
                       <span>
                         {msg.summaryCard.unlocked
@@ -1010,7 +1090,7 @@ export function AiAssistantDrawer() {
                         type="button"
                         disabled={busy}
                         onClick={() => void sendMessage(isVi ? "Mở phần tập trung và chạy 25 phút" : "Open focus and run 25m")}
-                        className="shrink-0 rounded-lg bg-accent/15 px-2.5 py-1 text-[10.5px] font-semibold text-accent hover:bg-accent hover:text-white"
+                        className="shrink-0 rounded-full bg-accent/15 px-2.5 py-1 text-[10.5px] font-semibold text-accent transition hover:bg-accent hover:text-white"
                       >
                         ▶ {isVi ? "Focus 25p" : "Focus 25m"}
                       </button>
@@ -1027,7 +1107,7 @@ export function AiAssistantDrawer() {
                         pendingCommand: msg.pendingConfirmation!.command,
                       })
                     }
-                    className="mt-1.5 inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+                    className="mt-1.5 ml-8 inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
                   >
                     🔓 {msg.pendingConfirmation.buttonLabel}
                   </button>
@@ -1035,25 +1115,28 @@ export function AiAssistantDrawer() {
               </div>
             ))}
             {busy && (
-              <div className="flex items-center gap-2 text-[11.5px] text-ink-muted">
-                <span className="size-2 animate-pulse rounded-full bg-accent" />
-                {isVi ? "Đang xử lý & đồng bộ..." : "Executing & syncing..."}
+              <div className="flex items-center gap-2 text-[11.5px] text-muted">
+                <AiRobotAvatar size={24} mood="thinking" />
+                <span className="rounded-2xl border border-line bg-surface-2 px-3 py-1.5">
+                  {isVi ? "GateBot đang xử lý & đồng bộ..." : "GateBot is thinking & syncing..."}
+                </span>
               </div>
             )}
             <div ref={listEndRef} />
           </div>
 
-          {/* Quick Chips */}
-          <div className="flex flex-wrap gap-1.5 border-t border-line/70 px-3.5 py-2">
+          {/* Friendly Quick Action Chips */}
+          <div className="flex flex-wrap gap-1.5 border-t border-line/70 bg-surface-2/40 px-3.5 py-2">
             {quickChips.map((chip) => (
               <button
                 key={chip.label}
                 type="button"
                 disabled={busy}
                 onClick={() => void sendMessage(chip.prompt)}
-                className="rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-ink-soft transition hover:border-accent/50 hover:text-ink disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-soft transition hover:border-accent/50 hover:bg-accent-soft/40 hover:text-ink disabled:opacity-50"
               >
-                {chip.label}
+                <span aria-hidden="true">{chip.icon}</span>
+                <span>{chip.label}</span>
               </button>
             ))}
           </div>
