@@ -564,11 +564,30 @@ export function AiAssistantDrawer() {
       setVoiceIsError(false);
       setVoiceStatus(
         isVi
-          ? "Đã bật Windows Voice Typing (Win+H)... Hãy nói lệnh (tự gửi sau 2s ngừng nói)!"
-          : "Windows Voice Typing (Win+H) active... Speak your command (auto-sends after 2s pause)!",
+          ? "Đang bật Windows Voice Typing (Win+H)... Hãy nói lệnh (tự gửi sau 2s ngừng nói)!"
+          : "Launching Windows Voice Typing (Win+H)... Speak your command (auto-sends after 2s pause)!",
       );
       inputRef.current?.focus();
+
+      let ackReceived = false;
+      const onAck = () => {
+        ackReceived = true;
+        window.removeEventListener("focusgate:voice-ack", onAck);
+      };
+      window.addEventListener("focusgate:voice-ack", onAck);
       webViewBridge.postMessage("focusgate_start_voice_typing");
+
+      window.setTimeout(() => {
+        window.removeEventListener("focusgate:voice-ack", onAck);
+        if (!ackReceived && voiceTypingModeRef.current && !transcriptRef.current.trim()) {
+          setVoiceStatus(
+            isVi
+              ? "Hãy bấm phím Win + H trên bàn phím để nói ngay (hoặc cập nhật bản FocusGate PC mới để tự bật 1 chạm)!"
+              : "Press Win + H on your keyboard to speak now (or update FocusGate PC for 1-click auto-launch)!",
+          );
+          inputRef.current?.focus();
+        }
+      }, 600);
       return;
     }
 

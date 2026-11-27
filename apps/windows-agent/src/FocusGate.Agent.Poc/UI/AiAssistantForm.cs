@@ -12,6 +12,7 @@ public sealed class AiAssistantForm : Form
 {
     private const byte VkLWin = 0x5B;
     private const byte VkH = 0x48;
+    private const uint KeyEventFExtendedKey = 0x0001;
     private const uint KeyEventFKeyUp = 0x0002;
 
     [DllImport("user32.dll")]
@@ -257,7 +258,7 @@ public sealed class AiAssistantForm : Form
         return btn;
     }
 
-    private void StartWindowsVoiceTyping()
+    private async void StartWindowsVoiceTyping()
     {
         if (_busy) return;
         _voiceListening = true;
@@ -265,11 +266,15 @@ public sealed class AiAssistantForm : Form
         _statusLabel.Text = "Đang bật Windows Voice Typing (Win+H)... Hãy nói lệnh!";
         _inputBox.Focus();
 
-        // Trigger native Windows 10/11 Voice Typing (Win + H)
-        keybd_event(VkLWin, 0, 0, UIntPtr.Zero);
-        keybd_event(VkH, 0, 0, UIntPtr.Zero);
-        keybd_event(VkH, 0, KeyEventFKeyUp, UIntPtr.Zero);
-        keybd_event(VkLWin, 0, KeyEventFKeyUp, UIntPtr.Zero);
+        // Trigger native Windows 10/11 Voice Typing (Win + H) with extended key flags & spacing
+        await Task.Delay(50);
+        keybd_event(VkLWin, 0x5B, KeyEventFExtendedKey, UIntPtr.Zero);
+        await Task.Delay(35);
+        keybd_event(VkH, 0x23, 0, UIntPtr.Zero);
+        await Task.Delay(35);
+        keybd_event(VkH, 0x23, KeyEventFKeyUp, UIntPtr.Zero);
+        await Task.Delay(25);
+        keybd_event(VkLWin, 0x5B, KeyEventFExtendedKey | KeyEventFKeyUp, UIntPtr.Zero);
     }
 
     private void UpdateMicButtonState()
