@@ -26,9 +26,11 @@ public sealed class DesktopAppForm : Form
     private readonly Action<EnforcementAction?> _onEnforcementChanged;
     private readonly Label _statusLabel;
     private readonly Button _enforceBtn;
+    private readonly Button _updateBtn;
     private readonly WebView2 _webView;
     private string? _lastBridgedToken;
     private bool _allowClose;
+    private Func<IProgress<int>, Task>? _onUpdateRequested;
 
     public DesktopAppForm(
         string apiBaseUrl,
@@ -142,6 +144,44 @@ public sealed class DesktopAppForm : Form
         modeMenu.Items.Add("Block: Off", null, (_, _) => SelectMode(null));
         _enforceBtn.Click += (_, _) => modeMenu.Show(_enforceBtn, new Point(0, _enforceBtn.Height));
 
+        _updateBtn = new Button
+        {
+            Text = "⬆ Update",
+            Visible = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(16, 128, 86),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+            Padding = new Padding(12, 5, 12, 5),
+            Margin = new Padding(0, 0, 8, 0),
+            Cursor = Cursors.Hand,
+        };
+        _updateBtn.FlatAppearance.BorderSize = 0;
+        _updateBtn.Click += async (_, _) =>
+        {
+            if (_onUpdateRequested is null) return;
+            _updateBtn.Enabled = false;
+            _updateBtn.Text = "Downloading...";
+            var progress = new Progress<int>(pct =>
+            {
+                if (!IsDisposed) _updateBtn.Text = $"Updating {pct}%";
+            });
+            try
+            {
+                await _onUpdateRequested(progress);
+            }
+            catch
+            {
+                if (!IsDisposed)
+                {
+                    _updateBtn.Enabled = true;
+                    _updateBtn.Text = "⬆ Retry Update";
+                }
+            }
+        };
+
         var syncBtn = new Button
         {
             Text = "Sync Now",
@@ -174,6 +214,7 @@ public sealed class DesktopAppForm : Form
         hideBtn.FlatAppearance.BorderSize = 0;
         hideBtn.Click += (_, _) => Hide();
 
+        rightPanel.Controls.Add(_updateBtn);
         rightPanel.Controls.Add(_enforceBtn);
         rightPanel.Controls.Add(syncBtn);
         rightPanel.Controls.Add(hideBtn);
@@ -199,6 +240,20 @@ public sealed class DesktopAppForm : Form
                 Hide();
             }
         };
+    }
+
+    public void ShowUpdateAvailable(string tagName, Func<IProgress<int>, Task> onUpdateRequested)
+    {
+        if (IsDisposed) return;
+        void Apply()
+        {
+            _onUpdateRequested = onUpdateRequested;
+            _updateBtn.Text = $"⬆ Update {tagName.Replace("windows-", "", StringComparison.OrdinalIgnoreCase)}";
+            _updateBtn.Visible = true;
+            _updateBtn.Enabled = true;
+        }
+        if (InvokeRequired) BeginInvoke(Apply);
+        else Apply();
     }
 
     public void UpdateStatusText(string text)

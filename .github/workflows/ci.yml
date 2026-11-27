@@ -28,12 +28,30 @@ jobs:
   windows-agent:
     name: Windows Agent (.NET 10)
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
       - run: dotnet test apps/windows-agent/FocusGate.Agent.slnx
+      - name: Publish Windows Single-File EXE
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: >
+          dotnet publish apps/windows-agent/src/FocusGate.Agent.Poc/FocusGate.Agent.Poc.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:Version=0.1.${{ github.run_number }}
+          -o apps/windows-agent/release-out --nologo
+      - name: Publish Windows Release EXE (for In-App Self-Updater)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-v0.1.${{ github.run_number }}
+          name: FocusGate Windows v0.1.${{ github.run_number }}
+          body: Automated FocusGate Windows Agent build #${{ github.run_number }}.
+          files: apps/windows-agent/release-out/FocusGate.exe
 
   android:
     name: Android Unit Tests (JDK 17)

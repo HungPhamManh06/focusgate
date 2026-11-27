@@ -144,6 +144,7 @@ public sealed class TrayAgentContext : ApplicationContext
         _syncTimer.Start();
         _enforceTimer.Start();
         _ = SyncPolicyAsync();
+        _ = CheckForUpdatesSilentlyAsync();
         if (showDesktopWindow)
         {
             ShowDesktopWindow();
@@ -489,6 +490,19 @@ public sealed class TrayAgentContext : ApplicationContext
         }
     }
 
+    private async Task CheckForUpdatesSilentlyAsync()
+    {
+        var update = await WindowsAppUpdater.CheckLatestReleaseAsync();
+        if (update is null || !update.IsNewerThanCurrent) return;
+        _desktopForm?.ShowUpdateAvailable(update.TagName, async progress =>
+        {
+            await WindowsAppUpdater.DownloadAndInstallInPlaceAsync(
+                update,
+                progress,
+                exitCurrentApp: () => ExitThread());
+        });
+    }
+
     private async Task CheckForUpdatesAsync()
     {
         var update = await WindowsAppUpdater.CheckLatestReleaseAsync();
@@ -503,14 +517,28 @@ public sealed class TrayAgentContext : ApplicationContext
         }
         var answer = MessageBox.Show(
             Tr(
-                $"Latest FocusGate release: {update.TagName}. Open download in browser?",
-                $"Phiên bản mới nhất: {update.TagName}. Mở trình duyệt để tải về ngay?"),
+                $"Latest FocusGate Windows release: {update.TagName}. Download and auto-update in place now?",
+                $"Phiên bản FocusGate Windows mới nhất: {update.TagName}. Tự động tải và cập nhật đè ngay bây giờ?"),
             "FocusGate Updater",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Information);
         if (answer == DialogResult.Yes)
         {
-            WindowsAppUpdater.OpenDownload(update.DownloadUrl);
+            try
+            {
+                await WindowsAppUpdater.DownloadAndInstallInPlaceAsync(
+                    update,
+                    progress: new Progress<int>(pct => _desktopForm?.UpdateStatusText($"Updating FocusGate... {pct}%")),
+                    exitCurrentApp: () => ExitThread());
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    Tr($"Auto-update failed: {ex.Message}", $"Cập nhật thất bại: {ex.Message}"),
+                    "FocusGate Updater",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
         }
     }
 
