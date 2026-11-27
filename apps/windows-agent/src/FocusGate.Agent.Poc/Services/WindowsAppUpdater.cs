@@ -124,7 +124,7 @@ public static class WindowsAppUpdater
         }
 
         var tempExePath = Path.Combine(Path.GetTempPath(), $"FocusGate-update-{Guid.NewGuid():N}.exe");
-        var scriptPath = Path.Combine(Path.GetTempPath(), $"focusgate-swap-{Guid.NewGuid():N}.cmd");
+        var scriptPath = Path.Combine(Path.GetTempPath(), $"focusgate-swap-{Guid.NewGuid():N}.ps1");
 
         using (var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
         {
@@ -160,30 +160,54 @@ public static class WindowsAppUpdater
         }
 
         var pid = Environment.ProcessId;
-        var script = $"""
-            @echo off
-            setlocal
-            :waitloop
-            tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
-            if "%ERRORLEVEL%"=="0" (
-              timeout /t 1 /nobreak >NUL
-              goto waitloop
-            )
-            timeout /t 1 /nobreak >NUL
-            move /Y "{tempExePath}" "{currentExePath}" >NUL
-            if errorlevel 1 (
-              copy /Y "{tempExePath}" "{currentExePath}" >NUL
-              del /F /Q "{tempExePath}" >NUL
-            )
-            start "" "{currentExePath}"
-            del /F /Q "%~f0" >NUL
+        var escapedTemp = tempExePath.Replace("'", "''");
+        var escapedTarget = currentExePath.Replace("'", "''");
+        var script = $$"""
+            $ErrorActionPreference = 'SilentlyContinue'
+            $targetPid = {{pid}}
+            $src = '{{escapedTemp}}'
+            $dst = '{{escapedTarget}}'
+
+            # Wait up to 8s for the exiting FocusGate process
+            for ($i = 0; $i -lt 16; $i++) {
+                if (-not (Get-Process -Id $targetPid -ErrorAction SilentlyContinue)) { break }
+                Start-Sleep -Milliseconds 500
+            }
+
+            # Close any stray FocusGate process still locking the same EXE path
+            Get-Process -Name 'FocusGate' -ErrorAction SilentlyContinue | ForEach-Object {
+                try {
+                    if ($_.Path -and ($_.Path -ieq $dst)) {
+                        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+                    }
+                } catch {}
+            }
+            Start-Sleep -Milliseconds 600
+
+            # Replace EXE in place with retries
+            $replaced = $false
+            for ($attempt = 0; $attempt -lt 15; $attempt++) {
+                try {
+                    Copy-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop
+                    $replaced = $true
+                    break
+                } catch {
+                    Start-Sleep -Milliseconds 500
+                }
+            }
+
+            if ($replaced) {
+                Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue
+            }
+            Start-Process -FilePath $dst
+            Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
             """;
-        await File.WriteAllTextAsync(scriptPath, script, cancellationToken);
+        await File.WriteAllTextAsync(scriptPath, script, System.Text.Encoding.UTF8, cancellationToken);
 
         Process.Start(new ProcessStartInfo
         {
-            FileName = "cmd.exe",
-            Arguments = $"/c \"\"{scriptPath}\"\"",
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\"",
             UseShellExecute = false,
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden,
