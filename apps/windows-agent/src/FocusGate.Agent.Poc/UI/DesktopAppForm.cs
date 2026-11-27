@@ -23,6 +23,7 @@ public sealed class DesktopAppForm : Form
     private readonly string _apiBaseUrl;
     private readonly Func<string, string?, Task> _onSessionToken;
     private readonly Func<Task> _onSyncNow;
+    private readonly Func<Task>? _onCheckUpdate;
     private readonly Action<EnforcementAction?> _onEnforcementChanged;
     private readonly Label _statusLabel;
     private readonly Button _enforceBtn;
@@ -37,11 +38,13 @@ public sealed class DesktopAppForm : Form
         EnforcementAction? initialEnforcement,
         Func<string, string?, Task> onSessionToken,
         Func<Task> onSyncNow,
-        Action<EnforcementAction?> onEnforcementChanged)
+        Action<EnforcementAction?> onEnforcementChanged,
+        Func<Task>? onCheckUpdate = null)
     {
         _apiBaseUrl = apiBaseUrl.TrimEnd('/');
         _onSessionToken = onSessionToken;
         _onSyncNow = onSyncNow;
+        _onCheckUpdate = onCheckUpdate;
         _onEnforcementChanged = onEnforcementChanged;
 
         Text = "FocusGate";
@@ -146,22 +149,27 @@ public sealed class DesktopAppForm : Form
 
         _updateBtn = new Button
         {
-            Text = "⬆ Update",
-            Visible = false,
+            Text = "↻ Update",
+            Visible = true,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(16, 128, 86),
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-            Padding = new Padding(12, 5, 12, 5),
+            BackColor = Color.FromArgb(36, 33, 34),
+            ForeColor = Color.FromArgb(225, 220, 218),
+            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+            Padding = new Padding(10, 4, 10, 4),
             Margin = new Padding(0, 0, 8, 0),
             Cursor = Cursors.Hand,
         };
-        _updateBtn.FlatAppearance.BorderSize = 0;
+        _updateBtn.FlatAppearance.BorderSize = 1;
+        _updateBtn.FlatAppearance.BorderColor = Color.FromArgb(62, 58, 60);
         _updateBtn.Click += async (_, _) =>
         {
-            if (_onUpdateRequested is null) return;
+            if (_onUpdateRequested is null)
+            {
+                if (_onCheckUpdate is not null) await _onCheckUpdate();
+                return;
+            }
             _updateBtn.Enabled = false;
             _updateBtn.Text = "Downloading...";
             var progress = new Progress<int>(pct =>
@@ -249,6 +257,9 @@ public sealed class DesktopAppForm : Form
         {
             _onUpdateRequested = onUpdateRequested;
             _updateBtn.Text = $"⬆ Update {tagName.Replace("windows-", "", StringComparison.OrdinalIgnoreCase)}";
+            _updateBtn.BackColor = Color.FromArgb(16, 128, 86);
+            _updateBtn.ForeColor = Color.White;
+            _updateBtn.FlatAppearance.BorderSize = 0;
             _updateBtn.Visible = true;
             _updateBtn.Enabled = true;
         }

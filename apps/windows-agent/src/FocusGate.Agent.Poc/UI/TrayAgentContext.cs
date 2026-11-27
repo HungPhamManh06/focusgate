@@ -38,6 +38,7 @@ public sealed class TrayAgentContext : ApplicationContext
     private AgentCredentials? _credentials;
     private AgentPolicySnapshot? _lastPolicy;
     private DesktopAppForm? _desktopForm;
+    private WindowsUpdateInfo? _pendingUpdate;
     private EnforcementAction? _enforcementMode = EnforcementAction.Overlay;
     private string? _lastBlockedKey;
 
@@ -323,7 +324,8 @@ public sealed class TrayAgentContext : ApplicationContext
                 {
                     _enforcementMode = next;
                     if (next is null) HideOverlay();
-                });
+                },
+                CheckForUpdatesAsync);
         }
         _desktopForm.Show();
         if (_desktopForm.WindowState == FormWindowState.Minimized)
@@ -332,6 +334,14 @@ public sealed class TrayAgentContext : ApplicationContext
         }
         _desktopForm.Activate();
         UpdateMenuLabels();
+        if (_pendingUpdate is not null)
+        {
+            ApplyPendingUpdateToForm(_pendingUpdate);
+        }
+        else
+        {
+            _ = CheckForUpdatesSilentlyAsync();
+        }
     }
 
     private async Task OnWebViewSessionTokenAsync(string accessToken, string? refreshToken)
@@ -490,10 +500,8 @@ public sealed class TrayAgentContext : ApplicationContext
         }
     }
 
-    private async Task CheckForUpdatesSilentlyAsync()
+    private void ApplyPendingUpdateToForm(WindowsUpdateInfo update)
     {
-        var update = await WindowsAppUpdater.CheckLatestReleaseAsync();
-        if (update is null || !update.IsNewerThanCurrent) return;
         _desktopForm?.ShowUpdateAvailable(update.TagName, async progress =>
         {
             await WindowsAppUpdater.DownloadAndInstallInPlaceAsync(
@@ -501,6 +509,14 @@ public sealed class TrayAgentContext : ApplicationContext
                 progress,
                 exitCurrentApp: () => ExitThread());
         });
+    }
+
+    private async Task CheckForUpdatesSilentlyAsync()
+    {
+        var update = await WindowsAppUpdater.CheckLatestReleaseAsync();
+        if (update is null || !update.IsNewerThanCurrent) return;
+        _pendingUpdate = update;
+        ApplyPendingUpdateToForm(update);
     }
 
     private async Task CheckForUpdatesAsync()
