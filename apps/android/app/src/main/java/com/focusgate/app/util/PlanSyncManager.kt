@@ -424,7 +424,7 @@ object PlanSyncManager {
 
     fun pollAndExecuteRemoteCommands(context: Context, onOpenSanctuary: () -> Unit = {}) {
         runCatching {
-            withValidToken(context) { token ->
+            withValidToken<Unit>(context) { token ->
                 val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/commands?platform=android")
                 val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
                     requestMethod = "GET"
@@ -433,16 +433,19 @@ object PlanSyncManager {
                     setRequestProperty("Authorization", "Bearer $token")
                 }
                 try {
-                    if (conn.responseCode !in 200..299) return@withValidToken
-                    val body = conn.inputStream.bufferedReader().use { it.readText() }
-                    val commands = org.json.JSONObject(body).optJSONArray("commands") ?: return@withValidToken
-                    for (i in 0 until commands.length()) {
-                        val item = commands.optJSONObject(i) ?: continue
-                        val id = item.optString("id")
-                        val payload = item.optJSONObject("payload")?.toString() ?: continue
-                        if (id.isBlank()) continue
-                        val res = AndroidCommandExecutor.execute(context, payload, onOpenSanctuary)
-                        ackRemoteCommand(token, id, res.ok, res.message)
+                    if (conn.responseCode in 200..299) {
+                        val body = conn.inputStream.bufferedReader().use { it.readText() }
+                        val commands = org.json.JSONObject(body).optJSONArray("commands")
+                        if (commands != null) {
+                            for (i in 0 until commands.length()) {
+                                val item = commands.optJSONObject(i) ?: continue
+                                val id = item.optString("id")
+                                val payload = item.optJSONObject("payload")?.toString() ?: continue
+                                if (id.isBlank()) continue
+                                val res = AndroidCommandExecutor.execute(context, payload, onOpenSanctuary)
+                                ackRemoteCommand(token, id, res.ok, res.message)
+                            }
+                        }
                     }
                 } finally {
                     conn.disconnect()
