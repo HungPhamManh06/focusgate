@@ -10,6 +10,7 @@ import { getV2Settings, listDiscoveredApps } from "@/lib/data/v2-settings";
 import { getWorkspace } from "@/lib/data/workspace";
 import { BlockRulesCard } from "./block-rules-card";
 import { DeviceRow } from "./device-row";
+import { EcosystemTopologyCard } from "./ecosystem-topology-card";
 import { GatePreviewCard } from "./gate-preview-card";
 import { QuickConnectCard } from "./quick-connect-card";
 import { RegisterDeviceForm } from "./register-device-form";
@@ -42,7 +43,9 @@ export default async function DevicesPage() {
         }
       />
 
-      <section className="mt-8 grid gap-3 sm:grid-cols-3">
+      <EcosystemTopologyCard devices={devices} rulesCount={rules.length} isVi={isVi} />
+
+      <section className="mt-4 grid gap-3 sm:grid-cols-3">
         <StatCard
           label={isVi ? "Tổng thiết bị" : "Total devices"}
           value={String(devices.length)}

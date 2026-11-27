@@ -17,6 +17,7 @@ import { CommandPalette } from "@/components/shell/command-palette";
 import { AmbientVisualShell } from "@/components/shell/ambient-visual-shell";
 import { AiAssistantDrawer } from "@/components/shell/ai-assistant-drawer";
 import { FloatingFocusPill } from "@/components/shell/floating-focus-pill";
+import { FocusHeaderRibbon } from "@/components/shell/focus-header-ribbon";
 import { KeyboardShortcuts } from "@/components/shell/keyboard-shortcuts";
 import { NetworkStatusBanner } from "@/components/shell/network-status-banner";
 import { StickyScrollHeader } from "@/components/shell/sticky-scroll-header";
@@ -123,6 +124,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <main id="main-content" tabIndex={-1} className="flex-1 pb-32 focus:outline-none lg:pb-8">
             {children}
           </main>
+          <FocusHeaderRibbon />
           <TopProgressBar percent={topProgressPct} />
           <CommandPalette />
           <AiAssistantDrawer />

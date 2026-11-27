@@ -62,7 +62,7 @@ export function TaskFormDialog({
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 backdrop-blur-[2px] sm:items-center sm:p-6"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 backdrop-blur-[3px] sm:items-stretch sm:justify-end sm:p-3"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !pending) setOpen(false);
@@ -73,9 +73,9 @@ export function TaskFormDialog({
             role="dialog"
             aria-modal="true"
             aria-labelledby="task-dialog-title"
-            className="max-h-[92vh] w-full max-w-[560px] overflow-y-auto rounded-t-[22px] border border-line bg-surface shadow-lift sm:rounded-[22px]"
+            className="fg-animate-in flex max-h-[92vh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[22px] border border-line bg-surface/96 shadow-lift backdrop-blur-xl sm:h-full sm:max-h-none sm:max-w-[460px] sm:rounded-[20px]"
           >
-            <div className="flex items-start justify-between border-b border-line px-6 py-5">
+            <div className="flex shrink-0 items-start justify-between border-b border-line px-6 py-5">
               <div>
                 <p className="label-xs text-muted">
                   {isEdit ? (isVi ? "Sửa nhiệm vụ" : "Edit task") : (isVi ? "Nhiệm vụ mới" : "New task")}
@@ -97,7 +97,7 @@ export function TaskFormDialog({
               </button>
             </div>
 
-            <form action={formAction} className="space-y-4 px-6 py-5">
+            <form action={formAction} className="flex flex-1 flex-col space-y-4 overflow-y-auto px-6 py-5">
               {task ? <input type="hidden" name="id" value={task.id} /> : null}
 
               {state.error ? (
@@ -240,7 +240,7 @@ export function TaskFormDialog({
                 </div>
               </details>
 
-              <div className="flex items-center justify-end gap-2 border-t border-line pt-5">
+              <div className="mt-auto flex shrink-0 items-center justify-end gap-2 border-t border-line pt-5">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}

@@ -45,6 +45,7 @@ import { CapacityForecastRing } from "./capacity-forecast-ring";
 import { DayEndCountdownPill } from "./day-end-countdown-pill";
 import { DeadlineMiniCalendar } from "./deadline-mini-calendar";
 import { PlanTaskRow } from "./plan-task-row";
+import { PlannerCapacityBar } from "./planner-capacity-bar";
 import { PlannerTabsShell } from "./planner-tabs-shell";
 import { TemplatesRoutinesCard } from "./templates-routines-card";
 import { TomorrowPreviewCard } from "./tomorrow-preview-card";
@@ -311,6 +312,10 @@ export default async function PlannerPage() {
 
           <div className="mt-4">
             <PlanStepper plan={plan} isVi={isVi} />
+          </div>
+
+          <div className="mt-4">
+            <PlannerCapacityBar tasks={plan.tasks} isVi={isVi} />
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
