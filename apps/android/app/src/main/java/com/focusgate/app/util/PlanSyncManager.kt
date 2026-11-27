@@ -399,7 +399,7 @@ object PlanSyncManager {
                 val code = conn.responseCode
                 val stream = if (code in 200..299) conn.inputStream else conn.errorStream
                 val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                if (code == 401) throw UnauthorizedApiException("Session expired.")
+                if (code == 401) throw UnauthorizedApiException()
                 val json = org.json.JSONObject(if (body.isBlank()) "{}" else body)
                 if (code !in 200..299) {
                     throw IllegalStateException(json.optString("error", "AI request failed ($code)"))
