@@ -6,6 +6,7 @@ import {
   type AgentPlanSnapshot,
 } from "@/lib/data/agent-plan";
 import { createAgentTask } from "@/lib/data/agent-tasks";
+import { enqueueDeviceCommand } from "@/lib/data/device-commands";
 import {
   completeFocusSession,
   getActiveSession,
@@ -18,14 +19,22 @@ import {
   normalizeVietnameseMatch,
   parseAiIntent,
   type AiChatResponse,
+  type AiClientCommand,
+  type AiDeviceCommand,
 } from "@/lib/domain/ai-assistant";
+
+export interface RunFocusGateAiOptions {
+  confirmUnlock?: boolean;
+  pendingCommand?: AiDeviceCommand | null;
+  sourcePlatform?: "web" | "windows" | "android";
+}
 
 function isEnglishPrompt(text: string): boolean {
   const hasViDiacritics = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(
     text,
   );
   if (hasViDiacritics) return false;
-  return /\b(add|create|start|focus|pause|resume|complete|finish|today|status|next|unlock|task|summary|help|what|how)\b/i.test(
+  return /\b(add|create|start|focus|pause|resume|complete|finish|today|status|next|unlock|task|summary|help|what|how|open|launch|close|mute|volume|lock|dark|light)\b/i.test(
     text,
   );
 }
@@ -84,8 +93,8 @@ async function callOptionalLlm(
   en: boolean,
 ): Promise<{ reply: string; provider: "gemini" | "openai" } | null> {
   const systemPrompt = en
-    ? `You are FocusGate AI — a concise, calm, action-oriented discipline coach embedded across Web, Windows PC, and Android. Answer in 2-4 short sentences based on the user's live FocusGate state:\n${contextSummary}`
-    : `Bạn là FocusGate AI — trợ lý kỷ luật & tập trung điềm tĩnh, ngắn gọn, đồng bộ trên Web, Windows PC và Android. Trả lời bằng tiếng Việt trong 2-4 câu ngắn, dựa trên trạng thái thực tế hôm nay:\n${contextSummary}`;
+    ? `You are FocusGate AI — an omni-controller discipline assistant across Web, Windows PC, and Android. Answer concisely in 2-3 sentences based on live FocusGate state:\n${contextSummary}`
+    : `Bạn là FocusGate AI — trợ lý kỷ luật điều khiển toàn diện Web, Windows PC và Android. Trả lời bằng tiếng Việt trong 2-3 câu ngắn gọn dựa trên trạng thái hôm nay:\n${contextSummary}`;
 
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
   if (geminiKey) {
@@ -99,7 +108,7 @@ async function callOptionalLlm(
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemPrompt }] },
             contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 280, temperature: 0.4 },
+            generationConfig: { maxOutputTokens: 260, temperature: 0.4 },
           }),
           signal: AbortSignal.timeout(12_000),
         },
@@ -112,7 +121,7 @@ async function callOptionalLlm(
         if (text) return { reply: text, provider: "gemini" };
       }
     } catch {
-      // Fall through to OpenAI or local engine
+      // Fall through
     }
   }
 
@@ -132,7 +141,7 @@ async function callOptionalLlm(
             { role: "system", content: systemPrompt },
             { role: "user", content: prompt },
           ],
-          max_tokens: 280,
+          max_tokens: 260,
           temperature: 0.4,
         }),
         signal: AbortSignal.timeout(12_000),
@@ -145,19 +154,177 @@ async function callOptionalLlm(
         if (text) return { reply: text, provider: "openai" };
       }
     } catch {
-      // Fall through to local engine
+      // Fall through
     }
   }
 
   return null;
 }
 
+async function dispatchDeviceCommand(
+  command: AiDeviceCommand,
+  en: boolean,
+  options: RunFocusGateAiOptions,
+  request?: Request,
+): Promise<AiChatResponse> {
+  const isDistraction =
+    (command.type === "open_url_in_browser" || command.type === "launch_app") &&
+    Boolean(command.isDistraction);
+
+  // Gate-Aware Guardrail: if Gate is locked & target is a distraction, ask to spend 10m from wallet first!
+  if (isDistraction) {
+    const snapshot = await getAgentTodayPlan(request);
+    if (!snapshot.unlocked) {
+      if (!options.confirmUnlock) {
+        const mustLeft = (snapshot.plan?.tasks ?? []).filter(
+          (t) => t.kind === "must_do" && t.status !== "completed",
+        ).length;
+        return {
+          reply: en
+            ? `FocusGate is currently locked (${mustLeft} Must-do left). You have ${snapshot.activeGrantMinutes}m in your wallet — would you like to spend 10m to unlock and run "${command.label}"?`
+            : `Cổng FocusGate đang khóa (còn ${mustLeft} việc Bắt buộc). Ví thưởng của bạn đang có ${snapshot.activeGrantMinutes} phút — bạn có muốn dùng 10 phút thưởng để mở khóa và thực hiện "${command.label}" không?`,
+          action: {
+            type: "gate_confirm",
+            executed: false,
+            label: en ? "Gate locked · Confirm 10m pass" : "Cổng đang khóa · Cần xác nhận 10p",
+          },
+          clientCommands: [],
+          deviceCommand: null,
+          pendingConfirmation: {
+            type: "unlock_and_run",
+            minutes: 10,
+            command,
+            buttonLabel: en ? "Use 10m & Open Now" : "Dùng 10p thưởng & Mở ngay",
+          },
+          shouldRefresh: false,
+          provider: "focusgate-engine",
+        };
+      }
+
+      // User confirmed! Spend 10m from reward wallet first.
+      try {
+        await activateUnlockPass(10, request);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        return {
+          reply: en
+            ? `Could not unlock 10m pass (${msg || "not enough earned minutes"}). Complete a focus session or Must-do task first!`
+            : `Chưa thể dùng 10 phút thưởng (${msg || "không đủ số dư ví thưởng"}). Hãy hoàn thành thêm phiên tập trung hoặc việc Bắt buộc trước nhé!`,
+          action: {
+            type: "unlock_pass",
+            executed: false,
+            label: en ? "Insufficient wallet balance" : "Chưa đủ phút thưởng",
+          },
+          clientCommands: [],
+          deviceCommand: null,
+          shouldRefresh: false,
+          provider: "focusgate-engine",
+        };
+      }
+    }
+  }
+
+  // Enqueue into cross-device remote queue if targeting another device (or general remote sync)
+  const source = options.sourcePlatform ?? "web";
+  const shouldEnqueueRemote =
+    (source === "web" && (command.targetPlatform === "windows" || command.targetPlatform === "android")) ||
+    (source === "android" && command.targetPlatform === "windows") ||
+    (source === "windows" && command.targetPlatform === "android");
+
+  if (shouldEnqueueRemote) {
+    await enqueueDeviceCommand(
+      {
+        targetPlatform: command.targetPlatform,
+        commandType: command.type,
+        payload: command as unknown as Record<string, unknown>,
+      },
+      request,
+    );
+  }
+
+  const clientCommands: AiClientCommand[] = [];
+  if (command.type === "open_url_in_browser" && source === "web" && command.targetPlatform !== "android") {
+    clientCommands.push({ type: "open_url", url: command.url, label: command.label });
+  }
+
+  const targetNote =
+    command.targetPlatform === "windows"
+      ? en
+        ? " on Windows PC"
+        : " trên máy tính Windows"
+      : command.targetPlatform === "android"
+        ? en
+          ? " on Android phone"
+          : " trên điện thoại Android"
+        : "";
+
+  const unlockPrefix = options.confirmUnlock
+    ? en
+      ? "Unlocked 10m pass and "
+      : "Đã dùng 10 phút thưởng và "
+    : en
+      ? "Executing: "
+      : "Đang thực thi: ";
+
+  return {
+    reply: `${unlockPrefix}${command.label}${targetNote}.`,
+    action: {
+      type: command.type,
+      executed: true,
+      label: command.label,
+    },
+    clientCommands,
+    deviceCommand: command,
+    shouldRefresh: Boolean(options.confirmUnlock),
+    provider: "focusgate-engine",
+  };
+}
+
 export async function runFocusGateAi(
   message: string,
   request?: Request,
+  options: RunFocusGateAiOptions = {},
 ): Promise<AiChatResponse> {
   const en = isEnglishPrompt(message);
+
+  // If user confirmed a pending Gate-Aware unlock command
+  if (options.confirmUnlock && options.pendingCommand) {
+    return dispatchDeviceCommand(options.pendingCommand, en, options, request);
+  }
+
   const intent = parseAiIntent(message);
+
+  if (intent.type === "device_command") {
+    return dispatchDeviceCommand(intent.command, en, options, request);
+  }
+
+  if (intent.type === "navigate") {
+    return {
+      reply: en ? `Opening ${intent.label}.` : `Đang chuyển sang ${intent.label}.`,
+      action: { type: "navigate", executed: true, label: intent.label },
+      clientCommands: [{ type: "navigate", path: intent.path, label: intent.label }],
+      shouldRefresh: false,
+      provider: "focusgate-engine",
+    };
+  }
+
+  if (intent.type === "set_theme") {
+    const label =
+      intent.mode === "dark"
+        ? en
+          ? "Dark mode"
+          : "Chế độ tối"
+        : en
+          ? "Light mode"
+          : "Chế độ sáng";
+    return {
+      reply: en ? `Switched interface to ${label}.` : `Đã chuyển giao diện sang ${label}.`,
+      action: { type: "set_theme", executed: true, label },
+      clientCommands: [{ type: "set_theme", mode: intent.mode, label }],
+      shouldRefresh: false,
+      provider: "focusgate-engine",
+    };
+  }
 
   if (intent.type === "create_task") {
     await createAgentTask(
@@ -191,6 +358,7 @@ export async function runFocusGateAi(
         executed: true,
         label: en ? `Added: ${intent.title}` : `Đã thêm: ${intent.title}`,
       },
+      clientCommands: [],
       shouldRefresh: true,
       provider: "focusgate-engine",
     };
@@ -201,13 +369,14 @@ export async function runFocusGateAi(
     if (existing) {
       return {
         reply: en
-          ? `A focus session (${existing.taskTitle ?? `${existing.plannedMinutes}m`}) is already ${existing.status}. Say "pause focus" or "complete focus" first.`
-          : `Bạn đang có phiên tập trung (${existing.taskTitle ?? `${existing.plannedMinutes}p`}) ở trạng thái ${existing.status === "paused" ? "tạm dừng" : "đang chạy"}. Bạn có thể nói "tiếp tục" hoặc "hoàn thành phiên tập trung".`,
+          ? `A focus session (${existing.taskTitle ?? `${existing.plannedMinutes}m`}) is already ${existing.status}. Opening the Focus page now.`
+          : `Bạn đang có phiên tập trung (${existing.taskTitle ?? `${existing.plannedMinutes}p`}) ở trạng thái ${existing.status === "paused" ? "tạm dừng" : "đang chạy"}. Tôi đang mở trang Tập trung cho bạn.`,
         action: {
           type: "start_focus",
-          executed: false,
-          label: en ? "Session already active" : "Đã có phiên đang chạy",
+          executed: true,
+          label: en ? "Opened active focus" : "Mở phiên đang chạy",
         },
+        clientCommands: [{ type: "navigate", path: "/focus", label: en ? "Open Focus" : "Mở Tập trung" }],
         shouldRefresh: false,
         provider: "focusgate-engine",
       };
@@ -244,13 +413,16 @@ export async function runFocusGateAi(
 
     return {
       reply: en
-        ? `Started a ${intent.plannedMinutes}m focus session${taskSuffix}. Distraction gates are armed across Web, PC, and Android.`
-        : `Đã bắt đầu phiên tập trung ${intent.plannedMinutes} phút${taskSuffix} và đồng bộ khóa cổng trên Web, PC & Android.`,
+        ? `Opened Focus and started a ${intent.plannedMinutes}m session${taskSuffix}. Distraction gates are armed across Web, PC, and Android.`
+        : `Đã mở phần Tập trung và bắt đầu chạy ${intent.plannedMinutes} phút${taskSuffix}, đồng bộ khóa cổng trên Web, PC & Android.`,
       action: {
         type: "start_focus",
         executed: true,
         label: `Focus ${intent.plannedMinutes}p`,
       },
+      clientCommands: intent.openFocusPage
+        ? [{ type: "navigate", path: "/focus", label: en ? "Open Focus" : "Mở Tập trung" }]
+        : [],
       shouldRefresh: true,
       provider: "focusgate-engine",
     };
@@ -264,6 +436,7 @@ export async function runFocusGateAi(
           ? "There is no running focus session to pause right now."
           : "Hiện không có phiên tập trung nào đang chạy để tạm dừng.",
         action: { type: "pause_focus", executed: false, label: en ? "No active timer" : "Không có phiên chạy" },
+        clientCommands: [],
         shouldRefresh: false,
         provider: "focusgate-engine",
       };
@@ -274,6 +447,7 @@ export async function runFocusGateAi(
         ? "Focus session paused. Say \"resume focus\" whenever you are ready."
         : "Đã tạm dừng phiên tập trung. Khi sẵn sàng, bạn chỉ cần nói \"tiếp tục phiên\".",
       action: { type: "pause_focus", executed: true, label: en ? "Paused focus" : "Đã tạm dừng" },
+      clientCommands: [],
       shouldRefresh: true,
       provider: "focusgate-engine",
     };
@@ -287,6 +461,7 @@ export async function runFocusGateAi(
           ? "There is no paused focus session to resume."
           : "Hiện không có phiên tập trung nào đang tạm dừng.",
         action: { type: "resume_focus", executed: false, label: en ? "Nothing paused" : "Không có phiên dừng" },
+        clientCommands: [],
         shouldRefresh: false,
         provider: "focusgate-engine",
       };
@@ -297,6 +472,7 @@ export async function runFocusGateAi(
         ? "Focus session resumed! Stay locked in."
         : "Đã tiếp tục phiên tập trung. Giữ nhịp nhé!",
       action: { type: "resume_focus", executed: true, label: en ? "Resumed focus" : "Đã tiếp tục" },
+      clientCommands: [],
       shouldRefresh: true,
       provider: "focusgate-engine",
     };
@@ -310,6 +486,7 @@ export async function runFocusGateAi(
           ? "No active focus session found to complete."
           : "Hiện không có phiên tập trung nào đang mở để kết thúc.",
         action: { type: "complete_focus", executed: false, label: en ? "No active session" : "Không có phiên" },
+        clientCommands: [],
         shouldRefresh: false,
         provider: "focusgate-engine",
       };
@@ -320,6 +497,7 @@ export async function runFocusGateAi(
         ? "Focus session completed and logged! Great discipline."
         : "Đã hoàn thành và ghi nhận phiên tập trung! Rất tốt.",
       action: { type: "complete_focus", executed: true, label: en ? "Focus completed" : "Xong phiên Focus" },
+      clientCommands: [],
       shouldRefresh: true,
       provider: "focusgate-engine",
     };
@@ -334,6 +512,7 @@ export async function runFocusGateAi(
           ? `I couldn't find an unfinished task matching "${intent.taskQuery}" in today's plan.`
           : `Tôi chưa tìm thấy nhiệm vụ chưa xong nào khớp với "${intent.taskQuery}" trong kế hoạch hôm nay.`,
         action: { type: "complete_task", executed: false, label: en ? "Task not found" : "Không tìm thấy việc" },
+        clientCommands: [],
         shouldRefresh: false,
         provider: "focusgate-engine",
       };
@@ -348,6 +527,7 @@ export async function runFocusGateAi(
         executed: true,
         label: en ? `Done: ${target.title}` : `Xong: ${target.title}`,
       },
+      clientCommands: [],
       shouldRefresh: true,
       provider: "focusgate-engine",
     };
@@ -370,6 +550,7 @@ export async function runFocusGateAi(
         executed: true,
         label: en ? `Unlocked ${intent.minutes}m` : `Mở khóa ${intent.minutes}p`,
       },
+      clientCommands: [],
       shouldRefresh: true,
       provider: "focusgate-engine",
     };
@@ -394,19 +575,21 @@ export async function runFocusGateAi(
           ? `All ${total} tasks in today's plan are complete! You have ${snapshot.activeGrantMinutes}m in your reward wallet.`
           : `Tuyệt vời! Bạn đã hoàn thành toàn bộ ${total} việc hôm nay và đang có ${snapshot.activeGrantMinutes} phút thưởng trong ví.`,
         action: { type: "next_move", executed: true, label: en ? "All clear" : "Đã hoàn thành hết" },
+        clientCommands: [],
         shouldRefresh: false,
         provider: "focusgate-engine",
       };
     }
     return {
       reply: en
-        ? `Best next move: "${nextTask.title}" (${nextTask.kind === "must_do" ? "Must-do" : "Task"}). Say "start focus 25 minutes" to lock in right now.`
-        : `Việc ưu tiên số 1 lúc này là "${nextTask.title}" (${nextTask.kind === "must_do" ? "Bắt buộc" : "Kế hoạch"}). Bạn có thể nói "bắt đầu tập trung 25 phút" để vào việc ngay.`,
+        ? `Best next move: "${nextTask.title}" (${nextTask.kind === "must_do" ? "Must-do" : "Task"}). Say "open focus and run 25m" to lock in right now.`
+        : `Việc ưu tiên số 1 lúc này là "${nextTask.title}" (${nextTask.kind === "must_do" ? "Bắt buộc" : "Kế hoạch"}). Bạn có thể nói "mở phần tập trung và chạy 25 phút" để vào việc ngay.`,
       action: {
         type: "next_move",
         executed: true,
         label: nextTask.title.slice(0, 32),
       },
+      clientCommands: [],
       shouldRefresh: false,
       provider: "focusgate-engine",
     };
@@ -428,12 +611,12 @@ export async function runFocusGateAi(
         executed: true,
         label: `${completed}/${total} · ${snapshot.activeGrantMinutes}p`,
       },
+      clientCommands: [],
       shouldRefresh: false,
       provider: "focusgate-engine",
     };
   }
 
-  // General conversation: try optional Gemini/OpenAI if configured
   const contextSummary = buildContextSummary(
     snapshot,
     activeSession ? `${activeSession.taskTitle ?? `${activeSession.plannedMinutes}m`} (${activeSession.status})` : null,
@@ -443,6 +626,7 @@ export async function runFocusGateAi(
     return {
       reply: llm.reply,
       action: null,
+      clientCommands: [],
       shouldRefresh: false,
       provider: llm.provider,
     };
@@ -450,9 +634,10 @@ export async function runFocusGateAi(
 
   return {
     reply: en
-      ? `You have ${mustRemaining.length} Must-do task(s) left today (${completed}/${total} done) and ${snapshot.activeGrantMinutes}m in your wallet. Try saying: "Start focus 25 minutes", "Add task read 20m", "Complete task ...", or "What's next?".`
-      : `Hôm nay bạn còn ${mustRemaining.length} việc Bắt buộc (${completed}/${total} đã xong), ví thưởng ${snapshot.activeGrantMinutes}p. Bạn có thể nói hoặc gõ: "Tập trung 25 phút", "Thêm việc đọc sách 20p", "Hoàn thành việc ...", hoặc "Hôm nay còn gì?".`,
+      ? `Try: "Open focus and run 25m", "Open Chrome and go to YouTube", "Open VS Code", "Dark mode", or "Today's status".`
+      : `Bạn có thể ra lệnh: "Mở phần tập trung và chạy 25m", "Mở Chrome và vào YouTube", "Mở VS Code", "Chế độ tối", "Tắt âm lượng", hoặc "Hôm nay còn gì?".`,
     action: null,
+    clientCommands: [],
     shouldRefresh: false,
     provider: "focusgate-engine",
   };

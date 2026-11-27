@@ -249,6 +249,9 @@ fun HomeScreen(
             try {
                 val snapshot = withContext(Dispatchers.IO) {
                     PlanSyncManager.syncRemoteFocusSession(context)
+                    PlanSyncManager.pollAndExecuteRemoteCommands(context) {
+                        showSanctuaryFullscreen = true
+                    }
                     PlanSyncManager.syncNow(context)
                 }
                 planSnapshot = snapshot
@@ -754,6 +757,10 @@ fun HomeScreen(
             AiAssistantSheetContent(
                 isVi = isVi,
                 onActionMutated = { syncPlanFromWeb(silent = true) },
+                onOpenSanctuary = {
+                    showAiSheet = false
+                    showSanctuaryFullscreen = true
+                },
             )
         }
     }

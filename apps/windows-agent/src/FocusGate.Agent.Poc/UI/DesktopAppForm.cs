@@ -260,6 +260,18 @@ public sealed class DesktopAppForm : Form
                             keybd_event(VkLWin, 0x5B, KeyEventFExtendedKey | KeyEventFKeyUp, UIntPtr.Zero);
                         });
                     }
+                    else if (!string.IsNullOrWhiteSpace(raw) && raw.TrimStart().StartsWith("{"))
+                    {
+                        using var doc = JsonDocument.Parse(raw);
+                        var root = doc.RootElement;
+                        if (root.TryGetProperty("type", out var tEl) &&
+                            string.Equals(tEl.GetString(), "focusgate_device_command", StringComparison.Ordinal) &&
+                            root.TryGetProperty("command", out var cmdEl))
+                        {
+                            var cmdClone = cmdEl.Clone();
+                            BeginInvoke(() => Services.PcCommandExecutor.Execute(cmdClone));
+                        }
+                    }
                 }
                 catch
                 {

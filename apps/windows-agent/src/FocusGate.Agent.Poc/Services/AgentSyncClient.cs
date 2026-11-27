@@ -280,6 +280,60 @@ public sealed class AgentSyncClient : IDisposable
         return new AiChatReply(reply, actionLabel, actionExecuted, shouldRefresh);
     }
 
+    public async Task<IReadOnlyList<RemoteDeviceCommand>> PollDeviceCommandsAsync(
+        string apiBaseUrl,
+        string accessToken,
+        string platform = "windows",
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri = NormalizeBaseUrl(apiBaseUrl);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            new Uri(baseUri, $"/api/agent/commands?platform={Uri.EscapeDataString(platform)}"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await _http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return Array.Empty<RemoteDeviceCommand>();
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+        if (!doc.RootElement.TryGetProperty("commands", out var cmdsEl) || cmdsEl.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<RemoteDeviceCommand>();
+        }
+
+        var list = new List<RemoteDeviceCommand>();
+        foreach (var item in cmdsEl.EnumerateArray())
+        {
+            var id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (string.IsNullOrWhiteSpace(id)) continue;
+            if (!item.TryGetProperty("payload", out var payloadEl)) continue;
+            list.Add(new RemoteDeviceCommand(id, payloadEl.Clone()));
+        }
+        return list;
+    }
+
+    public async Task AckDeviceCommandAsync(
+        string apiBaseUrl,
+        string accessToken,
+        string commandId,
+        bool ok,
+        string? resultMessage = null,
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri = NormalizeBaseUrl(apiBaseUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/api/agent/commands"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = JsonContent.Create(new
+        {
+            action = "ack",
+            commandId,
+            status = ok ? "executed" : "failed",
+            resultMessage,
+        });
+        using var _ = await _http.SendAsync(request, cancellationToken);
+    }
+
     private static Uri NormalizeBaseUrl(string apiBaseUrl)
     {
         if (!Uri.TryCreate(apiBaseUrl.Trim(), UriKind.Absolute, out var uri) ||
@@ -307,3 +361,7 @@ public sealed record AiChatReply(
     string? ActionLabel,
     bool ActionExecuted,
     bool ShouldRefresh);
+
+public sealed record RemoteDeviceCommand(
+    string Id,
+    JsonElement Payload);

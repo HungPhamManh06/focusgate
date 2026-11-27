@@ -366,9 +366,17 @@ object PlanSyncManager {
         val actionLabel: String?,
         val actionExecuted: Boolean,
         val shouldRefresh: Boolean,
+        val deviceCommandJson: String? = null,
+        val pendingConfirmCommandJson: String? = null,
+        val pendingConfirmLabel: String? = null,
     )
 
-    fun askAiAssistant(context: Context, message: String): AiChatReply {
+    fun askAiAssistant(
+        context: Context,
+        message: String,
+        confirmUnlock: Boolean = false,
+        pendingCommandJson: String? = null,
+    ): AiChatReply {
         return withValidToken(context) { token ->
             val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/ai")
             val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
@@ -380,10 +388,14 @@ object PlanSyncManager {
                 setRequestProperty("Content-Type", "application/json")
             }
             try {
-                val payload = org.json.JSONObject()
+                val payloadObj = org.json.JSONObject()
                     .put("message", message)
-                    .toString()
-                conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                    .put("sourcePlatform", "android")
+                if (confirmUnlock) payloadObj.put("confirmUnlock", true)
+                if (!pendingCommandJson.isNullOrBlank()) {
+                    payloadObj.put("pendingCommand", org.json.JSONObject(pendingCommandJson))
+                }
+                conn.outputStream.use { it.write(payloadObj.toString().toByteArray(Charsets.UTF_8)) }
                 val code = conn.responseCode
                 val stream = if (code in 200..299) conn.inputStream else conn.errorStream
                 val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -393,15 +405,73 @@ object PlanSyncManager {
                     throw IllegalStateException(json.optString("error", "AI request failed ($code)"))
                 }
                 val actionObj = json.optJSONObject("action")
+                val deviceCmdObj = json.optJSONObject("deviceCommand")
+                val pendingObj = json.optJSONObject("pendingConfirmation")
                 AiChatReply(
                     reply = json.optString("reply", "Done."),
                     actionLabel = actionObj?.optString("label")?.takeIf { it.isNotBlank() },
                     actionExecuted = actionObj?.optBoolean("executed", false) ?: false,
                     shouldRefresh = json.optBoolean("shouldRefresh", false),
+                    deviceCommandJson = deviceCmdObj?.toString(),
+                    pendingConfirmCommandJson = pendingObj?.optJSONObject("command")?.toString(),
+                    pendingConfirmLabel = pendingObj?.optString("buttonLabel")?.takeIf { it.isNotBlank() },
                 )
             } finally {
                 conn.disconnect()
             }
+        }
+    }
+
+    fun pollAndExecuteRemoteCommands(context: Context, onOpenSanctuary: () -> Unit = {}) {
+        runCatching {
+            withValidToken(context) { token ->
+                val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/commands?platform=android")
+                val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8_000
+                    readTimeout = 8_000
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+                try {
+                    if (conn.responseCode !in 200..299) return@withValidToken
+                    val body = conn.inputStream.bufferedReader().use { it.readText() }
+                    val commands = org.json.JSONObject(body).optJSONArray("commands") ?: return@withValidToken
+                    for (i in 0 until commands.length()) {
+                        val item = commands.optJSONObject(i) ?: continue
+                        val id = item.optString("id")
+                        val payload = item.optJSONObject("payload")?.toString() ?: continue
+                        if (id.isBlank()) continue
+                        val res = AndroidCommandExecutor.execute(context, payload, onOpenSanctuary)
+                        ackRemoteCommand(token, id, res.ok, res.message)
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            }
+        }
+    }
+
+    private fun ackRemoteCommand(token: String, commandId: String, ok: Boolean, message: String) {
+        val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/commands")
+        val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            connectTimeout = 6_000
+            readTimeout = 6_000
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        try {
+            val payload = org.json.JSONObject()
+                .put("action", "ack")
+                .put("commandId", commandId)
+                .put("status", if (ok) "executed" else "failed")
+                .put("resultMessage", message)
+                .toString()
+            conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+            conn.responseCode
+        } finally {
+            conn.disconnect()
         }
     }
 

@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.focusgate.app.util.AndroidCommandExecutor
 import com.focusgate.app.util.PlanSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,12 +60,15 @@ private data class AiUiMessage(
     val viaVoice: Boolean = false,
     val actionLabel: String? = null,
     val actionExecuted: Boolean = false,
+    val pendingConfirmCommandJson: String? = null,
+    val pendingConfirmLabel: String? = null,
 )
 
 @Composable
 fun AiAssistantSheetContent(
     isVi: Boolean,
     onActionMutated: () -> Unit,
+    onOpenSanctuary: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -114,7 +118,12 @@ fun AiAssistantSheetContent(
         }
     }
 
-    fun sendToAi(rawText: String, viaVoice: Boolean = false) {
+    fun sendToAi(
+        rawText: String,
+        viaVoice: Boolean = false,
+        confirmUnlock: Boolean = false,
+        pendingCommandJson: String? = null,
+    ) {
         val trimmed = rawText.trim()
         if (trimmed.isEmpty() || busy) return
         voiceError = null
@@ -131,7 +140,12 @@ fun AiAssistantSheetContent(
         scope.launch {
             try {
                 val reply = withContext(Dispatchers.IO) {
-                    PlanSyncManager.askAiAssistant(context, trimmed)
+                    PlanSyncManager.askAiAssistant(
+                        context = context,
+                        message = trimmed,
+                        confirmUnlock = confirmUnlock,
+                        pendingCommandJson = pendingCommandJson,
+                    )
                 }
                 messages.add(
                     AiUiMessage(
@@ -140,9 +154,18 @@ fun AiAssistantSheetContent(
                         text = reply.reply,
                         actionLabel = reply.actionLabel,
                         actionExecuted = reply.actionExecuted,
+                        pendingConfirmCommandJson = reply.pendingConfirmCommandJson,
+                        pendingConfirmLabel = reply.pendingConfirmLabel,
                     ),
                 )
                 speakIfEnabled(reply.reply)
+                if (!reply.deviceCommandJson.isNullOrBlank()) {
+                    AndroidCommandExecutor.execute(
+                        context = context,
+                        commandJson = reply.deviceCommandJson,
+                        onOpenSanctuary = onOpenSanctuary,
+                    )
+                }
                 if (reply.shouldRefresh) {
                     onActionMutated()
                 }
@@ -302,6 +325,22 @@ fun AiAssistantSheetContent(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (msg.actionExecuted) Color(0xFF10B981) else Color(0xFFD97706),
                             )
+                        }
+                    }
+                    if (!msg.pendingConfirmCommandJson.isNullOrBlank() && !msg.pendingConfirmLabel.isNullOrBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Button(
+                            onClick = {
+                                sendToAi(
+                                    rawText = msg.pendingConfirmLabel,
+                                    viaVoice = false,
+                                    confirmUnlock = true,
+                                    pendingCommandJson = msg.pendingConfirmCommandJson,
+                                )
+                            },
+                            enabled = !busy,
+                        ) {
+                            Text("🔓 ${msg.pendingConfirmLabel}", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }

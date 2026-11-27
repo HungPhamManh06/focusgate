@@ -233,6 +233,32 @@ public sealed class TrayAgentContext : ApplicationContext
                     _credentials.DeviceId,
                     apps);
             }
+
+            // Poll & execute remote AI device commands queued from Web or Android
+            var remoteCommands = await _syncClient.PollDeviceCommandsAsync(
+                _credentials.ApiBaseUrl,
+                _credentials.AccessToken,
+                "windows");
+            foreach (var remoteCmd in remoteCommands)
+            {
+                var (ok, resultMsg) = PcCommandExecutor.Execute(
+                    remoteCmd.Payload,
+                    onToggleFloatingTimer: () =>
+                    {
+                        if (_floatingTimer is { Visible: true }) _floatingTimer.HideSession();
+                        else
+                        {
+                            _floatingTimer ??= new FloatingTimerForm();
+                            _floatingTimer.UpdateSession("Focus Sprint", IsVi);
+                        }
+                    });
+                await _syncClient.AckDeviceCommandAsync(
+                    _credentials.ApiBaseUrl,
+                    _credentials.AccessToken,
+                    remoteCmd.Id,
+                    ok,
+                    resultMsg);
+            }
         }
         catch (Exception ex)
         {

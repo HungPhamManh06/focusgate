@@ -4,7 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AiLogoMark } from "@/components/ui/ai-logo";
 import { useLocale } from "@/components/i18n/language-provider";
-import type { AiChatResponse } from "@/lib/domain/ai-assistant";
+import { executeWebAiCommands } from "@/lib/client/ai-web-executor";
+import {
+  isAffirmativeConfirmation,
+  type AiChatResponse,
+  type AiDeviceCommand,
+  type AiPendingConfirmation,
+} from "@/lib/domain/ai-assistant";
 
 interface ChatEntry {
   id: string;
@@ -13,6 +19,7 @@ interface ChatEntry {
   viaVoice?: boolean;
   actionLabel?: string | null;
   actionExecuted?: boolean;
+  pendingConfirmation?: AiPendingConfirmation | null;
 }
 
 interface FabPosition {
@@ -98,6 +105,7 @@ export function AiAssistantDrawer() {
   const [voiceIsError, setVoiceIsError] = useState(false);
   const [fabPos, setFabPos] = useState<FabPosition | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<AiPendingConfirmation | null>(null);
   const [messages, setMessages] = useState<ChatEntry[]>(() => [
     {
       id: "welcome",
@@ -207,9 +215,18 @@ export function AiAssistantDrawer() {
   );
 
   const sendMessage = useCallback(
-    async (rawText: string, viaVoice = false) => {
+    async (
+      rawText: string,
+      viaVoice = false,
+      confirmOverride?: { confirmUnlock: boolean; pendingCommand: AiDeviceCommand },
+    ) => {
       const text = rawText.trim();
       if (!text || busy) return;
+
+      const isConfirming =
+        Boolean(confirmOverride) ||
+        (Boolean(pendingConfirm) && isAffirmativeConfirmation(text));
+      const cmdToConfirm = confirmOverride?.pendingCommand ?? (isConfirming ? pendingConfirm?.command : undefined);
 
       const userEntry: ChatEntry = {
         id: `u-${Date.now()}`,
@@ -221,13 +238,19 @@ export function AiAssistantDrawer() {
       setInput("");
       setVoiceStatus(null);
       setVoiceIsError(false);
+      setPendingConfirm(null);
       setBusy(true);
 
       try {
         const response = await fetch("/api/agent/ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text }),
+          body: JSON.stringify({
+            message: text,
+            confirmUnlock: isConfirming && Boolean(cmdToConfirm),
+            pendingCommand: cmdToConfirm ?? null,
+            sourcePlatform: getWebViewBridge() ? "windows" : "web",
+          }),
         });
         const data = (await response.json()) as AiChatResponse & { error?: string };
 
@@ -241,13 +264,20 @@ export function AiAssistantDrawer() {
           text: data.reply,
           actionLabel: data.action?.label ?? null,
           actionExecuted: data.action?.executed ?? false,
+          pendingConfirmation: data.pendingConfirmation ?? null,
         };
         setMessages((prev) => [...prev, aiEntry]);
+        if (data.pendingConfirmation) {
+          setPendingConfirm(data.pendingConfirmation);
+        }
         speakReply(data.reply);
 
-        if (data.shouldRefresh) {
-          router.refresh();
-        }
+        executeWebAiCommands({
+          clientCommands: data.clientCommands,
+          deviceCommand: data.deviceCommand,
+          router,
+          shouldRefresh: data.shouldRefresh,
+        });
       } catch (err) {
         const errorText =
           err instanceof Error
@@ -267,7 +297,7 @@ export function AiAssistantDrawer() {
         setBusy(false);
       }
     },
-    [busy, isVi, router, speakReply],
+    [busy, isVi, pendingConfirm, router, speakReply],
   );
 
   const stopListening = useCallback(
@@ -879,6 +909,21 @@ export function AiAssistantDrawer() {
                   >
                     {msg.actionExecuted ? "✓" : "•"} {msg.actionLabel}
                   </span>
+                )}
+                {msg.pendingConfirmation && pendingConfirm?.command === msg.pendingConfirmation.command && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void sendMessage(msg.pendingConfirmation!.buttonLabel, false, {
+                        confirmUnlock: true,
+                        pendingCommand: msg.pendingConfirmation!.command,
+                      })
+                    }
+                    className="mt-1.5 inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    🔓 {msg.pendingConfirmation.buttonLabel}
+                  </button>
                 )}
               </div>
             ))}
