@@ -110,6 +110,7 @@ export function AiAssistantDrawer() {
   const [dragging, setDragging] = useState(false);
   const [spotlightMode, setSpotlightMode] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
+  const [proactiveGreeting, setProactiveGreeting] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<AiPendingConfirmation | null>(null);
   const [messages, setMessages] = useState<ChatEntry[]>(() => [
     {
@@ -200,6 +201,44 @@ export function AiAssistantDrawer() {
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy, open]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (window.sessionStorage.getItem("focusgate_gatebot_greeted") === "1") return;
+    } catch {
+      return;
+    }
+    const showTimer = window.setTimeout(() => {
+      const hr = new Date().getHours();
+      const msg = isVi
+        ? hr < 12
+          ? "Chào buổi sáng! Lên 3 việc Bắt buộc cùng mình nhé?"
+          : hr < 18
+            ? "Chiều rồi! Bấm 1 phiên 25p để giữ nhịp tập trung nhé!"
+            : "Buổi tối nhẹ nhàng — hoàn thành nốt việc rồi nghỉ sớm nhé!"
+        : hr < 12
+          ? "Good morning! Ready to pick today's Must-dos?"
+          : hr < 18
+            ? "Afternoon check-in — want to run a quick 25m focus?"
+            : "Evening wind-down — finish strong and earn your rest!";
+      setProactiveGreeting(msg);
+      try {
+        window.sessionStorage.setItem("focusgate_gatebot_greeted", "1");
+      } catch {
+        // Ignore storage errors
+      }
+    }, 2500);
+
+    const hideTimer = window.setTimeout(() => {
+      setProactiveGreeting(null);
+    }, 9500);
+
+    return () => {
+      window.clearTimeout(showTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [isVi]);
 
   const clearVoiceTimers = useCallback(() => {
     if (silenceTimerRef.current !== null) {
@@ -843,6 +882,34 @@ export function AiAssistantDrawer() {
 
   return (
     <>
+      {/* GateBot Proactive Greeting Whisper */}
+      {proactiveGreeting && !open && !dragging && (
+        <div
+          className="fg-animate-in fixed bottom-[148px] right-4 z-40 flex max-w-[260px] items-start gap-2 rounded-2xl rounded-br-sm border border-line bg-surface/96 px-3.5 py-2.5 text-[11.5px] leading-snug text-ink shadow-lift backdrop-blur-md lg:bottom-[132px] lg:right-6"
+          role="status"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setProactiveGreeting(null);
+              setOpen(true);
+              window.setTimeout(() => inputRef.current?.focus(), 80);
+            }}
+            className="flex-1 text-left transition-colors hover:text-accent"
+          >
+            {proactiveGreeting}
+          </button>
+          <button
+            type="button"
+            onClick={() => setProactiveGreeting(null)}
+            aria-label="Dismiss GateBot greeting"
+            className="shrink-0 text-[10.5px] text-muted hover:text-ink"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Draggable Floating GateBot Companion Trigger */}
       <button
         ref={fabRef}

@@ -34,6 +34,7 @@ import { DistractionCostCalculator } from "./distraction-cost-calculator";
 import { DisciplineCurrencyCard } from "./discipline-currency-card";
 import { EarnedTimeCard } from "./earned-time-card";
 import { FocusBalanceScale } from "./focus-balance-scale";
+import { LeisureBatteryBar } from "./leisure-battery-bar";
 import { QuickRedeemVault } from "./quick-redeem-vault";
 import { RewardTierCard } from "./reward-tier-card";
 import { RewardWishlistCard } from "./reward-wishlist-card";
@@ -125,6 +126,13 @@ export default async function WalletPage() {
         consumedMinutes={wallet.consumedMinutes}
         displayName={workspace.profile.displayName}
         locale={locale}
+      />
+
+      <LeisureBatteryBar
+        availableMinutes={wallet.availableMinutes}
+        dailyCapMinutes={workspace.settings.dailyCapMinutes}
+        expiringSoonCount={expiringSoon.length}
+        isVi={isVi}
       />
 
       <DistractionCostCalculator availableMinutes={wallet.availableMinutes} />

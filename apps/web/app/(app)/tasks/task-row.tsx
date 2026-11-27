@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Check, Loader2, Play, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import { addSuggestedTaskToTodayPlanAction } from "@/lib/actions/planner";
 import {
@@ -313,6 +313,16 @@ export function TaskRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {!completed && !needsFocusInActivePlan ? (
+          <Link
+            href={`/focus?taskId=${task.id}`}
+            title={isVi ? "Bắt đầu tập trung 25p cho việc này" : "Start 25m focus for this task"}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-accent/25 bg-accent-soft/70 px-2 text-[11.5px] font-semibold text-accent opacity-90 transition-all hover:bg-accent hover:text-white md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+          >
+            <Play className="size-3 fill-current" />
+            <span>{isVi ? "25p" : "25m"}</span>
+          </Link>
+        ) : null}
         {needsFocusInActivePlan ? (
           <Link
             href={`/focus?taskId=${task.id}`}

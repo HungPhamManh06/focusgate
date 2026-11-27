@@ -84,9 +84,9 @@ fun AiAssistantSheetContent(
                 id = 1L,
                 fromUser = false,
                 text = if (isVi) {
-                    "Chào bạn! Tôi là FocusGate AI. Hãy nhập hoặc chạm nút Nói 🎙️ để ra lệnh đồng bộ Web, PC & Android."
+                    "Chào bạn! Mình là GateBot — trợ lý đồng hành FocusGate. Hãy nhắn hoặc chạm Nói 🎙️ để đồng bộ Web, PC & Android nhé!"
                 } else {
-                    "Hi! I'm FocusGate AI. Type or tap Speak 🎙️ to run synced actions across Web, PC, and Android."
+                    "Hi! I'm GateBot — your FocusGate buddy. Type or tap Speak 🎙️ to run synced actions across Web, PC, and Android!"
                 },
             ),
         )
@@ -246,16 +246,23 @@ fun AiAssistantSheetContent(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AiKeystoneLogo(size = 34.dp)
+                AiRobotAvatar(
+                    size = 38.dp,
+                    mood = if (busy) RobotMood.THINKING else RobotMood.IDLE,
+                )
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "FocusGate AI",
+                        text = "GateBot AI",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "Web · PC · Android",
+                        text = if (busy) {
+                            if (isVi) "Để mình xử lý nhé..." else "Working on it..."
+                        } else {
+                            if (isVi) "Sẵn sàng giúp bạn · Web · PC · Android" else "Ready to help · Web · PC · Android"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

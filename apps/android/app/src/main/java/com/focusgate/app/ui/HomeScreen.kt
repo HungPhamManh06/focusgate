@@ -1085,9 +1085,12 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        AiKeystoneLogo(size = 32.dp)
+                        AiRobotAvatar(
+                            size = 32.dp,
+                            mood = if (planUnlocked) RobotMood.SUCCESS else RobotMood.IDLE,
+                        )
                         Text(
-                            text = "AI",
+                            text = "GateBot",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -1208,6 +1211,81 @@ fun HomeScreen(
                 }
             }
             if (signedInEmail != null) {
+                val topFocusRunning = AgentPreferences.isActiveFocusRunning(context)
+                val topFocusSessionId = AgentPreferences.getActiveFocusSessionId(context)
+                val topFocusTitle = AgentPreferences.getActiveFocusTitle(context)
+                if (topFocusRunning) {
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(RoundedCornerShape(999.dp))
+                                            .background(Color(0xFF34D399)),
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = tr("Live Focus Session", "Đang tập trung trực tiếp"),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            maxLines = 1,
+                                        )
+                                        Text(
+                                            text = topFocusTitle ?: tr("Synced across Web & PC", "Đồng bộ Web & PC"),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                                if (!topFocusSessionId.isNullOrBlank()) {
+                                    Button(
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            scope.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    PlanSyncManager.updateRemoteFocusSession(context, "complete", topFocusSessionId)
+                                                    PlanSyncManager.syncRemoteFocusSession(context)
+                                                }
+                                                focusSyncVersion += 1
+                                                syncPlanFromWeb()
+                                            }
+                                        },
+                                    ) {
+                                        Text(
+                                            tr("Finish", "Xong"),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 item {
                     val heroPlan = planSnapshot?.plan
                     val mustDoTasks = heroPlan?.tasks?.filter { it.kind == "must_do" }.orEmpty()
@@ -1233,7 +1311,8 @@ fun HomeScreen(
                         Spacer(Modifier.height(10.dp))
                         Surface(
                             shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
+                            color = Color(0x1F10B981),
+                            border = BorderStroke(1.dp, Color(0x6610B981)),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Row(
@@ -1244,14 +1323,44 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text(
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp),
                                     text = tr(
-                                        "🎉 Gate Unlocked! Enjoy ${earnedMinutesBalance}m earned freedom.",
-                                        "🎉 Cổng đã mở! Tận hưởng ${earnedMinutesBalance}p tự do giải trí.",
+                                        "🎉 Gate Unlocked! ${earnedMinutesBalance}m earned freedom.",
+                                        "🎉 Cổng đã mở! Quỹ thưởng còn ${earnedMinutesBalance}p.",
                                     ),
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    color = Color(0xFF047857),
                                 )
+                                if (earnedMinutesBalance >= 10) {
+                                    Button(
+                                        enabled = !planSyncBusy,
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            planSyncBusy = true
+                                            scope.launch {
+                                                try {
+                                                    val snap = withContext(Dispatchers.IO) {
+                                                        PlanSyncManager.activateUnlockPassAndSync(context, 10)
+                                                    }
+                                                    planSnapshot = snap
+                                                    planUnlocked = snap.unlocked
+                                                    earnedMinutesBalance = snap.availableRewardMinutes
+                                                } finally {
+                                                    planSyncBusy = false
+                                                }
+                                            }
+                                        },
+                                    ) {
+                                        Text(
+                                            tr("Use 10m", "Dùng 10p"),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1336,10 +1445,10 @@ fun HomeScreen(
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    AiKeystoneLogo(size = 16.dp)
+                                    AiRobotAvatar(size = 18.dp)
                                     Spacer(Modifier.width(5.dp))
                                     Text(
-                                        "AI",
+                                        "GateBot",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
@@ -2055,15 +2164,42 @@ fun HomeScreen(
                                                         )
                                                     }
                                                 } else {
-                                                    OutlinedButton(
-                                                        onClick = { completeTaskFromPhone(task.planTaskId) },
-                                                        enabled = completingTaskId == null,
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
                                                     ) {
-                                                        Text(
-                                                            if (completingTaskId == task.planTaskId) "..." else tr("Done", "Xong"),
-                                                            maxLines = 1,
-                                                            softWrap = false,
-                                                        )
+                                                        Surface(
+                                                            shape = RoundedCornerShape(999.dp),
+                                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                                            onClick = {
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                scope.launch {
+                                                                    withContext(Dispatchers.IO) {
+                                                                        PlanSyncManager.startRemoteFocusSession(context, 25)
+                                                                        PlanSyncManager.syncRemoteFocusSession(context)
+                                                                    }
+                                                                    focusSyncVersion += 1
+                                                                }
+                                                            },
+                                                        ) {
+                                                            Text(
+                                                                text = "▶",
+                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                                                style = MaterialTheme.typography.labelMedium,
+                                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            )
+                                                        }
+                                                        OutlinedButton(
+                                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                            onClick = { completeTaskFromPhone(task.planTaskId) },
+                                                            enabled = completingTaskId == null,
+                                                        ) {
+                                                            Text(
+                                                                if (completingTaskId == task.planTaskId) "..." else tr("Done", "Xong"),
+                                                                maxLines = 1,
+                                                                softWrap = false,
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }

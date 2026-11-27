@@ -18,6 +18,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { getCategoryLabel } from "@/components/domain/labels";
 import { AnalyticsStudioCharts } from "@/components/domain/analytics-studio-charts";
 import { CircadianFocusHeatmap } from "@/components/domain/circadian-focus-heatmap";
+import { DisciplineHeatmapCard } from "@/components/domain/discipline-heatmap-card";
 import { DisciplineScoreRing } from "@/components/domain/discipline-score-ring";
 import { DailyReceiptCard } from "@/components/domain/daily-receipt-card";
 import { FocusGardenAndLetter } from "@/components/domain/focus-garden-letter";
@@ -131,6 +132,8 @@ export default async function StatisticsPage({
         completionRate={stats.completionRate}
         locale={locale}
       />
+
+      <DisciplineHeatmapCard days={stats.days} isVi={isVi} />
 
       <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
