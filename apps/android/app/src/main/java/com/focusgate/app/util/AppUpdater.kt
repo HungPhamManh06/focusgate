@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import com.focusgate.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -20,8 +21,8 @@ data class AppUpdateInfo(
 )
 
 object AppUpdater {
-    private const val RELEASES_LATEST_URL =
-        "https://api.github.com/repos/HungPhamManh06/focusgate/releases/latest"
+    private const val RELEASES_LIST_URL =
+        "https://api.github.com/repos/HungPhamManh06/focusgate/releases?per_page=30"
 
     /** Pure helper for unit testing tag parsing (`android-v0.1.64` -> 64). */
     fun parseVersionCodeFromTag(tag: String): Int? {
@@ -31,7 +32,7 @@ object AppUpdater {
     }
 
     suspend fun checkForUpdate(): AppUpdateInfo? = withContext(Dispatchers.IO) {
-        val conn = (URL(RELEASES_LATEST_URL).openConnection() as HttpURLConnection).apply {
+        val conn = (URL(RELEASES_LIST_URL).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 8_000
             readTimeout = 8_000
@@ -41,28 +42,40 @@ object AppUpdater {
         try {
             if (conn.responseCode !in 200..299) return@withContext null
             val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(body)
-            val tag = json.optString("tag_name", "")
-            val remoteCode = parseVersionCodeFromTag(tag) ?: return@withContext null
-            if (remoteCode <= BuildConfig.VERSION_CODE) return@withContext null
+            val releases = JSONArray(body)
+            var best: AppUpdateInfo? = null
 
-            val assets = json.optJSONArray("assets") ?: return@withContext null
-            var apkUrl: String? = null
-            for (i in 0 until assets.length()) {
-                val asset = assets.optJSONObject(i) ?: continue
-                val name = asset.optString("name", "")
-                if (name.endsWith(".apk", ignoreCase = true)) {
-                    apkUrl = asset.optString("browser_download_url", "").takeIf { it.isNotBlank() }
-                    break
+            for (r in 0 until releases.length()) {
+                val json: JSONObject = releases.optJSONObject(r) ?: continue
+                if (json.optBoolean("draft", false)) continue
+                val tag = json.optString("tag_name", "")
+                if (tag.startsWith("windows-", ignoreCase = true)) continue
+                val remoteCode = parseVersionCodeFromTag(tag) ?: continue
+                if (remoteCode <= BuildConfig.VERSION_CODE) continue
+
+                val assets = json.optJSONArray("assets") ?: continue
+                var apkUrl: String? = null
+                for (i in 0 until assets.length()) {
+                    val asset = assets.optJSONObject(i) ?: continue
+                    val name = asset.optString("name", "")
+                    if (name.endsWith(".apk", ignoreCase = true)) {
+                        apkUrl = asset.optString("browser_download_url", "").takeIf { it.isNotBlank() }
+                        break
+                    }
+                }
+                if (apkUrl == null) continue
+
+                val candidate = AppUpdateInfo(
+                    versionCode = remoteCode,
+                    versionName = tag.removePrefix("android-"),
+                    downloadUrl = apkUrl,
+                    releaseNotes = json.optString("body", ""),
+                )
+                if (best == null || candidate.versionCode > best.versionCode) {
+                    best = candidate
                 }
             }
-            if (apkUrl == null) return@withContext null
-            AppUpdateInfo(
-                versionCode = remoteCode,
-                versionName = tag.removePrefix("android-"),
-                downloadUrl = apkUrl,
-                releaseNotes = json.optString("body", ""),
-            )
+            best
         } catch (_: Throwable) {
             null
         } finally {

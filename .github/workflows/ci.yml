@@ -52,6 +52,7 @@ jobs:
           name: FocusGate Windows v0.1.${{ github.run_number }}
           body: Automated FocusGate Windows Agent build #${{ github.run_number }}.
           files: apps/windows-agent/release-out/FocusGate.exe
+          make_latest: false
 
   android:
     name: Android Unit Tests (JDK 17)
