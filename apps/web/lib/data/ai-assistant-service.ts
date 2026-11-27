@@ -568,6 +568,15 @@ export async function runFocusGateAi(
   const mustRemaining = tasks.filter((t) => t.kind === "must_do" && t.status !== "completed");
   const nextTask = mustRemaining[0] ?? tasks.find((t) => t.status !== "completed") ?? null;
 
+  const summaryCard = {
+    completed,
+    total,
+    mustRemaining: mustRemaining.length,
+    unlocked: snapshot.unlocked,
+    walletMinutes: snapshot.activeGrantMinutes,
+    nextTaskTitle: nextTask?.title ?? null,
+  };
+
   if (intent.type === "next_move") {
     if (!nextTask) {
       return {
@@ -576,6 +585,7 @@ export async function runFocusGateAi(
           : `Tuyệt vời! Bạn đã hoàn thành toàn bộ ${total} việc hôm nay và đang có ${snapshot.activeGrantMinutes} phút thưởng trong ví.`,
         action: { type: "next_move", executed: true, label: en ? "All clear" : "Đã hoàn thành hết" },
         clientCommands: [],
+        summaryCard,
         shouldRefresh: false,
         provider: "focusgate-engine",
       };
@@ -590,6 +600,7 @@ export async function runFocusGateAi(
         label: nextTask.title.slice(0, 32),
       },
       clientCommands: [],
+      summaryCard,
       shouldRefresh: false,
       provider: "focusgate-engine",
     };
@@ -612,6 +623,7 @@ export async function runFocusGateAi(
         label: `${completed}/${total} · ${snapshot.activeGrantMinutes}p`,
       },
       clientCommands: [],
+      summaryCard,
       shouldRefresh: false,
       provider: "focusgate-engine",
     };

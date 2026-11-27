@@ -74,12 +74,22 @@ export interface AiActionResult {
   label: string;
 }
 
+export interface AiSummaryCard {
+  completed: number;
+  total: number;
+  mustRemaining: number;
+  unlocked: boolean;
+  walletMinutes: number;
+  nextTaskTitle?: string | null;
+}
+
 export interface AiChatResponse {
   reply: string;
   action: AiActionResult | null;
   clientCommands?: AiClientCommand[];
   deviceCommand?: AiDeviceCommand | null;
   pendingConfirmation?: AiPendingConfirmation | null;
+  summaryCard?: AiSummaryCard | null;
   shouldRefresh: boolean;
   provider: "focusgate-engine" | "gemini" | "openai";
 }

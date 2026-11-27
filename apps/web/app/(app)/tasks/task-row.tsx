@@ -157,8 +157,32 @@ export function TaskRow({
     });
   }
 
+  const kindAccentBorder =
+    task.kind === "must_do"
+      ? "border-l-2 border-l-accent/70"
+      : task.kind === "should_do"
+        ? "border-l-2 border-l-warning/60"
+        : "border-l-2 border-l-success/60";
+
+  const focusProgressPct =
+    planTask && planTask.requiredFocusMinutes > 0
+      ? Math.min(100, Math.round((planTask.focusDone / planTask.requiredFocusMinutes) * 100))
+      : 0;
+
   return (
-      <div className="group flex items-start gap-3 border-b border-line px-5 py-4 transition-colors last:border-b-0 hover:bg-surface-2/55 sm:px-6">
+      <div
+        className={cn(
+          "group relative flex items-start gap-3 border-b border-line px-5 py-4 transition-colors last:border-b-0 hover:bg-surface-2/55 sm:px-6",
+          kindAccentBorder,
+        )}
+      >
+        {focusProgressPct > 0 && !completed && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-0 left-0 h-[2px] bg-accent/65 transition-all"
+            style={{ width: `${focusProgressPct}%` }}
+          />
+        )}
         <span
           aria-hidden
           title={getCategoryLabel(task.category, locale)}

@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@view-transition {
+  navigation: auto;
+}
+
+:root[data-zen-mode="true"] [data-zen-hide="true"] {
+  display: none !important;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {

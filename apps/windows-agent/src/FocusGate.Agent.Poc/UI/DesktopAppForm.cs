@@ -12,9 +12,14 @@ public sealed class DesktopAppForm : Form
     private const byte VkH = 0x48;
     private const uint KeyEventFExtendedKey = 0x0001;
     private const uint KeyEventFKeyUp = 0x0002;
+    private const int DwmwaUseImmersiveDarkMode = 20;
+    private const int DwmwaCaptionColor = 35;
 
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
     private readonly string _apiBaseUrl;
     private readonly Func<string, string?, Task> _onSessionToken;
     private readonly Func<Task> _onSyncNow;
@@ -211,6 +216,23 @@ public sealed class DesktopAppForm : Form
     {
         _allowClose = true;
         if (!IsDisposed) Close();
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        try
+        {
+            var dark = 1;
+            _ = DwmSetWindowAttribute(Handle, DwmwaUseImmersiveDarkMode, ref dark, sizeof(int));
+            // COLORREF is 0x00BBGGRR for #141212
+            var captionBgr = 0x00121214;
+            _ = DwmSetWindowAttribute(Handle, DwmwaCaptionColor, ref captionBgr, sizeof(int));
+        }
+        catch
+        {
+            // Older Windows 10 builds may ignore DWMWA_CAPTION_COLOR.
+        }
     }
 
     private async Task InitializeWebViewAsync()

@@ -552,6 +552,7 @@ public sealed class TrayAgentContext : ApplicationContext
             {
                 _floatingTimer = new FloatingTimerForm();
                 _floatingTimer.CompleteRequested += (_, _) => ShowDesktopWindow();
+                _floatingTimer.AskAiRequested += (_, _) => ShowAiAssistantWindow();
             }
             _floatingTimer.UpdateSession(active.TaskTitle, string.Equals(_lastPolicy?.Language, "vi", StringComparison.OrdinalIgnoreCase));
         }

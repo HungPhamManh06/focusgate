@@ -10,6 +10,7 @@ import {
   type AiChatResponse,
   type AiDeviceCommand,
   type AiPendingConfirmation,
+  type AiSummaryCard,
 } from "@/lib/domain/ai-assistant";
 
 interface ChatEntry {
@@ -20,6 +21,7 @@ interface ChatEntry {
   actionLabel?: string | null;
   actionExecuted?: boolean;
   pendingConfirmation?: AiPendingConfirmation | null;
+  summaryCard?: AiSummaryCard | null;
 }
 
 interface FabPosition {
@@ -79,6 +81,7 @@ function getWebViewBridge(): { postMessage: (msg: string) => void } | null {
 const VOICE_TTS_STORAGE_KEY = "focusgate_ai_tts_enabled";
 const VOICE_LANG_STORAGE_KEY = "focusgate_ai_voice_lang";
 const FAB_POS_STORAGE_KEY = "focusgate_ai_fab_pos";
+const SPOTLIGHT_MODE_STORAGE_KEY = "focusgate_ai_spotlight_mode";
 
 function clampPosition(x: number, y: number, width = 88, height = 46): FabPosition {
   if (typeof window === "undefined") return { x, y };
@@ -105,6 +108,7 @@ export function AiAssistantDrawer() {
   const [voiceIsError, setVoiceIsError] = useState(false);
   const [fabPos, setFabPos] = useState<FabPosition | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [spotlightMode, setSpotlightMode] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<AiPendingConfirmation | null>(null);
   const [messages, setMessages] = useState<ChatEntry[]>(() => [
     {
@@ -156,6 +160,7 @@ export function AiAssistantDrawer() {
       if (savedTts === "1") setTtsEnabled(true);
       const savedLang = window.localStorage.getItem(VOICE_LANG_STORAGE_KEY);
       if (savedLang === "vi-VN" || savedLang === "en-US") setVoiceLang(savedLang);
+      if (window.localStorage.getItem(SPOTLIGHT_MODE_STORAGE_KEY) === "1") setSpotlightMode(true);
       const savedPos = window.localStorage.getItem(FAB_POS_STORAGE_KEY);
       if (savedPos) {
         const parsed = JSON.parse(savedPos) as Partial<FabPosition>;
@@ -276,6 +281,7 @@ export function AiAssistantDrawer() {
           actionLabel: data.action?.label ?? null,
           actionExecuted: data.action?.executed ?? false,
           pendingConfirmation: data.pendingConfirmation ?? null,
+          summaryCard: data.summaryCard ?? null,
         };
         setMessages((prev) => [...prev, aiEntry]);
         if (data.pendingConfirmation) {
@@ -742,7 +748,11 @@ export function AiAssistantDrawer() {
     if (state.moved) {
       const dx = event.clientX - state.startX;
       const dy = event.clientY - state.startY;
-      const finalPos = clampPosition(state.originX + dx, state.originY + dy, state.width, state.height);
+      const rawPos = clampPosition(state.originX + dx, state.originY + dy, state.width, state.height);
+      // Magnetic Edge Snap: gently snap to nearest left or right viewport edge
+      const snapToLeft = rawPos.x + state.width / 2 < window.innerWidth / 2;
+      const snappedX = snapToLeft ? 12 : Math.max(12, window.innerWidth - state.width - 12);
+      const finalPos = clampPosition(snappedX, rawPos.y, state.width, state.height);
       setFabPos(finalPos);
       try {
         window.localStorage.setItem(FAB_POS_STORAGE_KEY, JSON.stringify(finalPos));
@@ -830,11 +840,25 @@ export function AiAssistantDrawer() {
         </span>
       </button>
 
-      {/* Interactive Drawer */}
+      {/* Interactive Drawer / Center Spotlight */}
+      {open && spotlightMode && (
+        <div
+          aria-hidden="true"
+          onClick={() => {
+            stopListening(false);
+            setOpen(false);
+          }}
+          className="fixed inset-0 z-40 bg-black/35 backdrop-blur-[2px]"
+        />
+      )}
       {open && (
         <section
           aria-label="FocusGate AI Assistant"
-          className="fixed bottom-24 right-4 z-50 flex h-[min(78vh,510px)] w-[min(92vw,395px)] flex-col overflow-hidden rounded-2xl border border-line bg-surface/95 shadow-2xl backdrop-blur-xl lg:bottom-20 lg:right-6"
+          className={
+            spotlightMode
+              ? "fixed left-1/2 top-1/2 z-50 flex h-[min(80vh,560px)] w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-line bg-surface/95 shadow-2xl backdrop-blur-xl"
+              : "fixed bottom-24 right-4 z-50 flex h-[min(78vh,510px)] w-[min(92vw,395px)] flex-col overflow-hidden rounded-2xl border border-line bg-surface/95 shadow-2xl backdrop-blur-xl lg:bottom-20 lg:right-6"
+          }
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-line bg-surface-2/70 px-4 py-3">
@@ -848,6 +872,33 @@ export function AiAssistantDrawer() {
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSpotlightMode((prev) => {
+                    const next = !prev;
+                    try {
+                      window.localStorage.setItem(SPOTLIGHT_MODE_STORAGE_KEY, next ? "1" : "0");
+                    } catch {
+                      // Ignore
+                    }
+                    return next;
+                  });
+                }}
+                title={
+                  spotlightMode
+                    ? isVi
+                      ? "Thu về góc màn hình"
+                      : "Dock to corner"
+                    : isVi
+                      ? "Mở rộng giữa màn hình (Spotlight)"
+                      : "Center Spotlight mode"
+                }
+                aria-label="Toggle Spotlight mode"
+                className="rounded-lg border border-line bg-surface px-2 py-1 text-[10.5px] font-semibold text-ink-soft hover:border-accent/50 hover:text-ink"
+              >
+                {spotlightMode ? "⤡" : "⤢"}
+              </button>
               <button
                 type="button"
                 onClick={toggleVoiceLang}
@@ -921,6 +972,51 @@ export function AiAssistantDrawer() {
                     {msg.actionExecuted ? "✓" : "•"} {msg.actionLabel}
                   </span>
                 )}
+                {msg.summaryCard && (
+                  <div className="mt-1.5 w-[86%] rounded-xl border border-line bg-surface p-3 shadow-sm">
+                    <div className="flex items-center justify-between text-[11px] font-medium text-ink-soft">
+                      <span>
+                        {msg.summaryCard.unlocked
+                          ? isVi
+                            ? "🔓 Cổng đã mở"
+                            : "🔓 Gate unlocked"
+                          : isVi
+                            ? `🔒 Còn ${msg.summaryCard.mustRemaining} việc Bắt buộc`
+                            : `🔒 ${msg.summaryCard.mustRemaining} Must-do left`}
+                      </span>
+                      <span className="font-semibold text-accent tabular-nums">
+                        {msg.summaryCard.walletMinutes}p
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className="h-full rounded-full bg-accent transition-all"
+                        style={{
+                          width: `${
+                            msg.summaryCard.total > 0
+                              ? Math.round((msg.summaryCard.completed / msg.summaryCard.total) * 100)
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className="truncate text-[11px] text-muted">
+                        {msg.summaryCard.nextTaskTitle
+                          ? `→ ${msg.summaryCard.nextTaskTitle}`
+                          : `${msg.summaryCard.completed}/${msg.summaryCard.total} ${isVi ? "hoàn thành" : "done"}`}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void sendMessage(isVi ? "Mở phần tập trung và chạy 25 phút" : "Open focus and run 25m")}
+                        className="shrink-0 rounded-lg bg-accent/15 px-2.5 py-1 text-[10.5px] font-semibold text-accent hover:bg-accent hover:text-white"
+                      >
+                        ▶ {isVi ? "Focus 25p" : "Focus 25m"}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {msg.pendingConfirmation && pendingConfirm?.command === msg.pendingConfirmation.command && (
                   <button
                     type="button"
@@ -962,16 +1058,27 @@ export function AiAssistantDrawer() {
             ))}
           </div>
 
-          {/* Voice status hint */}
-          {voiceStatus && (
+          {/* Voice status hint + Live Voice Waveform */}
+          {(voiceStatus || listening) && (
             <div
-              className={`px-4 py-1.5 text-[11px] font-medium ${
+              className={`flex items-center gap-2.5 px-4 py-1.5 text-[11px] font-medium ${
                 voiceIsError
                   ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
                   : "bg-accent/10 text-accent"
               }`}
             >
-              🎙️ {voiceStatus}
+              {listening && !voiceIsError ? (
+                <span className="flex h-3.5 items-end gap-0.5" aria-hidden="true">
+                  <span className="w-0.5 animate-pulse rounded-full bg-accent" style={{ height: "45%", animationDelay: "0ms" }} />
+                  <span className="w-0.5 animate-pulse rounded-full bg-accent" style={{ height: "100%", animationDelay: "120ms" }} />
+                  <span className="w-0.5 animate-pulse rounded-full bg-accent" style={{ height: "65%", animationDelay: "240ms" }} />
+                  <span className="w-0.5 animate-pulse rounded-full bg-accent" style={{ height: "90%", animationDelay: "360ms" }} />
+                  <span className="w-0.5 animate-pulse rounded-full bg-accent" style={{ height: "50%", animationDelay: "480ms" }} />
+                </span>
+              ) : (
+                <span>🎙️</span>
+              )}
+              <span className="min-w-0 flex-1">{voiceStatus}</span>
             </div>
           )}
 

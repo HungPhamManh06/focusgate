@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,12 +70,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -156,6 +162,8 @@ fun HomeScreen(
     var showScratchpadSheet by remember { mutableStateOf(false) }
     var showThemePickerSheet by remember { mutableStateOf(false) }
     var showAiSheet by remember { mutableStateOf(false) }
+    var aiOrbOffsetX by remember { mutableFloatStateOf(0f) }
+    var aiOrbOffsetY by remember { mutableFloatStateOf(0f) }
     var dailyFocusGoalMin by remember { mutableIntStateOf(90) }
     var activeSoundMode by remember { mutableStateOf(FocusSoundscapePlayer.getMode()) }
     var lastSyncedAtMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -1021,6 +1029,42 @@ fun HomeScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+        },
+        floatingActionButton = {
+            if (signedInEmail != null && bottomTab != HomeBottomTab.WEB) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    shadowElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier
+                        .offset { IntOffset(aiOrbOffsetX.roundToInt(), aiOrbOffsetY.roundToInt()) }
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                aiOrbOffsetX = (aiOrbOffsetX + dragAmount.x).coerceIn(-680f, 40f)
+                                aiOrbOffsetY = (aiOrbOffsetY + dragAmount.y).coerceIn(-1100f, 40f)
+                            }
+                        }
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showAiSheet = true
+                        },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        AiKeystoneLogo(size = 32.dp)
+                        Text(
+                            text = "AI",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 }
             }

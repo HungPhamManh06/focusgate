@@ -13,6 +13,7 @@ public sealed class FloatingTimerForm : Form
     private readonly Button _doneButton;
     private readonly Button _microButton;
     private readonly Button _themeButton;
+    private readonly Button _aiButton;
     private readonly System.Windows.Forms.Timer _tickTimer;
     private Point _dragStart;
     private bool _dragging;
@@ -25,6 +26,7 @@ public sealed class FloatingTimerForm : Form
     private Color _borderColor = Color.FromArgb(220, 56, 56);
 
     public event EventHandler? CompleteRequested;
+    public event EventHandler? AskAiRequested;
 
     public FloatingTimerForm()
     {
@@ -117,7 +119,23 @@ public sealed class FloatingTimerForm : Form
         _themeButton.FlatAppearance.BorderSize = 0;
         _themeButton.Click += (_, _) => CycleTheme();
 
-        Width = 282;
+        _aiButton = new Button
+        {
+            Text = "✦",
+            Width = 24,
+            Height = 24,
+            Left = 278,
+            Top = 12,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(52, 22, 26),
+            ForeColor = Color.FromArgb(252, 165, 165),
+            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+        };
+        _aiButton.FlatAppearance.BorderSize = 0;
+        _aiButton.Click += (_, _) => AskAiRequested?.Invoke(this, EventArgs.Empty);
+
+        Width = 310;
         ApplyRoundedRegion(22);
 
         Controls.Add(_clockLabel);
@@ -125,14 +143,16 @@ public sealed class FloatingTimerForm : Form
         Controls.Add(_themeButton);
         Controls.Add(_doneButton);
         Controls.Add(_microButton);
+        Controls.Add(_aiButton);
 
-        // FocusGate 10.0 & 11.0: Right-click menu for Pin-On-Top, Opacity Cycle & Quick 5m Break
+        // FocusGate 10.0, 11.0 & 12.0: Pin-On-Top, Opacity Cycle, 5m Break & Dynamic Island Top-Center Dock
         var ctxMenu = new ContextMenuStrip();
         var pinItem = new ToolStripMenuItem("Always on Top") { Checked = true, CheckOnClick = true };
         pinItem.Click += (_, _) => TopMost = pinItem.Checked;
+        var dockTopItem = new ToolStripMenuItem("Dock Top-Center (Dynamic Island)", null, (_, _) => DockTopCenter());
         var opacityItem = new ToolStripMenuItem("Cycle Opacity (96% → 80% → 65%)", null, (_, _) => CycleOpacity());
         var breakItem = new ToolStripMenuItem("Toggle 5m Break Mode", null, (_, _) => ToggleBreakMode());
-        ctxMenu.Items.AddRange([pinItem, opacityItem, breakItem]);
+        ctxMenu.Items.AddRange([pinItem, dockTopItem, opacityItem, breakItem]);
         ContextMenuStrip = ctxMenu;
 
         foreach (Control ctrl in new Control[] { this, _clockLabel, _titleLabel })
@@ -200,6 +220,12 @@ public sealed class FloatingTimerForm : Form
         using var pen = new Pen(_borderColor, 1.5f);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         e.Graphics.DrawPath(pen, path);
+    }
+
+    private void DockTopCenter()
+    {
+        var area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
+        Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + 10);
     }
 
     private void ToggleMicroMode()
