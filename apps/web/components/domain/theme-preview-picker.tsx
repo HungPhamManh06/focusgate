@@ -12,7 +12,7 @@ import {
 } from "@/lib/domain/gate-sfx";
 import { cn } from "@/lib/utils";
 
-type VisualPreset = "crimson" | "espresso" | "matcha" | "nordic";
+type VisualPreset = "crimson" | "espresso" | "obsidian" | "matcha" | "nordic";
 
 const PRESETS: Array<{
   id: VisualPreset;
@@ -52,6 +52,19 @@ const PRESETS: Array<{
     ink: "#f7f1f1",
     accent: "#f87171",
     border: "rgba(255,224,226,0.14)",
+  },
+  {
+    id: "obsidian",
+    isDark: true,
+    nameEn: "Obsidian OLED",
+    nameVi: "Đen Thuần OLED",
+    descEn: "True obsidian black & crisp ruby",
+    descVi: "Nền đen thuần OLED & ruby sắc nét",
+    bg: "#07070a",
+    card: "#111116",
+    ink: "#f4f4f6",
+    accent: "#f43f5e",
+    border: "rgba(255,255,255,0.10)",
   },
   {
     id: "matcha",
@@ -249,7 +262,7 @@ export function ThemePreviewPicker() {
   const applyPreset = (target: (typeof PRESETS)[number]) => {
     setPreset(target.id);
     document.documentElement.classList.toggle("dark", target.isDark);
-    if (target.id === "matcha" || target.id === "nordic") {
+    if (target.id === "matcha" || target.id === "nordic" || target.id === "obsidian") {
       document.documentElement.setAttribute("data-preset", target.id);
     } else {
       document.documentElement.removeAttribute("data-preset");
@@ -267,7 +280,7 @@ export function ThemePreviewPicker() {
       <CardHeader className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle className="flex items-center gap-2">
           <Palette className="size-4 text-accent" />
-          {isVi ? "FocusGate Themes Studio (4 bộ chủ đề)" : "FocusGate Themes Studio (4 Presets)"}
+          {isVi ? "FocusGate Themes Studio (5 bộ chủ đề)" : "FocusGate Themes Studio (5 Presets)"}
         </CardTitle>
         {/* FocusGate 11.0: Live Mini-Preview Pill */}
         <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2/70 px-3 py-1.5 text-[11px]">
@@ -280,7 +293,7 @@ export function ThemePreviewPicker() {
           </span>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3.5 pt-3 sm:grid-cols-2 lg:grid-cols-4">
+      <CardContent className="grid gap-3.5 pt-3 sm:grid-cols-2 lg:grid-cols-5">
         {PRESETS.map((item) => {
           const active = preset === item.id;
           return (
@@ -645,6 +658,26 @@ export function ThemePreviewPicker() {
                 }}
                 className="mt-2.5 w-full accent-[var(--accent)]"
               />
+            </div>
+          </div>
+          {/* FocusGate 16.0: Keyboard Shortcuts Quick Reference */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-[11.5px] sm:col-span-2">
+            <span className="font-medium text-ink">
+              {isVi ? "Phím tắt điều hướng nhanh" : "Quick keyboard shortcuts"}
+            </span>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+              <span className="inline-flex items-center gap-1">
+                <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-[10px] text-ink">Ctrl K</kbd>
+                {isVi ? "Lệnh nhanh" : "Command"}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-[10px] text-ink">[</kbd>
+                {isVi ? "Thu gọn thanh bên" : "Toggle sidebar"}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-[10px] text-ink">Esc</kbd>
+                {isVi ? "Thoát Studio" : "Exit Studio"}
+              </span>
             </div>
           </div>
         </div>

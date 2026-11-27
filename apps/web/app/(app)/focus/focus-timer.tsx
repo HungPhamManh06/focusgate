@@ -13,6 +13,7 @@ import {
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
+  Wind,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -65,6 +66,7 @@ export function FocusTimer({
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [zenMode, setZenMode] = useState(false);
+  const [breatheMode, setBreatheMode] = useState(false);
   const [splitView, setSplitView] = useState(false);
   const [splitTab, setSplitTab] = useState<"notes" | "queue">("notes");
   const [splitNote, setSplitNote] = useState("");
@@ -406,6 +408,21 @@ export function FocusTimer({
           </p>
           <button
             type="button"
+            onClick={() => setBreatheMode((prev) => !prev)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+              breatheMode
+                ? "border-accent bg-accent-soft text-accent"
+                : zenMode
+                  ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                  : "border-line bg-surface-2 text-ink hover:border-accent/40 hover:text-accent",
+            )}
+          >
+            <Wind className="size-3.5" />
+            {isVi ? "Tĩnh lặng" : "Breathe"}
+          </button>
+          <button
+            type="button"
             onClick={() => setSplitView((prev) => !prev)}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
@@ -450,8 +467,18 @@ export function FocusTimer({
           "relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-9 sm:py-11",
         )}
       >
+        {breatheMode ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
+          >
+            <div className="size-72 animate-pulse rounded-full bg-accent/12 blur-3xl [animation-duration:4000ms]" />
+          </div>
+        ) : null}
         {/* 3 Clock Style Switcher */}
-        <FocusSanctuaryTools darkSurface={zenMode} />
+        <div className={cn("transition-opacity duration-500", breatheMode ? "opacity-25 hover:opacity-100" : "opacity-100")}>
+          <FocusSanctuaryTools darkSurface={zenMode} />
+        </div>
         <div
           className={cn(
             "mb-5 mt-4 inline-flex gap-1 rounded-full border p-1 text-[11px] font-medium transition-opacity duration-500",

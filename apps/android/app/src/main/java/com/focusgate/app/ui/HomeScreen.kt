@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -815,14 +816,15 @@ fun HomeScreen(
                                 modifier = Modifier.size(22.dp),
                             )
                         }
-                        Spacer(Modifier.width(10.dp))
-                        Column {
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
                                 Text(
                                     "FocusGate",
+                                    style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     softWrap = false,
@@ -836,18 +838,18 @@ fun HomeScreen(
                                 }
                                 val ringPrimary = MaterialTheme.colorScheme.primary
                                 val ringTrack = MaterialTheme.colorScheme.surfaceVariant
-                                Canvas(modifier = Modifier.size(18.dp)) {
-                                    val st = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+                                Canvas(modifier = Modifier.size(16.dp)) {
+                                    val st = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
                                     drawArc(ringTrack, -90f, 360f, false, style = st)
                                     drawArc(ringPrimary, -90f, 360f * topProgress, false, style = st)
                                 }
                             }
                             Text(
                                 tr(
-                                    "Finish your tasks. Earn your freedom.",
-                                    "Hoàn thành nhiệm vụ. Tự do giải trí.",
+                                    "Finish tasks. Earn freedom.",
+                                    "Xong việc. Tự do giải trí.",
                                 ),
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -856,23 +858,46 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    val actionPad = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                     TextButton(
+                        contentPadding = actionPad,
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             showQuickStatsSheet = true
                         },
                     ) {
-                        Text(tr("Stats", "Số liệu"), maxLines = 1, softWrap = false)
+                        Text(
+                            tr("Stats", "Số liệu"),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
                     }
                     TextButton(
+                        contentPadding = actionPad,
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             showThemePickerSheet = true
                         },
                     ) {
-                        Text(tr("Theme", "Màu"))
+                        Text(
+                            tr("Theme", "Màu"),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
                     }
-                    TextButton(onClick = onOpenSetup) { Text(tr("Setup", "Thiết lập")) }
+                    TextButton(
+                        contentPadding = actionPad,
+                        onClick = onOpenSetup,
+                    ) {
+                        Text(
+                            tr("Setup", "Cài đặt"),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
                 },
             )
         },
@@ -1232,84 +1257,163 @@ fun HomeScreen(
                     }
                     // FocusGate 8.0: 7-Day Habit Streak Strip + Last-Sync Pill + Soundscape Button
                     Spacer(Modifier.height(10.dp))
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            val syncedMinAgo = ((System.currentTimeMillis() - lastSyncedAtMs) / 60_000L).coerceAtLeast(0L)
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(Color(0xFF34D399)),
-                            )
-                            Text(
-                                text = if (syncedMinAgo == 0L) {
-                                    tr("Synced just now", "Đồng bộ vừa xong")
-                                } else {
-                                    tr("Synced ${syncedMinAgo}m ago", "Đồng bộ ${syncedMinAgo}p trước")
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            repeat(7) { idx ->
-                                val filled = idx < 5 || mustDoDone > 0
+                            Row(
+                                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                val syncedMinAgo = ((System.currentTimeMillis() - lastSyncedAtMs) / 60_000L).coerceAtLeast(0L)
                                 Box(
                                     modifier = Modifier
-                                        .size(8.dp)
+                                        .size(7.dp)
                                         .clip(RoundedCornerShape(999.dp))
-                                        .background(
-                                            if (filled) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.outlineVariant
-                                            },
-                                        ),
+                                        .background(Color(0xFF34D399)),
+                                )
+                                Text(
+                                    text = if (syncedMinAgo == 0L) {
+                                        tr("Synced just now", "Đồng bộ vừa xong")
+                                    } else {
+                                        tr("Synced ${syncedMinAgo}m ago", "Đồng bộ ${syncedMinAgo}p trước")
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Spacer(Modifier.width(6.dp))
-                            TextButton(
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                repeat(7) { idx ->
+                                    val filled = idx < 5 || mustDoDone > 0
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(RoundedCornerShape(999.dp))
+                                            .background(
+                                                if (filled) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.outlineVariant
+                                                },
+                                            ),
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     showAiSheet = true
                                 },
                             ) {
-                                AiKeystoneLogo(size = 18.dp)
-                                Spacer(Modifier.width(4.dp))
-                                Text("AI", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    AiKeystoneLogo(size = 16.dp)
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(
+                                        "AI",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                    )
+                                }
                             }
-                            TextButton(
+
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     showScratchpadSheet = true
                                 },
                             ) {
-                                Text(tr("Note", "Nháp"), style = MaterialTheme.typography.labelSmall)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        tr("Note", "Nháp"),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
-                            TextButton(
+
+                            Surface(
+                                modifier = Modifier.weight(1.2f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (soundscapePlaying) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (soundscapePlaying) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                    } else {
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                    },
+                                ),
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     showSoundscapeSheet = true
                                 },
                             ) {
-                                Text(
-                                    if (soundscapePlaying) tr("Audio ON", "Âm thanh BẬT") else tr("Audio", "Âm thanh"),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        if (soundscapePlaying) tr("Audio ON", "Âm thanh BẬT") else tr("Audio", "Âm thanh"),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (soundscapePlaying) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         }
                     }
@@ -1465,10 +1569,19 @@ fun HomeScreen(
                             )
                             Spacer(Modifier.height(10.dp))
                             if (!focusRunning) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    listOf(25, 50).forEach { mins ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    listOf(
+                                        25 to tr("Pomodoro", "Nhịp chuẩn"),
+                                        50 to tr("Deep Work", "Tập trung sâu"),
+                                    ).forEach { (mins, subtitle) ->
                                         Button(
+                                            modifier = Modifier.weight(1f),
                                             enabled = !focusBusy,
+                                            shape = RoundedCornerShape(14.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                                             onClick = {
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 focusBusy = true
@@ -1488,7 +1601,22 @@ fun HomeScreen(
                                                 }
                                             },
                                         ) {
-                                            Text(tr("${mins}m Focus", "Tập trung ${mins}p"))
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text(
+                                                    tr("${mins}m Focus", "Tập trung ${mins}p"),
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                )
+                                                Text(
+                                                    subtitle,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1858,8 +1986,8 @@ fun HomeScreen(
                                         val isDone = task.status == "completed"
                                         val dotColor = when (task.kind) {
                                             "must_do" -> MaterialTheme.colorScheme.primary
-                                            "should_do" -> MaterialTheme.colorScheme.secondary
-                                            else -> MaterialTheme.colorScheme.tertiary
+                                            "should_do" -> Color(0xFFD97706)
+                                            else -> Color(0xFF10B981)
                                         }
                                         val taskRowContent: @Composable () -> Unit = {
                                             Row(
@@ -1871,7 +1999,8 @@ fun HomeScreen(
                                             ) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(8.dp)
+                                                        .width(3.5.dp)
+                                                        .height(34.dp)
                                                         .clip(RoundedCornerShape(999.dp))
                                                         .background(if (isDone) Color(0xFF34D399) else dotColor),
                                                 )
@@ -2619,6 +2748,7 @@ fun HomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 6.dp),
+                            contentPadding = PaddingValues(end = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(SoundscapeMode.entries) { mode ->

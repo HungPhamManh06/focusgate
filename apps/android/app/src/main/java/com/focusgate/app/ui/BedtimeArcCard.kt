@@ -2,6 +2,7 @@ package com.focusgate.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,7 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * FocusGate 8.0: Bedtime & Quiet Hours Visual Arc Card on Android GUARD tab.
+ * FocusGate 16.0: Bedtime & Quiet Hours Visual Arc Card on Android GUARD tab.
+ * Arc radius is strictly bounded by both canvas width and height so it never
+ * overflows or overlaps the 23:00 / 06:00 labels below.
  */
 @Composable
 fun BedtimeArcCard(
@@ -41,7 +44,7 @@ fun BedtimeArcCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                     Text(
                         text = if (isVi) "Cổng Giờ Ngủ (23:00 → 06:00)" else "Bedtime Quiet Arc (23:00 → 06:00)",
                         style = MaterialTheme.typography.titleSmall,
@@ -60,36 +63,73 @@ fun BedtimeArcCard(
                 Switch(checked = enabled, onCheckedChange = onToggle)
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
-            Canvas(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp),
+                    .height(92.dp),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                val stroke = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
-                val arcW = size.width * 0.72f
-                val left = (size.width - arcW) / 2f
-                val arcSize = Size(arcW, arcW)
-                drawArc(
-                    color = trackColor,
-                    startAngle = 180f,
-                    sweepAngle = 180f,
-                    useCenter = false,
-                    topLeft = Offset(left, 8.dp.toPx()),
-                    size = arcSize,
-                    style = stroke,
-                )
-                drawArc(
-                    color = if (enabled) activeColor else trackColor,
-                    startAngle = 195f,
-                    sweepAngle = 150f,
-                    useCenter = false,
-                    topLeft = Offset(left, 8.dp.toPx()),
-                    size = arcSize,
-                    style = stroke,
-                )
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(88.dp),
+                ) {
+                    val strokePx = 9.dp.toPx()
+                    val stroke = Stroke(width = strokePx, cap = StrokeCap.Round)
+                    val maxRadius = minOf(
+                        (size.width - strokePx * 2f) * 0.40f,
+                        size.height - strokePx * 1.2f,
+                    ).coerceAtLeast(24f)
+                    val diameter = maxRadius * 2f
+                    val left = (size.width - diameter) / 2f
+                    val top = size.height - maxRadius - strokePx * 0.5f
+                    val arcSize = Size(diameter, diameter)
+
+                    drawArc(
+                        color = trackColor,
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        topLeft = Offset(left, top),
+                        size = arcSize,
+                        style = stroke,
+                    )
+                    drawArc(
+                        color = if (enabled) activeColor else trackColor,
+                        startAngle = 192f,
+                        sweepAngle = 156f,
+                        useCenter = false,
+                        topLeft = Offset(left, top),
+                        size = arcSize,
+                        style = stroke,
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                ) {
+                    Text(
+                        text = "23:00 – 06:00",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (enabled) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = if (enabled) {
+                            if (isVi) "Đang bảo vệ" else "Protected"
+                        } else {
+                            if (isVi) "Đang tắt" else "Off"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+
+            Spacer(Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -99,11 +139,13 @@ fun BedtimeArcCard(
                     text = if (isVi) "🌙 23:00 Khóa" else "🌙 23:00 Lock",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
                 Text(
                     text = if (isVi) "☀️ 06:00 Mở" else "☀️ 06:00 Wake",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
             }
         }
