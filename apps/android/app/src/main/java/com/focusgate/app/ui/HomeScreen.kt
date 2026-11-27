@@ -1346,7 +1346,9 @@ fun HomeScreen(
                                                     }
                                                     planSnapshot = snap
                                                     planUnlocked = snap.unlocked
-                                                    earnedMinutesBalance = snap.availableRewardMinutes
+                                                    earnedMinutesBalance = AgentPreferences.getEarnedMinutesBalance(context)
+                                                } catch (t: Throwable) {
+                                                    syncError = t.message ?: tr("Unlock pass failed", "Kích hoạt thẻ thất bại")
                                                 } finally {
                                                     planSyncBusy = false
                                                 }
