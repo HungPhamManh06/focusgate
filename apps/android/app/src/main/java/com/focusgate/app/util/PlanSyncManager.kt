@@ -361,6 +361,50 @@ object PlanSyncManager {
         }
     }
 
+    data class AiChatReply(
+        val reply: String,
+        val actionLabel: String?,
+        val actionExecuted: Boolean,
+        val shouldRefresh: Boolean,
+    )
+
+    fun askAiAssistant(context: Context, message: String): AiChatReply {
+        return withValidToken(context) { token ->
+            val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/ai")
+            val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Content-Type", "application/json")
+            }
+            try {
+                val payload = org.json.JSONObject()
+                    .put("message", message)
+                    .toString()
+                conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                val code = conn.responseCode
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (code == 401) throw UnauthorizedApiException("Session expired.")
+                val json = org.json.JSONObject(if (body.isBlank()) "{}" else body)
+                if (code !in 200..299) {
+                    throw IllegalStateException(json.optString("error", "AI request failed ($code)"))
+                }
+                val actionObj = json.optJSONObject("action")
+                AiChatReply(
+                    reply = json.optString("reply", "Done."),
+                    actionLabel = actionObj?.optString("label")?.takeIf { it.isNotBlank() },
+                    actionExecuted = actionObj?.optBoolean("executed", false) ?: false,
+                    shouldRefresh = json.optBoolean("shouldRefresh", false),
+                )
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
     fun updateRemoteFocusSession(context: Context, action: String, sessionId: String) {
         withValidToken(context) { token ->
             val url = java.net.URL("${AgentPreferences.DEFAULT_API_BASE_URL}/api/agent/focus-session")

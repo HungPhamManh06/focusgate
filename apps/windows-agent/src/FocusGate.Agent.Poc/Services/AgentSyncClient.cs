@@ -245,6 +245,41 @@ public sealed class AgentSyncClient : IDisposable
             : 0;
     }
 
+    public async Task<AiChatReply> AskAiAsync(
+        string apiBaseUrl,
+        string accessToken,
+        string message,
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri = NormalizeBaseUrl(apiBaseUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/api/agent/ai"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = JsonContent.Create(new { message });
+
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"FocusGate AI failed ({(int)response.StatusCode}): {body}",
+                null,
+                response.StatusCode);
+        }
+
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+        var root = doc.RootElement;
+        var reply = root.TryGetProperty("reply", out var replyEl) ? replyEl.GetString() ?? "Done." : "Done.";
+        var shouldRefresh = root.TryGetProperty("shouldRefresh", out var refreshEl) && refreshEl.GetBoolean();
+        string? actionLabel = null;
+        var actionExecuted = false;
+        if (root.TryGetProperty("action", out var actionEl) && actionEl.ValueKind == JsonValueKind.Object)
+        {
+            if (actionEl.TryGetProperty("label", out var labelEl)) actionLabel = labelEl.GetString();
+            if (actionEl.TryGetProperty("executed", out var execEl)) actionExecuted = execEl.GetBoolean();
+        }
+        return new AiChatReply(reply, actionLabel, actionExecuted, shouldRefresh);
+    }
+
     private static Uri NormalizeBaseUrl(string apiBaseUrl)
     {
         if (!Uri.TryCreate(apiBaseUrl.Trim(), UriKind.Absolute, out var uri) ||
@@ -266,3 +301,9 @@ public sealed class AgentSyncClient : IDisposable
 }
 
 public sealed record SupabaseAuthResult(string AccessToken, string? RefreshToken);
+
+public sealed record AiChatReply(
+    string Reply,
+    string? ActionLabel,
+    bool ActionExecuted,
+    bool ShouldRefresh);

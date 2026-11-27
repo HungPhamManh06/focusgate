@@ -33,6 +33,7 @@ public sealed class TrayAgentContext : ApplicationContext
     private readonly EnforcementEngine _enforcementEngine;
     private BlockOverlayForm? _overlayForm;
     private FloatingTimerForm? _floatingTimer;
+    private AiAssistantForm? _aiForm;
 
     private AgentCredentials? _credentials;
     private AgentPolicySnapshot? _lastPolicy;
@@ -61,6 +62,7 @@ public sealed class TrayAgentContext : ApplicationContext
         _policyItem = new ToolStripMenuItem("Policy: Not pulled yet") { Enabled = false };
 
         _openAppItem = new ToolStripMenuItem("Open FocusGate App", null, (_, _) => ShowDesktopWindow());
+        var askAiItem = new ToolStripMenuItem("Ask FocusGate AI (Text & Voice)...", null, (_, _) => ShowAiAssistantWindow());
         var openFocusStudioItem = new ToolStripMenuItem("Open Focus Studio (Web)", null, (_, _) =>
         {
             var baseUrl = string.IsNullOrWhiteSpace(_options.ApiBaseUrl) ? "https://focusgate-blue.vercel.app" : _options.ApiBaseUrl.TrimEnd('/');
@@ -102,6 +104,7 @@ public sealed class TrayAgentContext : ApplicationContext
             _statusItem,
             _policyItem,
             new ToolStripSeparator(),
+            askAiItem,
             _openAppItem,
             quickFocus25Item,
             toggleFloatingItem,
@@ -485,6 +488,35 @@ public sealed class TrayAgentContext : ApplicationContext
         }
     }
 
+    private void ShowAiAssistantWindow()
+    {
+        if (_aiForm is null || _aiForm.IsDisposed)
+        {
+            _aiForm = new AiAssistantForm(
+                onSend: async message =>
+                {
+                    if (_credentials is null || string.IsNullOrWhiteSpace(_credentials.AccessToken))
+                    {
+                        throw new InvalidOperationException(
+                            Tr(
+                                "Sign in inside Open FocusGate App first so AI can sync with your account.",
+                                "Hãy mở FocusGate App và đăng nhập trước để AI đồng bộ với tài khoản của bạn."));
+                    }
+                    var apiBase = string.IsNullOrWhiteSpace(_credentials.ApiBaseUrl)
+                        ? _options.ApiBaseUrl
+                        : _credentials.ApiBaseUrl;
+                    return await _syncClient.AskAiAsync(apiBase, _credentials.AccessToken, message);
+                },
+                onMutated: async () => await SyncPolicyAsync());
+        }
+        _aiForm.Show();
+        if (_aiForm.WindowState == FormWindowState.Minimized)
+        {
+            _aiForm.WindowState = FormWindowState.Normal;
+        }
+        _aiForm.Activate();
+    }
+
     private void SyncFloatingTimer()
     {
         var active = _lastPolicy?.ActiveFocusSession;
@@ -526,6 +558,7 @@ public sealed class TrayAgentContext : ApplicationContext
         _syncTimer.Stop();
         _syncTimer.Dispose();
         _desktopForm?.ForceClose();
+        _aiForm?.Dispose();
         _floatingTimer?.Close();
         _floatingTimer?.Dispose();
         HideOverlay();

@@ -217,6 +217,15 @@ public sealed class DesktopAppForm : Form
 
             var env = await CoreWebView2Environment.CreateAsync(null, userDataDir);
             await _webView.EnsureCoreWebView2Async(env);
+            _webView.CoreWebView2.PermissionRequested += (_, args) =>
+            {
+                if (args.PermissionKind == CoreWebView2PermissionKind.Microphone &&
+                    Uri.TryCreate(args.Uri, UriKind.Absolute, out var reqUri) &&
+                    reqUri.Host.Equals(new Uri(_apiBaseUrl).Host, StringComparison.OrdinalIgnoreCase))
+                {
+                    args.State = CoreWebView2PermissionState.Allow;
+                }
+            };
             _webView.CoreWebView2.NavigationCompleted += async (_, _) => await TryBridgeSessionAsync();
             _webView.Source = new Uri(_apiBaseUrl);
         }

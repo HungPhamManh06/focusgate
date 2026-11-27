@@ -14,6 +14,7 @@ import { MobileNav } from "@/components/shell/mobile-nav";
 import { MobileQuickFab } from "@/components/shell/mobile-quick-fab";
 import { Sidebar } from "@/components/shell/sidebar";
 import { CommandPalette } from "@/components/shell/command-palette";
+import { AiAssistantDrawer } from "@/components/shell/ai-assistant-drawer";
 import { FloatingFocusPill } from "@/components/shell/floating-focus-pill";
 import { KeyboardShortcuts } from "@/components/shell/keyboard-shortcuts";
 import { NetworkStatusBanner } from "@/components/shell/network-status-banner";
@@ -122,6 +123,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </main>
           <TopProgressBar percent={topProgressPct} />
           <CommandPalette />
+          <AiAssistantDrawer />
           <FloatingFocusPill />
           <MobileQuickFab />
           <KeyboardShortcuts />

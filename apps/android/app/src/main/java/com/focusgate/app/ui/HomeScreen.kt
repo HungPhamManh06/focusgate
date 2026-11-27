@@ -155,6 +155,7 @@ fun HomeScreen(
     var showSoundscapeSheet by remember { mutableStateOf(false) }
     var showScratchpadSheet by remember { mutableStateOf(false) }
     var showThemePickerSheet by remember { mutableStateOf(false) }
+    var showAiSheet by remember { mutableStateOf(false) }
     var dailyFocusGoalMin by remember { mutableIntStateOf(90) }
     var activeSoundMode by remember { mutableStateOf(FocusSoundscapePlayer.getMode()) }
     var lastSyncedAtMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -748,6 +749,15 @@ fun HomeScreen(
         }
     }
 
+    if (showAiSheet) {
+        ModalBottomSheet(onDismissRequest = { showAiSheet = false }) {
+            AiAssistantSheetContent(
+                isVi = isVi,
+                onActionMutated = { syncPlanFromWeb(silent = true) },
+            )
+        }
+    }
+
     if (showQuickStatsSheet) {
         val planTasksList = planSnapshot?.plan?.tasks.orEmpty()
         val doneCount = planTasksList.count { it.status == "completed" }
@@ -1219,6 +1229,16 @@ fun HomeScreen(
                                 )
                             }
                             Spacer(Modifier.width(6.dp))
+                            TextButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    showAiSheet = true
+                                },
+                            ) {
+                                AiKeystoneLogo(size = 18.dp)
+                                Spacer(Modifier.width(4.dp))
+                                Text("AI", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
                             TextButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
