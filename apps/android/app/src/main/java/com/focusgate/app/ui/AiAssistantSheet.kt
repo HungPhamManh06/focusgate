@@ -93,12 +93,12 @@ fun AiAssistantSheetContent(
     }
 
     var ttsReady by remember { mutableStateOf(false) }
-    val tts = remember {
-        var engine: TextToSpeech? = null
-        engine = TextToSpeech(context.applicationContext) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-        }
-        engine
+    val tts: TextToSpeech? = remember {
+        runCatching {
+            TextToSpeech(context.applicationContext) { status ->
+                ttsReady = status == TextToSpeech.SUCCESS
+            }
+        }.getOrNull()
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -110,11 +110,12 @@ fun AiAssistantSheetContent(
     }
 
     fun speakIfEnabled(text: String) {
-        if (!ttsEnabled || !ttsReady || tts == null) return
+        val engine = tts ?: return
+        if (!ttsEnabled || !ttsReady) return
         runCatching {
             val locale = if (voiceLang.startsWith("vi")) Locale("vi", "VN") else Locale.US
-            tts.language = locale
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "fg-ai-reply")
+            engine.language = locale
+            engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "fg-ai-reply")
         }
     }
 
@@ -327,20 +328,22 @@ fun AiAssistantSheetContent(
                             )
                         }
                     }
-                    if (!msg.pendingConfirmCommandJson.isNullOrBlank() && !msg.pendingConfirmLabel.isNullOrBlank()) {
+                    val confirmCmd = msg.pendingConfirmCommandJson
+                    val confirmLabel = msg.pendingConfirmLabel
+                    if (confirmCmd != null && confirmCmd.isNotBlank() && confirmLabel != null && confirmLabel.isNotBlank()) {
                         Spacer(Modifier.height(6.dp))
                         Button(
                             onClick = {
                                 sendToAi(
-                                    rawText = msg.pendingConfirmLabel,
+                                    rawText = confirmLabel,
                                     viaVoice = false,
                                     confirmUnlock = true,
-                                    pendingCommandJson = msg.pendingConfirmCommandJson,
+                                    pendingCommandJson = confirmCmd,
                                 )
                             },
                             enabled = !busy,
                         ) {
-                            Text("🔓 ${msg.pendingConfirmLabel}", style = MaterialTheme.typography.labelMedium)
+                            Text("🔓 $confirmLabel", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
