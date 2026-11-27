@@ -133,6 +133,13 @@ const KNOWN_SITES: Array<{ keys: string[]; url: string; domain: string; label: s
   { keys: ["chatgpt"], url: "https://chatgpt.com", domain: "chatgpt.com", label: "ChatGPT", distraction: false },
   { keys: ["gemini"], url: "https://gemini.google.com", domain: "gemini.google.com", label: "Gemini", distraction: false },
   { keys: ["google translate", "dịch", "translate"], url: "https://translate.google.com", domain: "translate.google.com", label: "Google Translate", distraction: false },
+  { keys: ["todoist"], url: "https://app.todoist.com", domain: "todoist.com", label: "Todoist", distraction: false },
+  { keys: ["trello"], url: "https://trello.com", domain: "trello.com", label: "Trello", distraction: false },
+  { keys: ["leetcode"], url: "https://leetcode.com", domain: "leetcode.com", label: "LeetCode", distraction: false },
+  { keys: ["duolingo"], url: "https://www.duolingo.com", domain: "duolingo.com", label: "Duolingo", distraction: false },
+  { keys: ["stackoverflow", "stack overflow"], url: "https://stackoverflow.com", domain: "stackoverflow.com", label: "Stack Overflow", distraction: false },
+  { keys: ["wikipedia", "wiki"], url: "https://vi.wikipedia.org", domain: "wikipedia.org", label: "Wikipedia", distraction: false },
+  { keys: ["spotify"], url: "https://open.spotify.com", domain: "open.spotify.com", label: "Spotify", distraction: false },
   { keys: ["google"], url: "https://www.google.com", domain: "google.com", label: "Google", distraction: false },
 ];
 
@@ -261,14 +268,22 @@ export function parseAiIntent(rawInput: string): AiIntent {
     };
   }
 
-  // 3. Open browser + website ("mở chrome và vào youtube", "mở youtube", "open chrome and go to github.com")
+  // 3. Open browser + website ("mở google chrome và mở todoist", "mở chrome và vào youtube", "mở soundcloud")
   const browser = detectBrowser(lower);
+  const lowerWithoutBrowser = lower
+    .replace(/\b(google\s+chrome|microsoft\s+edge|chrome|edge|firefox|brave|cốc\s+cốc|coc\s+coc|coccoc)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const explicitUrlMatch = cleaned.match(/https?:\/\/[^\s]+|\b([a-z0-9-]+\.(?:com|vn|org|net|io|dev|ai|edu|gov)(?:\/[^\s]*)?)\b/i);
-  const matchedSite = KNOWN_SITES.find((site) => site.keys.some((k) => lower.includes(k)));
-  if (
-    /(mở|mo|vào|vao|chạy|chay|open|launch|go to)\b/i.test(lower) &&
-    (browser || matchedSite || explicitUrlMatch)
-  ) {
+  const matchedSite = KNOWN_SITES.find((site) =>
+    site.keys.some((k) => {
+      if (k === "spotify" && !browser) return false; // Let standalone "open spotify" launch desktop Spotify app first
+      return lowerWithoutBrowser.includes(k);
+    }),
+  );
+  const hasOpenVerb = /(?:^|\s)(?:mở|mo|vào|vao|chạy|chay|open|launch|go to)(?:\s|$)/i.test(lower);
+
+  if (hasOpenVerb && (browser || matchedSite || explicitUrlMatch)) {
     let url = matchedSite?.url ?? "";
     let domain = matchedSite?.domain;
     let label = matchedSite?.label ?? "";
@@ -284,6 +299,20 @@ export function parseAiIntent(rawInput: string): AiIntent {
       }
       label = domain;
       isDistraction = KNOWN_SITES.some((s) => s.distraction && domain?.includes(s.domain));
+    }
+
+    // If user said "mở google chrome và mở/vào <site>" for any unlisted website name (e.g. "mở chrome và mở dribbble")
+    if (!url && browser) {
+      const afterBrowserMatch = cleaned.match(
+        /(?:google\s+chrome|microsoft\s+edge|chrome|edge|firefox|brave|cốc\s+cốc|coccoc)\s*(?:và|va|rồi|roi|,|and)?\s*(?:mở|mo|vào|vao|truy cập|truy cap|open|go to|visit)?\s*(?:trang|web|website)?\s*([a-z0-9-]+)$/i,
+      );
+      const guessedSite = afterBrowserMatch?.[1]?.trim().toLowerCase();
+      if (guessedSite && guessedSite.length >= 2) {
+        url = `https://${guessedSite}.com`;
+        domain = `${guessedSite}.com`;
+        label = guessedSite.charAt(0).toUpperCase() + guessedSite.slice(1);
+        isDistraction = KNOWN_SITES.some((s) => s.distraction && domain?.includes(s.domain));
+      }
     }
 
     if (url) {

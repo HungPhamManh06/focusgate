@@ -52,6 +52,20 @@ test("parseAiIntent parses browser/app/system Omni-Controller commands", () => {
     },
   });
 
+  const todoist = parseAiIntent("mở google chrome và mở todoist");
+  assert.deepEqual(todoist, {
+    type: "device_command",
+    command: {
+      type: "open_url_in_browser",
+      targetPlatform: "any",
+      browser: "chrome",
+      url: "https://app.todoist.com",
+      domain: "todoist.com",
+      isDistraction: false,
+      label: "CHROME → Todoist",
+    },
+  });
+
   const vscode = parseAiIntent("Mở VS Code trên máy tính");
   assert.deepEqual(vscode, {
     type: "device_command",
