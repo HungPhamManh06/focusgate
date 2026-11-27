@@ -169,6 +169,17 @@ export function AiAssistantDrawer() {
   }, []);
 
   useEffect(() => {
+    const onDeviceResult = (event: Event) => {
+      const detail = (event as CustomEvent<{ ok?: boolean; message?: string }>).detail;
+      if (!detail?.message) return;
+      setVoiceIsError(!detail.ok);
+      setVoiceStatus(`${detail.ok ? "💻 PC:" : "⚠️ PC:"} ${detail.message}`);
+    };
+    window.addEventListener("focusgate:device-result", onDeviceResult);
+    return () => window.removeEventListener("focusgate:device-result", onDeviceResult);
+  }, []);
+
+  useEffect(() => {
     const onResize = () => {
       setFabPos((prev) => {
         if (!prev) return prev;

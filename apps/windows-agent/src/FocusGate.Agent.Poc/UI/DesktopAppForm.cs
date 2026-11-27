@@ -269,7 +269,17 @@ public sealed class DesktopAppForm : Form
                             root.TryGetProperty("command", out var cmdEl))
                         {
                             var cmdClone = cmdEl.Clone();
-                            BeginInvoke(() => Services.PcCommandExecutor.Execute(cmdClone));
+                            BeginInvoke(async () =>
+                            {
+                                var (ok, msg) = Services.PcCommandExecutor.Execute(cmdClone);
+                                try
+                                {
+                                    var detailJson = JsonSerializer.Serialize(new { ok, message = msg });
+                                    await _webView.ExecuteScriptAsync(
+                                        $"window.dispatchEvent(new CustomEvent('focusgate:device-result', {{ detail: {detailJson} }}));");
+                                }
+                                catch { }
+                            });
                         }
                     }
                 }

@@ -147,6 +147,68 @@ public static class PcCommandExecutor
         }
     }
 
+    private static readonly Dictionary<string, string[]> AppDirectPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["spotify"] =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Spotify\Spotify.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\WindowsApps\Spotify.exe"),
+        ],
+        ["zalo"] =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Zalo\Zalo.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"ZaloPC\Zalo.exe"),
+        ],
+        ["notion"] =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Notion\Notion.exe"),
+        ],
+        ["telegram"] =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Telegram Desktop\Telegram.exe"),
+        ],
+        ["vs code"] =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Microsoft VS Code\Code.exe"),
+            @"C:\Program Files\Microsoft VS Code\Code.exe",
+        ],
+        ["vscode"] =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Microsoft VS Code\Code.exe"),
+            @"C:\Program Files\Microsoft VS Code\Code.exe",
+        ],
+    };
+
+    private static readonly Dictionary<string, string> AppProtocolUris = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["spotify"] = "spotify:",
+        ["discord"] = "discord:",
+        ["zalo"] = "zalo:",
+        ["notion"] = "notion:",
+        ["telegram"] = "tg:",
+        ["whatsapp"] = "whatsapp:",
+        ["settings"] = "ms-settings:",
+        ["cài đặt"] = "ms-settings:",
+        ["store"] = "ms-windows-store:",
+        ["clock"] = "ms-clock:",
+        ["calculator"] = "calculator:",
+        ["máy tính"] = "calculator:",
+    };
+
+    private static readonly Dictionary<string, string> AppWebFallbacks = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["spotify"] = "https://open.spotify.com",
+        ["soundcloud"] = "https://soundcloud.com",
+        ["discord"] = "https://discord.com/app",
+        ["notion"] = "https://www.notion.so",
+        ["zalo"] = "https://chat.zalo.me",
+        ["telegram"] = "https://web.telegram.org",
+        ["whatsapp"] = "https://web.whatsapp.com",
+        ["messenger"] = "https://www.messenger.com",
+        ["figma"] = "https://www.figma.com",
+        ["canva"] = "https://www.canva.com",
+    };
+
     private static (bool Ok, string Message) ExecuteLaunchApp(JsonElement cmd)
     {
         var appName = cmd.TryGetProperty("appName", out var appEl) ? appEl.GetString()?.Trim() : null;
@@ -167,7 +229,22 @@ public static class PcCommandExecutor
             }
         }
 
-        // 2. Check Start Menu shortcuts (.lnk) for installed desktop apps (Zalo, Spotify, VS Code, etc.)
+        // 2. Check known direct install paths (%AppData%, %LocalAppData%, WindowsApps)
+        if (AppDirectPaths.TryGetValue(appName, out var directPaths))
+        {
+            foreach (var exe in directPaths)
+            {
+                if (!File.Exists(exe)) continue;
+                try
+                {
+                    Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+                    return (true, $"Launched {appName}.");
+                }
+                catch { }
+            }
+        }
+
+        // 3. Check Start Menu shortcuts (.lnk) for installed desktop apps
         var lnkPath = FindStartMenuShortcut(appName);
         if (lnkPath is not null)
         {
@@ -179,13 +256,35 @@ public static class PcCommandExecutor
             catch { }
         }
 
-        // 3. Check known alias executables
+        // 4. Check Windows URI protocol handlers (works for Microsoft Store / UWP apps like Spotify, WhatsApp, Settings!)
+        if (AppProtocolUris.TryGetValue(appName, out var uriScheme))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(uriScheme) { UseShellExecute = true });
+                return (true, $"Launched {appName} ({uriScheme}).");
+            }
+            catch { }
+        }
+
+        // 5. Check known alias executables in PATH
         if (KnownAppAliases.TryGetValue(appName, out var target))
         {
             try
             {
                 Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
                 return (true, $"Launched {appName}.");
+            }
+            catch { }
+        }
+
+        // 6. Web app fallback (e.g. SoundCloud, Spotify Web, Notion Web if desktop app is not installed)
+        if (AppWebFallbacks.TryGetValue(appName, out var fallbackUrl))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(fallbackUrl) { UseShellExecute = true });
+                return (true, $"Opened {appName} in browser ({fallbackUrl}).");
             }
             catch { }
         }
