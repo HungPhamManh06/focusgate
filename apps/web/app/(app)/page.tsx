@@ -4,6 +4,7 @@ import { AiCoachCard } from "@/components/domain/ai-coach-card";
 import { DailyMissionCard } from "@/components/domain/daily-mission-card";
 import { DashboardActivityTabs } from "@/components/domain/dashboard-activity-tabs";
 import { DashboardBentoCustomizer } from "@/components/domain/dashboard-bento-customizer";
+import { AnimatedMinutes } from "@/components/ui/animated-counter";
 import { ZenViewToggle } from "@/components/shell/zen-view-toggle";
 import { DayTimelineRibbon } from "@/components/domain/day-timeline-ribbon";
 import { EnergyCheckinPill } from "@/components/domain/energy-checkin-pill";
@@ -148,7 +149,7 @@ export default async function DashboardPage() {
         </div>
 
         <div
-          className="grid grid-cols-3 gap-2 rounded-2xl border border-line bg-surface p-2 sm:w-auto sm:min-w-[390px]"
+          className="spotlight-card grid grid-cols-3 gap-2 rounded-2xl border border-line bg-surface/90 p-2 backdrop-blur-sm sm:w-auto sm:min-w-[390px]"
           aria-label={isVi ? "Chỉ số nhanh hôm nay" : "Quick metrics"}
         >
           <Link
@@ -159,7 +160,7 @@ export default async function DashboardPage() {
               <Timer className="size-3 text-accent" /> {isVi ? "Tập trung" : "Focus"}
             </p>
             <p className="mt-0.5 text-[16px] font-bold text-ink tabular-nums">
-              {formatMinutes(focus.minutes)}
+              <AnimatedMinutes minutes={focus.minutes} />
             </p>
           </Link>
           <Link

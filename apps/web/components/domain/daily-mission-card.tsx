@@ -71,15 +71,22 @@ export function DailyMissionCard({
 
   return (
     <Card
-      className="relative overflow-hidden"
+      className="spotlight-card gate-tilt-card relative overflow-hidden"
       style={{
         backgroundImage: isUnlockedDay
-          ? "radial-gradient(circle at 12% 18%, rgba(16,185,129,0.09), transparent 52%)"
+          ? "radial-gradient(circle at 12% 18%, rgba(16,185,129,0.12), transparent 55%)"
           : plan && plan.status !== "draft"
             ? `radial-gradient(circle at 12% 18%, ${themeSpec.glowHex}, transparent 52%)`
             : undefined,
       }}
     >
+      {isUnlockedDay && (
+        <div aria-hidden="true" className="pointer-events-none absolute right-5 top-4 z-10 flex gap-2">
+          <span className="fg-sparkle text-[12px] text-emerald-400" style={{ animationDelay: "0ms" }}>✦</span>
+          <span className="fg-sparkle text-[10px] text-amber-400" style={{ animationDelay: "500ms" }}>✦</span>
+          <span className="fg-sparkle text-[11px] text-emerald-300" style={{ animationDelay: "1100ms" }}>✦</span>
+        </div>
+      )}
       <div>
         {/* Panoramic Real-Time Living Sanctuary Banner */}
         <LivingSanctuaryBanner

@@ -57,11 +57,11 @@ public sealed class DesktopAppForm : Form
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MinimumSize = new Size(0, 56),
+            MinimumSize = new Size(0, 42),
             ColumnCount = 2,
             RowCount = 1,
             BackColor = Color.FromArgb(20, 18, 18),
-            Padding = new Padding(14, 10, 14, 10),
+            Padding = new Padding(12, 5, 12, 5),
         };
         topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         topBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));

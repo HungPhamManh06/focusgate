@@ -27,6 +27,7 @@ import { isNavActive, navItems } from "./nav-items";
 const QUICK_THEMES = [
   { id: "crimson", label: "Crimson", isDark: false, dot: "#b91c1c" },
   { id: "espresso", label: "Espresso", isDark: true, dot: "#28181a" },
+  { id: "obsidian", label: "Obsidian OLED", isDark: true, dot: "#09090d" },
   { id: "matcha", label: "Kyoto Matcha", isDark: false, dot: "#2d6a4f" },
   { id: "nordic", label: "Nordic Slate", isDark: false, dot: "#2563eb" },
 ] as const;
@@ -65,11 +66,31 @@ export function Sidebar({
       if (savedCompact) document.documentElement.setAttribute("data-compact-window", "1");
 
       const savedPreset = window.localStorage.getItem("focusgate-preset");
-      if (savedPreset) setActivePreset(savedPreset);
-      else if (document.documentElement.classList.contains("dark")) setActivePreset("espresso");
+      if (savedPreset) {
+        setActivePreset(savedPreset);
+        if (savedPreset === "matcha" || savedPreset === "nordic" || savedPreset === "obsidian") {
+          document.documentElement.setAttribute("data-preset", savedPreset);
+        }
+      } else if (document.documentElement.classList.contains("dark")) {
+        setActivePreset("espresso");
+      }
     } catch {
       // ignore
     }
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "[" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const tag = (event.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || (event.target as HTMLElement | null)?.isContentEditable) {
+        return;
+      }
+      event.preventDefault();
+      toggleCollapsed();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   function toggleCollapsed() {
@@ -88,7 +109,7 @@ export function Sidebar({
   function applyQuickTheme(item: (typeof QUICK_THEMES)[number]) {
     setActivePreset(item.id);
     document.documentElement.classList.toggle("dark", item.isDark);
-    if (item.id === "matcha" || item.id === "nordic") {
+    if (item.id === "matcha" || item.id === "nordic" || item.id === "obsidian") {
       document.documentElement.setAttribute("data-preset", item.id);
     } else {
       document.documentElement.removeAttribute("data-preset");

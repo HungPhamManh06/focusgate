@@ -3,6 +3,7 @@ package com.focusgate.app.ui
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -961,9 +962,10 @@ fun HomeScreen(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(28.dp),
-                        tonalElevation = 6.dp,
-                        shadowElevation = 8.dp,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        tonalElevation = 8.dp,
+                        shadowElevation = 10.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(

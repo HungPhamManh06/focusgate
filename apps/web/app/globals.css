@@ -384,3 +384,77 @@
     animation: fgBreathGlow 8s ease-in-out infinite;
   }
 }
+
+/* FocusGate 13.0: Midnight Obsidian OLED Theme, Spotlight Border, 3D Tilt & Paper Grain */
+:root[data-preset="obsidian"] {
+  --canvas: #050507;
+  --surface: #0d0c10;
+  --surface-2: #16141b;
+  --ink: #faf8fa;
+  --ink-soft: #ddd6de;
+  --muted: #988f9c;
+  --line: rgba(255, 255, 255, 0.08);
+  --accent: #f43f5e;
+  --accent-strong: #e11d48;
+  --accent-soft: rgba(244, 63, 94, 0.16);
+  color-scheme: dark;
+}
+
+.dark .surface-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 32px -18px rgba(0, 0, 0, 0.65);
+}
+
+.fg-paper-grain {
+  background-image: radial-gradient(color-mix(in srgb, var(--ink) 5%, transparent) 0.65px, transparent 0.65px);
+  background-size: 16px 16px;
+  opacity: 0.32;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .spotlight-card {
+    position: relative;
+  }
+  .spotlight-card::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.28s ease;
+    background: radial-gradient(
+      260px circle at var(--mx, 50%) var(--my, 50%),
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      transparent 72%
+    );
+  }
+  .spotlight-card:hover::after {
+    opacity: 1;
+  }
+
+  .gate-tilt-card {
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+    will-change: transform;
+  }
+  .gate-tilt-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 48px -22px color-mix(in srgb, var(--accent) 26%, rgba(0, 0, 0, 0.35));
+  }
+}
+
+@keyframes fgSparkleFloat {
+  0%, 100% {
+    transform: translateY(0px) scale(0.95);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(-6px) scale(1.15);
+    opacity: 0.95;
+  }
+}
+
+.fg-sparkle {
+  animation: fgSparkleFloat 3.6s ease-in-out infinite;
+}

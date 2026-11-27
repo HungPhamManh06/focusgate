@@ -14,6 +14,7 @@ import { MobileNav } from "@/components/shell/mobile-nav";
 import { MobileQuickFab } from "@/components/shell/mobile-quick-fab";
 import { Sidebar } from "@/components/shell/sidebar";
 import { CommandPalette } from "@/components/shell/command-palette";
+import { AmbientVisualShell } from "@/components/shell/ambient-visual-shell";
 import { AiAssistantDrawer } from "@/components/shell/ai-assistant-drawer";
 import { FloatingFocusPill } from "@/components/shell/floating-focus-pill";
 import { KeyboardShortcuts } from "@/components/shell/keyboard-shortcuts";
@@ -67,6 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <LanguageProvider language={language}>
       <ToastProvider>
+      <AmbientVisualShell gateUnlocked={gateUnlocked} />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:border focus:border-accent focus:bg-surface focus:px-4 focus:py-2 focus:text-[12.5px] focus:font-medium focus:text-ink focus:shadow-lift"
