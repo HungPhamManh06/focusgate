@@ -15,6 +15,11 @@ interface ChatEntry {
   actionExecuted?: boolean;
 }
 
+interface FabPosition {
+  x: number;
+  y: number;
+}
+
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
 }
@@ -55,6 +60,18 @@ function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
 
 const VOICE_TTS_STORAGE_KEY = "focusgate_ai_tts_enabled";
 const VOICE_LANG_STORAGE_KEY = "focusgate_ai_voice_lang";
+const FAB_POS_STORAGE_KEY = "focusgate_ai_fab_pos";
+
+function clampPosition(x: number, y: number, width = 88, height = 46): FabPosition {
+  if (typeof window === "undefined") return { x, y };
+  const margin = 10;
+  const maxX = Math.max(margin, window.innerWidth - width - margin);
+  const maxY = Math.max(margin, window.innerHeight - height - margin);
+  return {
+    x: Math.min(Math.max(margin, x), maxX),
+    y: Math.min(Math.max(margin, y), maxY),
+  };
+}
 
 export function AiAssistantDrawer() {
   const router = useRouter();
@@ -67,17 +84,39 @@ export function AiAssistantDrawer() {
   const [voiceLang, setVoiceLang] = useState<"vi-VN" | "en-US">(isVi ? "vi-VN" : "en-US");
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
+  const [voiceIsError, setVoiceIsError] = useState(false);
+  const [fabPos, setFabPos] = useState<FabPosition | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [messages, setMessages] = useState<ChatEntry[]>(() => [
     {
       id: "welcome",
       role: "assistant",
       text: isVi
-        ? "Chào bạn! Tôi là FocusGate AI. Bạn có thể gõ hoặc bấm nút Micro để ra lệnh trực tiếp cho Web, Windows PC và Android."
-        : "Hi! I'm FocusGate AI. Type or tap the Mic to run live actions across Web, Windows PC, and Android.",
+        ? "Chào bạn! Tôi là FocusGate AI. Bạn có thể kéo thả biểu tượng AI đến bất kỳ đâu, gõ lệnh hoặc bấm nút Micro để ra lệnh bằng giọng nói."
+        : "Hi! I'm FocusGate AI. Drag the AI icon anywhere on screen, type a command, or tap the Mic to speak.",
     },
   ]);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const wantListeningRef = useRef(false);
+  const fatalVoiceErrorRef = useRef(false);
+  const transcriptRef = useRef("");
+  const silenceTimerRef = useRef<number | null>(null);
+  const idleTimeoutRef = useRef<number | null>(null);
+  const restartCountRef = useRef(0);
+
+  const fabRef = useRef<HTMLButtonElement | null>(null);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    width: number;
+    height: number;
+    moved: boolean;
+  } | null>(null);
+
   const listEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -88,14 +127,44 @@ export function AiAssistantDrawer() {
       if (savedTts === "1") setTtsEnabled(true);
       const savedLang = window.localStorage.getItem(VOICE_LANG_STORAGE_KEY);
       if (savedLang === "vi-VN" || savedLang === "en-US") setVoiceLang(savedLang);
+      const savedPos = window.localStorage.getItem(FAB_POS_STORAGE_KEY);
+      if (savedPos) {
+        const parsed = JSON.parse(savedPos) as Partial<FabPosition>;
+        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+          setFabPos(clampPosition(parsed.x, parsed.y));
+        }
+      }
     } catch {
       // Ignore storage access errors
     }
   }, []);
 
   useEffect(() => {
+    const onResize = () => {
+      setFabPos((prev) => {
+        if (!prev) return prev;
+        const rect = fabRef.current?.getBoundingClientRect();
+        return clampPosition(prev.x, prev.y, rect?.width ?? 88, rect?.height ?? 46);
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy, open]);
+
+  const clearVoiceTimers = useCallback(() => {
+    if (silenceTimerRef.current !== null) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (idleTimeoutRef.current !== null) {
+      window.clearTimeout(idleTimeoutRef.current);
+      idleTimeoutRef.current = null;
+    }
+  }, []);
 
   const speakReply = useCallback(
     (text: string) => {
@@ -130,6 +199,7 @@ export function AiAssistantDrawer() {
       setMessages((prev) => [...prev, userEntry]);
       setInput("");
       setVoiceStatus(null);
+      setVoiceIsError(false);
       setBusy(true);
 
       try {
@@ -179,98 +249,213 @@ export function AiAssistantDrawer() {
     [busy, isVi, router, speakReply],
   );
 
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // Ignore stop errors
+  const stopListening = useCallback(
+    (dispatchPending = false) => {
+      wantListeningRef.current = false;
+      clearVoiceTimers();
+      const pendingText = transcriptRef.current.trim();
+      transcriptRef.current = "";
+
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // Ignore stop errors
+        }
+        recognitionRef.current = null;
       }
-    }
-    setListening(false);
-  }, []);
+      setListening(false);
+      if (!fatalVoiceErrorRef.current) {
+        setVoiceStatus(null);
+        setVoiceIsError(false);
+      }
+      if (dispatchPending && pendingText) {
+        void sendMessage(pendingText, true);
+      }
+    },
+    [clearVoiceTimers, sendMessage],
+  );
 
-  const startListening = useCallback(() => {
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      setVoiceStatus(
-        isVi
-          ? "Trình duyệt này chưa hỗ trợ Web Speech API (hãy dùng Chrome hoặc Edge)."
-          : "This browser does not support Web Speech API (try Chrome or Edge).",
-      );
-      return;
-    }
+  const launchRecognitionSession = useCallback(
+    (Ctor: SpeechRecognitionCtor) => {
+      try {
+        const recognition = new Ctor();
+        recognition.lang = voiceLang;
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
 
-    if (listening) {
-      stopListening();
-      return;
-    }
-
-    try {
-      const recognition = new Ctor();
-      recognition.lang = voiceLang;
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-
-      let latestFinal = "";
-
-      recognition.onstart = () => {
-        setListening(true);
-        setVoiceStatus(isVi ? "Đang lắng nghe giọng nói..." : "Listening...");
-      };
-
-      recognition.onresult = (event) => {
-        let interim = "";
-        let finalTranscript = "";
-        for (let i = 0; i < event.results.length; i += 1) {
-          const item = event.results[i];
-          const text = item?.[0]?.transcript ?? "";
-          if (item?.isFinal) finalTranscript += text;
-          else interim += text;
-        }
-        const combined = (finalTranscript || interim).trim();
-        if (combined) setInput(combined);
-        if (finalTranscript.trim()) {
-          latestFinal = finalTranscript.trim();
-        }
-      };
-
-      recognition.onerror = (event) => {
-        setListening(false);
-        const code = event.error ?? "unknown";
-        if (code === "not-allowed" || code === "service-not-allowed") {
+        recognition.onstart = () => {
+          setListening(true);
+          setVoiceIsError(false);
           setVoiceStatus(
             isVi
-              ? "Chưa có quyền Micro. Hãy cho phép Micro trên trình duyệt."
-              : "Microphone permission denied. Please allow mic access.",
+              ? "Đang lắng nghe... Hãy nói lệnh (tự gửi sau 2s im lặng hoặc bấm 🎙️ để gửi ngay)"
+              : "Listening... Speak your command (auto-sends after 2s pause or tap 🎙️)",
           );
-        } else if (code !== "aborted" && code !== "no-speech") {
-          setVoiceStatus(isVi ? `Lỗi thu âm (${code}).` : `Voice error (${code}).`);
-        } else {
-          setVoiceStatus(null);
-        }
-      };
+          if (idleTimeoutRef.current !== null) window.clearTimeout(idleTimeoutRef.current);
+          idleTimeoutRef.current = window.setTimeout(() => {
+            if (wantListeningRef.current && !transcriptRef.current.trim()) {
+              stopListening(false);
+              setVoiceIsError(false);
+              setVoiceStatus(
+                isVi ? "Chưa nghe thấy giọng nói. Bấm 🎙️ để thử lại." : "No speech detected. Tap 🎙️ to retry.",
+              );
+            }
+          }, 15_000);
+        };
 
-      recognition.onend = () => {
+        recognition.onresult = (event) => {
+          restartCountRef.current = 0;
+          let fullTranscript = "";
+          for (let i = 0; i < event.results.length; i += 1) {
+            const item = event.results[i];
+            const text = item?.[0]?.transcript ?? "";
+            if (text) fullTranscript += `${text} `;
+          }
+          const combined = fullTranscript.trim();
+          if (combined) {
+            transcriptRef.current = combined;
+            setInput(combined);
+            setVoiceStatus(isVi ? `Đang nghe: "${combined}"` : `Hearing: "${combined}"`);
+            setVoiceIsError(false);
+
+            if (silenceTimerRef.current !== null) window.clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = window.setTimeout(() => {
+              if (wantListeningRef.current && transcriptRef.current.trim()) {
+                stopListening(true);
+              }
+            }, 2_000);
+          }
+        };
+
+        recognition.onerror = (event) => {
+          const code = event.error ?? "unknown";
+          if (code === "no-speech") {
+            // Do not terminate on brief silence; onend will keep listening while wantListeningRef is true.
+            return;
+          }
+          if (code === "aborted" && !wantListeningRef.current) {
+            return;
+          }
+
+          fatalVoiceErrorRef.current = true;
+          wantListeningRef.current = false;
+          clearVoiceTimers();
+          setListening(false);
+          setVoiceIsError(true);
+
+          if (code === "not-allowed" || code === "service-not-allowed") {
+            setVoiceStatus(
+              isVi
+                ? "Trình duyệt chưa cấp quyền Micro. Hãy bấm biểu tượng ổ khóa trên thanh địa chỉ để cho phép Micro."
+                : "Microphone permission denied. Allow mic access in your browser settings.",
+            );
+          } else if (code === "audio-capture") {
+            setVoiceStatus(
+              isVi
+                ? "Không tìm thấy thiết bị Micro. Hãy kiểm tra tai nghe/mic của máy."
+                : "No microphone hardware detected. Check your audio input device.",
+            );
+          } else if (code === "network") {
+            setVoiceStatus(
+              isVi
+                ? "Trình duyệt không kết nối được dịch vụ giọng nói (lỗi network). Trên Windows hãy bấm Win+H trong ô nhập để nói bằng Windows Voice Typing."
+                : "Browser speech service unreachable (network). On Windows, press Win+H inside the input box for Windows Voice Typing.",
+            );
+            inputRef.current?.focus();
+          } else {
+            setVoiceStatus(isVi ? `Lỗi thu âm (${code}).` : `Voice error (${code}).`);
+          }
+        };
+
+        recognition.onend = () => {
+          recognitionRef.current = null;
+          if (fatalVoiceErrorRef.current) {
+            setListening(false);
+            return;
+          }
+          // If the user already spoke and browser ended the session, send immediately.
+          if (transcriptRef.current.trim() && !wantListeningRef.current) {
+            const text = transcriptRef.current.trim();
+            transcriptRef.current = "";
+            setListening(false);
+            void sendMessage(text, true);
+            return;
+          }
+          // Keep listening seamlessly if the browser dropped after ~1s of silence before user finished!
+          if (wantListeningRef.current && restartCountRef.current < 6) {
+            restartCountRef.current += 1;
+            window.setTimeout(() => {
+              if (wantListeningRef.current && !fatalVoiceErrorRef.current) {
+                launchRecognitionSession(Ctor);
+              }
+            }, 180);
+            return;
+          }
+          wantListeningRef.current = false;
+          clearVoiceTimers();
+          setListening(false);
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+      } catch {
+        fatalVoiceErrorRef.current = true;
+        wantListeningRef.current = false;
+        clearVoiceTimers();
         setListening(false);
-        recognitionRef.current = null;
-        if (latestFinal) {
-          void sendMessage(latestFinal, true);
-        } else {
-          setVoiceStatus(null);
-        }
-      };
+        setVoiceIsError(true);
+        setVoiceStatus(
+          isVi ? "Không thể khởi động Micro lúc này." : "Could not start microphone.",
+        );
+      }
+    },
+    [clearVoiceTimers, isVi, sendMessage, stopListening, voiceLang],
+  );
 
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch {
-      setListening(false);
+  const startListening = useCallback(async () => {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) {
+      setVoiceIsError(true);
       setVoiceStatus(
-        isVi ? "Không thể khởi động Micro lúc này." : "Could not start microphone.",
+        isVi
+          ? "Trình duyệt chưa hỗ trợ Web Speech API. Hãy dùng Chrome/Edge hoặc bấm Win+H trong ô nhập."
+          : "Web Speech API not supported here. Use Chrome/Edge or press Win+H in the input box.",
       );
+      return;
     }
-  }, [isVi, listening, sendMessage, stopListening, voiceLang]);
+
+    if (listening || wantListeningRef.current) {
+      stopListening(true);
+      return;
+    }
+
+    fatalVoiceErrorRef.current = false;
+    transcriptRef.current = "";
+    restartCountRef.current = 0;
+    setVoiceIsError(false);
+
+    // Warm up microphone permission via MediaDevices first so Chrome/Edge prompts cleanly instead of aborting in 1s.
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      } catch {
+        fatalVoiceErrorRef.current = true;
+        setVoiceIsError(true);
+        setVoiceStatus(
+          isVi
+            ? "Chưa có quyền Micro. Hãy cho phép Micro rồi bấm 🎙️ lại."
+            : "Microphone permission is required. Please allow mic access and tap 🎙️ again.",
+        );
+        return;
+      }
+    }
+
+    wantListeningRef.current = true;
+    launchRecognitionSession(Ctor);
+  }, [isVi, launchRecognitionSession, listening, stopListening]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -278,13 +463,13 @@ export function AiAssistantDrawer() {
         event.preventDefault();
         if (event.shiftKey) {
           setOpen(true);
-          window.setTimeout(() => startListening(), 120);
+          window.setTimeout(() => void startListening(), 120);
         } else {
           setOpen((prev) => !prev);
           window.setTimeout(() => inputRef.current?.focus(), 80);
         }
       } else if (event.key === "Escape" && open) {
-        stopListening();
+        stopListening(false);
         setOpen(false);
       }
     };
@@ -294,6 +479,8 @@ export function AiAssistantDrawer() {
 
   useEffect(() => {
     return () => {
+      wantListeningRef.current = false;
+      clearVoiceTimers();
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
@@ -302,7 +489,64 @@ export function AiAssistantDrawer() {
         }
       }
     };
-  }, []);
+  }, [clearVoiceTimers]);
+
+  const handleFabPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 && event.pointerType === "mouse") return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: rect.left,
+      originY: rect.top,
+      width: rect.width,
+      height: rect.height,
+      moved: false,
+    };
+  };
+
+  const handleFabPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    if (!state.moved && Math.hypot(dx, dy) > 6) {
+      state.moved = true;
+      setDragging(true);
+    }
+    if (state.moved) {
+      setFabPos(clampPosition(state.originX + dx, state.originY + dy, state.width, state.height));
+    }
+  };
+
+  const handleFabPointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Ignore release errors
+    }
+    dragStateRef.current = null;
+    setDragging(false);
+
+    if (state.moved) {
+      const dx = event.clientX - state.startX;
+      const dy = event.clientY - state.startY;
+      const finalPos = clampPosition(state.originX + dx, state.originY + dy, state.width, state.height);
+      setFabPos(finalPos);
+      try {
+        window.localStorage.setItem(FAB_POS_STORAGE_KEY, JSON.stringify(finalPos));
+      } catch {
+        // Ignore storage errors
+      }
+    } else {
+      setOpen((prev) => !prev);
+      window.setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  };
 
   const toggleTts = () => {
     setTtsEnabled((prev) => {
@@ -345,18 +589,33 @@ export function AiAssistantDrawer() {
         { label: "Unlock 10m", prompt: "Unlock 10 minutes pass" },
       ];
 
+  const fabStyle = fabPos
+    ? { left: `${fabPos.x}px`, top: `${fabPos.y}px`, right: "auto", bottom: "auto" }
+    : undefined;
+
   return (
     <>
-      {/* Floating Keystone Spark Trigger */}
+      {/* Draggable Floating Keystone Spark Trigger */}
       <button
+        ref={fabRef}
         type="button"
-        onClick={() => {
-          setOpen((prev) => !prev);
-          window.setTimeout(() => inputRef.current?.focus(), 80);
+        onPointerDown={handleFabPointerDown}
+        onPointerMove={handleFabPointerMove}
+        onPointerUp={handleFabPointerUp}
+        onPointerCancel={() => {
+          dragStateRef.current = null;
+          setDragging(false);
         }}
-        title={isVi ? "FocusGate AI (Alt+A · Giọng nói Alt+Shift+A)" : "FocusGate AI (Alt+A · Voice Alt+Shift+A)"}
-        aria-label="Toggle FocusGate AI assistant"
-        className="fixed bottom-20 right-4 z-40 flex items-center gap-2 rounded-full border border-line bg-surface/95 p-1.5 pr-3.5 text-ink shadow-lift backdrop-blur-md transition hover:-translate-y-0.5 hover:border-accent/60 lg:bottom-6 lg:right-6"
+        style={fabStyle}
+        title={
+          isVi
+            ? "Kéo để di chuyển · Bấm để mở FocusGate AI (Alt+A · Giọng nói Alt+Shift+A)"
+            : "Drag to move · Click to open FocusGate AI (Alt+A · Voice Alt+Shift+A)"
+        }
+        aria-label="Toggle or drag FocusGate AI assistant"
+        className={`fixed z-40 flex touch-none select-none items-center gap-2 rounded-full border border-line bg-surface/95 p-1.5 pr-3.5 text-ink shadow-lift backdrop-blur-md hover:border-accent/60 ${
+          fabPos ? "" : "bottom-24 right-4 lg:bottom-20 lg:right-6"
+        } ${dragging ? "cursor-grabbing scale-105 border-accent shadow-2xl" : "cursor-grab transition-shadow"}`}
       >
         <AiLogoMark size={30} thinking={busy} listening={listening} />
         <span className="text-[12px] font-semibold tracking-tight">
@@ -368,7 +627,7 @@ export function AiAssistantDrawer() {
       {open && (
         <section
           aria-label="FocusGate AI Assistant"
-          className="fixed bottom-32 right-4 z-50 flex h-[500px] w-[min(92vw,390px)] flex-col overflow-hidden rounded-2xl border border-line bg-surface/95 shadow-2xl backdrop-blur-xl lg:bottom-20 lg:right-6"
+          className="fixed bottom-24 right-4 z-50 flex h-[min(78vh,510px)] w-[min(92vw,395px)] flex-col overflow-hidden rounded-2xl border border-line bg-surface/95 shadow-2xl backdrop-blur-xl lg:bottom-20 lg:right-6"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-line bg-surface-2/70 px-4 py-3">
@@ -414,7 +673,7 @@ export function AiAssistantDrawer() {
               <button
                 type="button"
                 onClick={() => {
-                  stopListening();
+                  stopListening(false);
                   setOpen(false);
                 }}
                 aria-label="Close AI assistant"
@@ -448,8 +707,8 @@ export function AiAssistantDrawer() {
                   <span
                     className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10.5px] font-medium ${
                       msg.actionExecuted
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-amber-500/15 text-amber-400"
+                        ? "bg-emerald-500/15 text-emerald-500"
+                        : "bg-amber-500/15 text-amber-500"
                     }`}
                   >
                     {msg.actionExecuted ? "✓" : "•"} {msg.actionLabel}
@@ -483,7 +742,13 @@ export function AiAssistantDrawer() {
 
           {/* Voice status hint */}
           {voiceStatus && (
-            <div className="bg-accent/10 px-4 py-1.5 text-[11px] font-medium text-accent">
+            <div
+              className={`px-4 py-1.5 text-[11px] font-medium ${
+                voiceIsError
+                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                  : "bg-accent/10 text-accent"
+              }`}
+            >
               🎙️ {voiceStatus}
             </div>
           )}
@@ -492,19 +757,26 @@ export function AiAssistantDrawer() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (listening) {
+                stopListening(false);
+              }
               void sendMessage(input, false);
             }}
             className="flex items-center gap-2 border-t border-line bg-surface px-3 py-2.5"
           >
             <button
               type="button"
-              onClick={startListening}
+              onClick={() => void startListening()}
               disabled={busy}
               title={
                 voiceSupported
-                  ? isVi
-                    ? "Bấm để ra lệnh bằng giọng nói (Alt+Shift+A)"
-                    : "Tap to speak a command (Alt+Shift+A)"
+                  ? listening
+                    ? isVi
+                      ? "Đang nghe — bấm để dừng và gửi ngay"
+                      : "Listening — tap to stop and send now"
+                    : isVi
+                      ? "Bấm để ra lệnh bằng giọng nói (Alt+Shift+A)"
+                      : "Tap to speak a command (Alt+Shift+A)"
                   : isVi
                     ? "Trình duyệt chưa hỗ trợ thu âm giọng nói"
                     : "Voice input not supported in this browser"
